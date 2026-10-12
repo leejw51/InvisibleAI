@@ -1,0 +1,14 @@
+[package]
+name = "causewaybay-shared"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+bip39 = { version = "2", features = ["zeroize"] }
+bip32 = "0.5"
+k256 = { version = "0.13", features = ["ecdsa"] }
+sha3 = "0.10"
+hex = "0.4"
+zeroize = "1"

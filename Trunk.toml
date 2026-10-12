@@ -1,0 +1,5 @@
+[build]
+target = "frontend/index.html"
+dist = "dist"
+filehash = true
+release = true

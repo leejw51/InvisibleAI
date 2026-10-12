@@ -1,0 +1,10 @@
+Generator: built-in image_gen.imagegen
+Asset: connection-orb.png (original transparent PNG, copied without modifications)
+
+Use case: stylized-concept
+Asset type: transparent decorative bitmap for the connection animation in Causewaybay Bot, an existing elegant lavender personal workspace web app.
+Primary request: Create one exceptionally polished 3D luminous glass pearl, like an optical sculpture, floating in empty space. A spherical translucent milky pearl with softly refracting lilac and pale mint highlights, an exquisite thin flowing glass ribbon wrapping around its equator in a slightly tilted elliptical halo. Quiet, refined, premium software interface aesthetic. The center should be smooth and luminous, with tactile frosted glass and delicate chrome-like edge reflections, not a planet or a mechanical object.
+Composition: a single centered compact sculpture filling about 68 percent of a square canvas, generous transparent margins on every side, complete silhouette and halo visible. Orthographic studio product render, gently elevated viewpoint.
+Lighting: beautiful broad softbox reflections, restrained iridescence, white pearlescent core, lavender rim light and the faintest mint edge, no hard dark shadows.
+Background: genuinely transparent alpha, no backdrop, no floor, no checkerboard baked in, no rectangular shadow. Isolated object suitable on both ivory and dark plum UI backgrounds.
+Constraints: no text, no letters, no icons, no logos, no watermark, no extra separate objects, no stars or sparkles, no UI mockup. Produce the finished square raster asset.

@@ -1,0 +1,103 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+
+jobs:
+  macos:
+    # The backend depends on Apple Vision, sandbox-exec, Apple Foundation Models
+    # and macOS screen capture, so the real test suite runs on macOS only.
+    name: Format, Clippy, build and offline tests (macOS)
+    # apple-vision builds Swift that needs the macOS 26 SDK (Xcode 26).
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install npm packages
+        run: npm ci
+      - name: Formatting
+        run: cargo fmt --all -- --check
+      - name: Clippy (native crates)
+        run: cargo clippy -p causewaybay-server -p causewaybay-shared -p causewaybay-cli --all-targets -- -D warnings
+      - name: Clippy (WASM frontend)
+        run: cargo clippy -p causewaybay-frontend --target wasm32-unknown-unknown -- -D warnings
+      - name: Build
+        run: cargo build -p causewaybay-server -p causewaybay-cli
+      - name: Rust tests
+        # Wallet mode must be off for the test backends; live tests that need
+        # provider keys, Apple Vision fixtures, a local model download or a
+        # real screen are #[ignore] and stay out of CI.
+        run: env -u CWBBOT_ADMIN cargo test -p causewaybay-server -p causewaybay-shared -p causewaybay-cli
+      - name: Frontend crate tests
+        run: cargo test -p causewaybay-frontend
+      - name: Script tests
+        run: npm run test:scripts
+
+  linux-check:
+    # Only the shared crate is platform-independent by design; the server and
+    # CLI gate macOS APIs behind cfg(target_os = "macos") but have not been
+    # verified to build elsewhere. This job keeps formatting and the shared
+    # models honest on a cheap runner without claiming Linux support.
+    name: Format and shared crate (Linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - name: Formatting
+        run: cargo fmt --all -- --check
+      - name: Shared crate
+        run: cargo test -p causewaybay-shared
+
+  browser:
+    # Playwright against a demo backend takes several minutes and needs the
+    # built web assets; run it on demand or on main rather than on every PR.
+    name: Browser tests (macOS, manual or main)
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    runs-on: macos-26
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install npm packages and browsers
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium webkit
+      - name: Install Trunk
+        run: cargo install trunk --locked
+      - name: Build debug web assets and binaries
+        run: make build-debug
+      - name: Playwright
+        run: env -u CWBBOT_ADMIN npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: playwright-report
+          retention-days: 7

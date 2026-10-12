@@ -1,0 +1,19 @@
+{
+  "name": "causewaybay-build-tools",
+  "private": true,
+  "scripts": {
+    "css": "tailwindcss -i frontend/styles.css -o frontend/assets/app.css --minify",
+    "test:e2e": "playwright test",
+    "test:scripts": "node --test tests/scripts/*.test.mjs",
+    "visuals": "esbuild frontend/status-diagram.js frontend/wiki-graph.js frontend/everyday-motion.js --bundle --minify --format=esm --outdir=frontend/assets"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.2",
+    "esbuild": "^0.28.2",
+    "tailwindcss": "^3.4.17"
+  },
+  "dependencies": {
+    "motion": "14.1.0",
+    "three": "^0.186.1"
+  }
+}

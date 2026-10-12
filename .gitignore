@@ -1,0 +1,40 @@
+/target/
+/bin/
+/dist/
+/frontend/assets/app.css
+/data/
+/crates/server/data/
+/node_modules/
+/test-results/
+/playwright-report/
+/package/
+.env
+.env.*
+!.env.example
+/.fastembed_cache/
+.DS_Store
+
+/frontend/assets/status-diagram.js
+/frontend/assets/status-diagram.js.LEGAL.txt
+
+/native/apple-ai/.build/
+**/__pycache__/
+
+# Separate site repository checked out alongside this project
+invisible-ai-proposal/
+/frontend/assets/wiki-graph.js
+/frontend/assets/wiki-graph.js.LEGAL.txt
+
+/native/mlx-ai/target/
+
+/frontend/assets/everyday-motion.js
+/frontend/assets/everyday-motion.js.LEGAL.txt
+
+# Locally generated verification screenshots
+/docs/screenshots/
+
+# Rust extras (from GitHub template)
+**/*.rs.bk
+*.pdb
+**/mutants.out*/
+rustc-ice-*.txt

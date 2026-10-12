@@ -1,0 +1,46 @@
+[package]
+name = "causewaybay-server"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+causewaybay-shared.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+axum = { version = "0.8", features = ["ws"] }
+tokio = { version = "1", features = ["full"] }
+rusqlite = { version = "0.37", features = ["bundled"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls", "multipart"] }
+futures-util = "0.3"
+async-stream = "0.3"
+tower-http = { version = "0.6", features = ["fs", "trace", "limit"] }
+tower = { version = "0.5", features = ["util"] }
+anyhow = "1"
+csv = "1"
+sha2 = "0.10"
+hex = "0.4"
+thiserror = "2"
+uuid = { version = "1", features = ["v4"] }
+chrono = { version = "0.4", features = ["serde"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tempfile = "3"
+dotenvy = "0.15"
+base64 = "0.22"
+clap = { version = "4", features = ["derive", "env"] }
+fastembed = { version = "5", optional = true }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
+zip = { version = "8.6.0", default-features = false, features = ["deflate"] }
+pdf-extract = "0.12.1"
+quick-xml = "0.39.4"
+regex = "1"
+
+[features]
+default = ["semantic"]
+semantic = ["dep:fastembed"]
+
+[target.'cfg(target_os = "macos")'.dependencies]
+apple-vision = { version = "0.17", default-features = false, features = ["recognize_text", "classify"] }
+
+[dev-dependencies]
+http-body-util = "0.1"

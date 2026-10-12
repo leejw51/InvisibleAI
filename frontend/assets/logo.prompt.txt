@@ -1,0 +1,26 @@
+Generated with the built-in image generation tool on 2026-10-12.
+Character reference: frontend/assets/everyday-companion.png.
+Output: frontend/assets/logo.png, 1536 × 1024 transparent PNG.
+
+INITIAL GENERATION
+Use case: logo-brand
+Asset type: reusable transparent PNG brand logo for Invisible AI, saved as logo.png.
+Primary request: create a polished logo pairing the existing Invisible AI main character with the exact title "INVISIBLE AI".
+Input image: everyday-companion.png is the character identity reference. Preserve the same translucent lavender glass-and-jelly companion: rounded ghost-like body, two rounded little feet, two short rounded arms, large dark violet round eyes with highlights, a small curved happy smile and one arm waving. Keep this unmistakably the same character.
+Composition/framing: a clean centered vertical lockup on a landscape 3:2 canvas, ideally 1536 by 1024 pixels. The complete waving companion sits above the title. Character roughly 60 percent of canvas height; large title directly underneath with a small intentional gap. Keep the combined mark balanced and compact, with generous clear margins. Face, arm and all letters entirely visible.
+Style/medium: luminous polished 3D glass character paired with crisp professional typography. Friendly and memorable. Carefully controlled lilac highlights and violet reflections; character silhouette reads clearly at reduced size.
+Text (verbatim): "INVISIBLE AI"
+Typography: render that exact uppercase title once, all on one horizontal line. Bold modern geometric sans-serif with subtly rounded corners, careful optical kerning, strong clean letterforms. Solid deep violet lettering, no gradient or dimensional extrusion on the type. The title should be wide, substantial and easily readable, visually supporting the character above it. Spell INVISIBLE as I-N-V-I-S-I-B-L-E, then a space, then AI as A-I.
+Background: genuinely transparent alpha around both the character and lettering, including all negative spaces and between letters. Preserve the character's glossy softly translucent appearance. Do not draw a checkerboard or a colored backdrop.
+Constraints: exactly one character and only the requested title. No notebook, cards, orbit rings, scenery, icons, tagline, extra text, frames, badge, watermark, hard ground plane, accessories, new character design or drop shadow behind the lettering. Do not let the character overlap any letter.
+
+FINAL REFINEMENT
+Use case: precise-object-edit
+Asset type: final transparent Invisible AI logo PNG.
+Input image 1: edit target, the generated logo.
+Input image 2: original companion, character identity and clean cutout reference.
+Primary request: refine the existing logo into a clean professional transparent cutout. REMOVE ALL of the hazy lavender light, outer glow, blurred purple aura and background color around the character AND around the title. The area outside the actual character silhouette and outside the letterforms must be completely transparent, alpha zero. Keep beautiful glossy highlights inside the character surface only. Use the clean isolated edge quality of image 2.
+Keep: the same smiling waving lavender glass companion above the same exact title "INVISIBLE AI" on one line. Keep the same character identity and pleasant face. Typography is crisp, bold, solid medium-deep violet (#6540A2), a modern rounded geometric sans serif. Make all letters fully opaque and clearly separated, no blur, no glow, no shadow, no gradient.
+Composition refinement: reduce the combined logo a little to leave at least 80 pixels of clear transparent margin on all four sides of the 1536x1024 landscape canvas; leave 50 pixels of clean transparent space between the bottom of the character and top of the title. Keep both centered. The entire character including its waving arm and feet and all title letters must be visible and uncropped.
+Text exactly once: "INVISIBLE AI". I-N-V-I-S-I-B-L-E space A-I.
+Constraints: transparent background, no checkerboard rendered in the image, no background rectangle, no scenery, no rings, no decorations or additional text. Preserve the glossy character and clean flat typography. Absolutely no external glow or ambient haze.

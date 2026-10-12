@@ -1,0 +1,25 @@
+[package]
+name = "causewaybay-frontend"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+causewaybay-shared.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+yew = { version = "0.21", features = ["csr"] }
+gloo-net = { version = "0.6", features = ["websocket"] }
+futures-util = "0.3"
+futures-channel = "0.3"
+base64 = "0.22"
+gloo-events = "0.2"
+gloo-timers = { version = "0.3", features = ["futures"] }
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+web-sys = { version = "0.3", features = ["AnimationEvent", "CssStyleDeclaration", "MediaQueryList", "Crypto", "EventSource", "MessageEvent", "Storage", "StorageEvent", "Location", "History", "HtmlInputElement", "HtmlTextAreaElement", "HtmlSelectElement", "AbortController", "AbortSignal", "Blob", "File", "FileList", "Navigator", "Clipboard", "KeyboardEvent", "Window", "Document", "HtmlElement", "DragEvent", "DataTransfer", "ClipboardEvent", "Element", "DomTokenList"] }
+pulldown-cmark = "0.13"
+ammonia = "4"
+idb = "0.6"
+zeroize = "1"
+sha2 = "0.10"

@@ -1,0 +1,22 @@
+[package]
+name = "invisible-mlx"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Invisible AI on-device worker: Qwen3.5 on Apple Silicon through MLX (Rust)"
+
+# Deliberately not a member of the main workspace: mlx-rs compiles MLX from
+# source (cmake, several minutes), which `make test` must never pay for.
+[workspace]
+
+[dependencies]
+anyhow = "1"
+mlx-rs = { version = "0.32.0", features = ["safetensors"] }
+mlx-sys = "0.6.0"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokenizers = { version = "0.23", default-features = false, features = ["onig"] }
+
+[profile.release]
+lto = "thin"
+strip = true
