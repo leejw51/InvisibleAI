@@ -12,3 +12,7 @@ k256 = { version = "0.13", features = ["ecdsa"] }
 sha3 = "0.10"
 hex = "0.4"
 zeroize = "1"
+
+[dev-dependencies]
+# Live Cronos integration tests only (`cargo test -- --ignored`).
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }

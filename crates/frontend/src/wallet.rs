@@ -51,7 +51,10 @@ async fn balances(network: Network, address: String) -> Result<Balances, String>
     let owner = evm::parse_address(&address)?;
     let chain = quantity(&rpc(&network, "eth_chainId", json!([])).await?)?;
     if chain != U256::from(network.chain_id) {
-        return Err(format!("{} answered as a different chain. Refusing to continue.", network.rpc));
+        return Err(format!(
+            "{} answered as a different chain. Refusing to continue.",
+            network.rpc
+        ));
     }
     let native = quantity(&rpc(&network, "eth_getBalance", json!([address, "latest"])).await?)?;
     let call = json!([{"to":network.usdc.address,"data":hex_data(&evm::erc20_balance_of(&owner))},"latest"]);
@@ -66,51 +69,47 @@ pub struct Prepared {
     amount: String,
     fee: String,
 }
-async fn prepare(network: Network, from: String, to: String, amount: String, have: Balances) -> Result<Prepared, String> {
-    let recipient = evm::parse_address(&to)?;
-    if from.eq_ignore_ascii_case(to.trim()) {
-        return Err("That is your own address. Sending to yourself moves nothing and still costs a fee.".into());
-    }
-    let value = evm::parse_units(&amount, network.usdc.decimals)?;
-    if value.is_zero() {
-        return Err("Enter an amount greater than zero.".into());
-    }
-    if value > have.usdc {
-        return Err(format!("You have {} {}.", evm::format_units(have.usdc, 6), network.usdc.symbol));
-    }
-    let data = evm::erc20_transfer(&recipient, value);
-    let token = evm::parse_address(network.usdc.address)?;
-    let nonce = quantity(&rpc(&network, "eth_getTransactionCount", json!([from, "pending"])).await?)?;
+async fn prepare(
+    network: Network,
+    from: String,
+    to: String,
+    amount: String,
+    have: Balances,
+) -> Result<Prepared, String> {
+    // Everything that can be refused without the network is refused first.
+    let request = evm::check_transfer(&network, &from, &to, &amount, have.usdc)?;
+    let nonce = quantity(
+        &rpc(
+            &network,
+            "eth_getTransactionCount",
+            json!([from, "pending"]),
+        )
+        .await?,
+    )?;
     let gas_price = quantity(&rpc(&network, "eth_gasPrice", json!([])).await?)?;
-    let estimate = rpc(&network, "eth_estimateGas", json!([{"from":from,"to":network.usdc.address,"data":hex_data(&data)}]))
-        .await
-        .and_then(|v| quantity(&v))
-        .ok()
-        .and_then(|v| u64::try_from(v).ok());
-    let tx = LegacyTransaction {
-        nonce: u64::try_from(nonce).map_err(|_| "The network returned an impossible nonce.")?,
-        gas_price,
-        gas_limit: estimate.map(evm::with_headroom).unwrap_or(100_000),
-        to: token,
-        value: U256::ZERO,
-        data,
-        chain_id: network.chain_id,
-    };
-    let fee = tx.fee();
-    if fee > U256::from(network.max_fee_wei) {
-        return Err(format!(
-            "The network asked for a fee of {} {}, above this wallet's {} {} ceiling. Not signing.",
-            evm::format_units(fee, 18), network.native, evm::format_units(U256::from(network.max_fee_wei), 18), network.native
-        ));
-    }
-    if fee > have.native {
-        return Err(format!("You need about {} {} for the network fee.", evm::format_units(fee, 18), network.native));
-    }
+    let estimate = rpc(
+        &network,
+        "eth_estimateGas",
+        json!([{"from":from,"to":network.usdc.address,"data":hex_data(&request.data)}]),
+    )
+    .await
+    .and_then(|v| quantity(&v))
+    .ok();
+    let tx = evm::build_transfer(
+        &network,
+        &request,
+        evm::Quote {
+            nonce,
+            gas_price,
+            estimate,
+        },
+        have.native,
+    )?;
     Ok(Prepared {
+        to: evm::checksum(&request.recipient),
+        amount: evm::format_units(request.value, network.usdc.decimals),
+        fee: evm::format_units(tx.fee(), 18),
         tx,
-        to: evm::checksum(&recipient),
-        amount: evm::format_units(value, network.usdc.decimals),
-        fee: evm::format_units(fee, 18),
     })
 }
 
@@ -169,7 +168,10 @@ fn stored_network() -> Network {
 }
 impl Wallet {
     fn address(ctx: &Context<Self>) -> String {
-        ctx.props().session["address"].as_str().unwrap_or_default().to_string()
+        ctx.props().session["address"]
+            .as_str()
+            .unwrap_or_default()
+            .to_string()
     }
     /// The signing key, only if it belongs to the signed-in wallet.
     fn unlocked(ctx: &Context<Self>) -> bool {
@@ -181,7 +183,9 @@ impl Wallet {
         }
         self.review_leaving = true;
         let link = ctx.link().clone();
-        self._fade = Some(Timeout::new(FADE_MS, move || link.send_message(Msg::Removed)));
+        self._fade = Some(Timeout::new(FADE_MS, move || {
+            link.send_message(Msg::Removed)
+        }));
     }
 }
 impl Component for Wallet {
@@ -209,7 +213,9 @@ impl Component for Wallet {
     fn update(&mut self, ctx: &Context<Self>, msg: Msg) -> bool {
         match msg {
             Msg::Network(key) => {
-                let Some(network) = evm::network(key) else { return false };
+                let Some(network) = evm::network(key) else {
+                    return false;
+                };
                 if network == self.network || self.sending {
                     return false;
                 }
@@ -229,8 +235,11 @@ impl Component for Wallet {
                 }
                 self.generation += 1;
                 self.loading = true;
-                let (generation, network, address) = (self.generation, self.network, Self::address(ctx));
-                ctx.link().send_future(async move { Msg::Loaded(generation, balances(network, address).await) });
+                let (generation, network, address) =
+                    (self.generation, self.network, Self::address(ctx));
+                ctx.link().send_future(async move {
+                    Msg::Loaded(generation, balances(network, address).await)
+                });
             }
             Msg::Loaded(generation, result) => {
                 if generation != self.generation {
@@ -256,13 +265,16 @@ impl Component for Wallet {
                 }
             }
             Msg::Review => {
-                let Some(have) = self.balances.clone() else { return false };
+                let Some(have) = self.balances.clone() else {
+                    return false;
+                };
                 if self.preparing || self.sending {
                     return false;
                 }
                 self.preparing = true;
                 self.error.clear();
-                let (generation, network, from) = (self.generation, self.network, Self::address(ctx));
+                let (generation, network, from) =
+                    (self.generation, self.network, Self::address(ctx));
                 let (to, amount) = (self.to.clone(), self.amount.clone());
                 ctx.link().send_future(async move {
                     Msg::Prepared(generation, prepare(network, from, to, amount, have).await)
@@ -287,14 +299,17 @@ impl Component for Wallet {
                 self.review_leaving = false;
             }
             Msg::Send => {
-                let Some(prepared) = self.review.clone() else { return false };
+                let Some(prepared) = self.review.clone() else {
+                    return false;
+                };
                 if self.sending || self.review_leaving {
                     return false;
                 }
                 // The key is read from local storage for this one signature
                 // and dropped (zeroized) when the identity goes out of scope.
                 let address = Self::address(ctx);
-                let Some(identity) = account::identity().filter(|id| id.address() == address) else {
+                let Some(identity) = account::identity().filter(|id| id.address() == address)
+                else {
                     self.error = "This browser has no saved key for this wallet. Sign out and sign in again.".into();
                     return true;
                 };
@@ -323,7 +338,16 @@ impl Component for Wallet {
                 self.sending = false;
                 match result {
                     Ok((hash, prepared)) => {
-                        self.activity.insert(0, Activity { network: self.network, hash: hash.clone(), amount: prepared.amount, to: prepared.to, status: "Pending" });
+                        self.activity.insert(
+                            0,
+                            Activity {
+                                network: self.network,
+                                hash: hash.clone(),
+                                amount: prepared.amount,
+                                to: prepared.to,
+                                status: "Pending",
+                            },
+                        );
                         self.to.clear();
                         self.amount.clear();
                         self.close_review(ctx);
@@ -333,7 +357,14 @@ impl Component for Wallet {
                 }
             }
             Msg::Poll(hash, attempt) => {
-                let Some(network) = self.activity.iter().find(|a| a.hash == hash).map(|a| a.network) else { return false };
+                let Some(network) = self
+                    .activity
+                    .iter()
+                    .find(|a| a.hash == hash)
+                    .map(|a| a.network)
+                else {
+                    return false;
+                };
                 ctx.link().send_future(async move {
                     let receipt = rpc(&network, "eth_getTransactionReceipt", json!([hash])).await;
                     Msg::Receipt(hash, attempt, receipt)
@@ -342,7 +373,11 @@ impl Component for Wallet {
             }
             Msg::Receipt(hash, attempt, result) => {
                 let status = match &result {
-                    Ok(r) if r.is_object() => Some(if r["status"] == "0x1" { "Confirmed" } else { "Failed" }),
+                    Ok(r) if r.is_object() => Some(if r["status"] == "0x1" {
+                        "Confirmed"
+                    } else {
+                        "Failed"
+                    }),
                     _ if attempt >= 45 => Some("Unconfirmed"),
                     _ => None,
                 };
@@ -357,7 +392,12 @@ impl Component for Wallet {
                     None => {
                         let link = ctx.link().clone();
                         let next = hash.clone();
-                        self.polls.insert(hash, Timeout::new(2_000, move || link.send_message(Msg::Poll(next, attempt + 1))));
+                        self.polls.insert(
+                            hash,
+                            Timeout::new(2_000, move || {
+                                link.send_message(Msg::Poll(next, attempt + 1))
+                            }),
+                        );
                         return false;
                     }
                 }
@@ -369,11 +409,29 @@ impl Component for Wallet {
         let address = Self::address(ctx);
         let network = self.network;
         let unlocked = Self::unlocked(ctx);
-        let usdc = self.balances.as_ref().map(|b| evm::format_units(b.usdc, network.usdc.decimals));
-        let native = self.balances.as_ref().map(|b| evm::format_units(b.native, 18));
-        let state = if self.sending { "sending" } else if self.loading { "loading" } else { "ready" };
+        let usdc = self
+            .balances
+            .as_ref()
+            .map(|b| evm::format_units(b.usdc, network.usdc.decimals));
+        let native = self
+            .balances
+            .as_ref()
+            .map(|b| evm::format_units(b.native, 18));
+        let state = if self.sending {
+            "sending"
+        } else if self.loading {
+            "loading"
+        } else {
+            "ready"
+        };
         let summary = match (&usdc, &native) {
-            (Some(u), Some(n)) => format!("{} {}: {u} {}, {n} {}", t("Wallet card"), network.name, network.usdc.symbol, network.native),
+            (Some(u), Some(n)) => format!(
+                "{} {}: {u} {}, {n} {}",
+                t("Wallet card"),
+                network.name,
+                network.usdc.symbol,
+                network.native
+            ),
             _ => format!("{} {}", t("Wallet card"), network.name),
         };
         let link = ctx.link();

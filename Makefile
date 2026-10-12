@@ -41,6 +41,8 @@ help:
 	@echo '  make verify           Formatting, Clippy, Rust, and browser checks'
 	@echo '  make test-vision      Real Apple Vision OCR test (macOS)'
 	@echo '  make test-semantic    Real local embedding test (model downloads once)'
+	@echo '  make test-wallet      Wallet unit, integration and Playwright tests (no network)'
+	@echo '  make test-wallet-live Wallet against the real Cronos nodes (read-only)'
 	@echo '  make test-cloud       Live Grok text and image tests (XAI_API_KEY)'
 	@echo '  make test-live        Full Playwright flow with real OCR, Grok, and CLI'
 	@echo '  make test-native-capture  Real desktop capture + OCR/image + Grok in Playwright'
@@ -120,6 +122,18 @@ test-e2e: build-debug
 .PHONY: test-scripts restart
 test-scripts:
 	npm run test:scripts
+# The wallet's own layers: Rust unit + integration (shared crate), JS unit
+# (card helpers), then Playwright against a fake Cronos node.
+.PHONY: test-wallet test-wallet-live
+test-wallet: build-debug
+	cargo test -p causewaybay-shared
+	node --test tests/scripts/wallet-format.test.mjs
+	npx playwright test tests/e2e/wallet.spec.mjs tests/e2e/wallet-flow.spec.mjs --project=chromium
+# Live, read-only: chain ids, token metadata, a node-validated signature, and
+# the Wallet page reading real balances. Never broadcasts a funded transfer.
+test-wallet-live: build-debug
+	cargo test -p causewaybay-shared --test cronos_live -- --ignored
+	RUN_LIVE_WALLET=1 npx playwright test tests/e2e/wallet-live.spec.mjs --project=chromium
 # Discovers fresh-context unit/API/browser regressions alongside the full suite.
 test: test-rust test-scripts test-e2e
 test-vision:

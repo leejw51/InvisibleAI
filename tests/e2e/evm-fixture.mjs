@@ -63,6 +63,7 @@ export const RPC = /^https:\/\/evm(-t3)?\.cronos\.org\/?$/;
 export async function fakeCronos(context, state) {
   state.calls = [];
   state.sent = [];
+  state.polls = {};
   await context.route(RPC, async route => {
     const url = route.request().url();
     const mainnet = !url.includes('-t3');
@@ -81,7 +82,13 @@ export async function fakeCronos(context, state) {
         state.sent.push({ url, raw });
         return answer(hex(keccak256(unhex(raw))));
       }
-      case 'eth_getTransactionReceipt': return answer({ status: '0x1', transactionHash: params[0] });
+      case 'eth_getTransactionReceipt': {
+        // `receiptAfter` polls answer null (still pending) before the receipt.
+        const seen = (state.polls[params[0]] = (state.polls[params[0]] ?? 0) + 1);
+        if (seen <= (state.receiptAfter ?? 0)) return answer(null);
+        state.onReceipt?.(params[0]);
+        return answer({ status: state.receiptStatus ?? '0x1', transactionHash: params[0] });
+      }
       default: return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ jsonrpc: '2.0', id, error: { code: -32601, message: 'method not found' } }) });
     }
   });

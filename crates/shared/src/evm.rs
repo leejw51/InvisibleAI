@@ -3,8 +3,8 @@
 //! and legacy EIP-155 transactions. No network access and no persistence: the
 //! browser asks the node, this module only encodes, signs and decodes.
 use k256::ecdsa::SigningKey;
-pub use u256::U256;
 use sha3::{Digest, Keccak256};
+pub use u256::{U256, U256Error};
 
 /// The only two networks the wallet harness serves.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -71,14 +71,19 @@ pub fn parse_units(amount: &str, decimals: u8) -> Result<U256, String> {
     }
     let (int_part, frac_part) = s.split_once('.').unwrap_or((s, ""));
     if (int_part.is_empty() && frac_part.is_empty())
-        || ![int_part, frac_part].iter().all(|p| p.bytes().all(|b| b.is_ascii_digit()))
+        || ![int_part, frac_part]
+            .iter()
+            .all(|p| p.bytes().all(|b| b.is_ascii_digit()))
         || frac_part.len() > decimals as usize
     {
         return Err(invalid());
     }
     let mut digits = String::from(if int_part.is_empty() { "0" } else { int_part });
     digits.push_str(frac_part);
-    digits.extend(std::iter::repeat_n('0', decimals as usize - frac_part.len()));
+    digits.extend(std::iter::repeat_n(
+        '0',
+        decimals as usize - frac_part.len(),
+    ));
     let trimmed = digits.trim_start_matches('0');
     U256::from_str_radix(if trimmed.is_empty() { "0" } else { trimmed }, 10)
         .map_err(|_| "Amount is too large.".to_string())
@@ -134,7 +139,8 @@ pub fn parse_address(value: &str) -> Result<[u8; 20], String> {
         .ok_or("Enter a 0x-prefixed address of 40 hex characters.")?;
     let mut out = [0u8; 20];
     hex::decode_to_slice(raw, &mut out).map_err(|_| "Invalid address")?;
-    let mixed = raw.bytes().any(|b| b.is_ascii_lowercase()) && raw.bytes().any(|b| b.is_ascii_uppercase());
+    let mixed =
+        raw.bytes().any(|b| b.is_ascii_lowercase()) && raw.bytes().any(|b| b.is_ascii_uppercase());
     if mixed && checksum(&out) != value {
         return Err("Address checksum does not match. Check for a mistyped character.".into());
     }
@@ -160,12 +166,117 @@ pub fn erc20_balance_of(owner: &[u8; 20]) -> Vec<u8> {
     out
 }
 
+/// A USDC transfer that passed every check that needs no network: the
+/// recipient parses (and verifies, if checksummed), is not the sender, and the
+/// amount is positive, within the token's decimals and within the balance.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TransferRequest {
+    pub recipient: [u8; 20],
+    pub value: U256,
+    pub data: Vec<u8>,
+}
+pub fn check_transfer(
+    network: &Network,
+    from: &str,
+    to: &str,
+    amount: &str,
+    usdc_balance: U256,
+) -> Result<TransferRequest, String> {
+    let recipient = parse_address(to)?;
+    if from.trim().eq_ignore_ascii_case(to.trim()) {
+        return Err(
+            "That is your own address. Sending to yourself moves nothing and still costs a fee."
+                .into(),
+        );
+    }
+    let value = parse_units(amount, network.usdc.decimals)?;
+    if value.is_zero() {
+        return Err("Enter an amount greater than zero.".into());
+    }
+    if value > usdc_balance {
+        return Err(format!(
+            "You have {} {}.",
+            format_units(usdc_balance, network.usdc.decimals),
+            network.usdc.symbol
+        ));
+    }
+    Ok(TransferRequest {
+        data: erc20_transfer(&recipient, value),
+        recipient,
+        value,
+    })
+}
+/// What the node said about the sender and the chain right now.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Quote {
+    pub nonce: U256,
+    pub gas_price: U256,
+    /// `eth_estimateGas`, or `None` when the node could not estimate.
+    pub estimate: Option<U256>,
+}
+/// Gas limit when the node cannot estimate an ERC-20 transfer.
+pub const FALLBACK_GAS: u64 = 100_000;
+/// Build the unsigned transaction and refuse it if the fee passes the
+/// network's ceiling or the native balance, before any key is touched.
+pub fn build_transfer(
+    network: &Network,
+    request: &TransferRequest,
+    quote: Quote,
+    native_balance: U256,
+) -> Result<LegacyTransaction, String> {
+    let nonce = u64::try_from(quote.nonce)
+        .map_err(|_| "The network returned an impossible nonce.".to_string())?;
+    let gas_limit = quote
+        .estimate
+        .and_then(|e| u64::try_from(e).ok())
+        .filter(|e| *e > 0)
+        .map(with_headroom)
+        .unwrap_or(FALLBACK_GAS);
+    let tx = LegacyTransaction {
+        nonce,
+        gas_price: quote.gas_price,
+        gas_limit,
+        to: parse_address(network.usdc.address)?,
+        value: U256::ZERO,
+        data: request.data.clone(),
+        chain_id: network.chain_id,
+    };
+    let fee = tx.fee();
+    let ceiling = U256::from(network.max_fee_wei);
+    if fee > ceiling {
+        return Err(format!(
+            "The network asked for a fee of {} {}, above this wallet's {} {} ceiling. Not signing.",
+            format_units(fee, 18),
+            network.native,
+            format_units(ceiling, 18),
+            network.native
+        ));
+    }
+    if fee > native_balance {
+        return Err(format!(
+            "You need about {} {} for the network fee.",
+            format_units(fee, 18),
+            network.native
+        ));
+    }
+    Ok(tx)
+}
+
 mod u256 {
     //! Just enough 256-bit unsigned arithmetic for balances, amounts and fees:
     //! big-endian bytes, so the derived ordering is numeric ordering.
     use std::fmt;
     #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
     pub struct U256([u8; 32]);
+    /// Not a number in the given radix, or larger than 256 bits.
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub struct U256Error;
+    impl fmt::Display for U256Error {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            f.write_str("not a 256-bit unsigned number")
+        }
+    }
+    impl std::error::Error for U256Error {}
     impl U256 {
         pub const ZERO: Self = Self([0; 32]);
         pub fn is_zero(&self) -> bool {
@@ -195,23 +306,29 @@ mod u256 {
         pub fn saturating_mul_u64(&self, m: u64) -> Self {
             self.mul_add(m, 0).unwrap_or(Self([0xff; 32]))
         }
-        fn div_rem_small(&self, d: u32) -> (Self, u32) {
+        /// `(self / d, self % d)`, long division one byte at a time.
+        fn div_rem_u64(&self, d: u64) -> (Self, u64) {
+            assert!(d != 0);
             let mut out = [0u8; 32];
-            let mut rem = 0u32;
-            for i in 0..32 {
-                let v = (rem << 8) | self.0[i] as u32;
-                out[i] = (v / d) as u8;
-                rem = v % d;
+            let mut rem = 0u128;
+            for (q, byte) in out.iter_mut().zip(self.0) {
+                let v = (rem << 8) | byte as u128;
+                *q = (v / d as u128) as u8;
+                rem = v % d as u128;
             }
-            (Self(out), rem)
+            (Self(out), rem as u64)
         }
-        pub fn from_str_radix(s: &str, radix: u32) -> Result<Self, ()> {
+        /// `self / d`, rounding down.
+        pub fn div_floor_u64(&self, d: u64) -> Self {
+            self.div_rem_u64(d).0
+        }
+        pub fn from_str_radix(s: &str, radix: u32) -> Result<Self, U256Error> {
             if s.is_empty() || !(radix == 10 || radix == 16) {
-                return Err(());
+                return Err(U256Error);
             }
             s.chars().try_fold(Self::ZERO, |acc, c| {
-                let digit = c.to_digit(radix).ok_or(())?;
-                acc.mul_add(radix as u64, digit as u64).ok_or(())
+                let digit = c.to_digit(radix).ok_or(U256Error)?;
+                acc.mul_add(radix as u64, digit as u64).ok_or(U256Error)
             })
         }
     }
@@ -226,17 +343,17 @@ mod u256 {
         }
     }
     impl TryFrom<U256> for u64 {
-        type Error = ();
-        fn try_from(v: U256) -> Result<u64, ()> {
+        type Error = U256Error;
+        fn try_from(v: U256) -> Result<u64, U256Error> {
             if v.0[..24].iter().any(|b| *b != 0) {
-                return Err(());
+                return Err(U256Error);
             }
             Ok(u64::from_be_bytes(v.0[24..].try_into().unwrap()))
         }
     }
     impl std::str::FromStr for U256 {
-        type Err = ();
-        fn from_str(s: &str) -> Result<Self, ()> {
+        type Err = U256Error;
+        fn from_str(s: &str) -> Result<Self, U256Error> {
             Self::from_str_radix(s, 10)
         }
     }
@@ -248,7 +365,7 @@ mod u256 {
             let mut digits = Vec::new();
             let mut n = *self;
             while !n.is_zero() {
-                let (q, r) = n.div_rem_small(10);
+                let (q, r) = n.div_rem_u64(10);
                 digits.push(b'0' + r as u8);
                 n = q;
             }
@@ -397,7 +514,10 @@ mod tests {
         let v = &vectors("transactions")["vectors"][3];
         let to = parse_address("0x9858effd232b4033e47d90003d41ec34ecaeda94").unwrap();
         let data = erc20_transfer(&to, parse_units("1.5", 18).unwrap());
-        assert_eq!(format!("0x{}", hex::encode(data)), v["data"].as_str().unwrap());
+        assert_eq!(
+            format!("0x{}", hex::encode(data)),
+            v["data"].as_str().unwrap()
+        );
         assert_eq!(
             hex::encode(erc20_balance_of(&to)),
             "70a082310000000000000000000000009858effd232b4033e47d90003d41ec34ecaeda94"
@@ -411,14 +531,26 @@ mod tests {
             let bytes = parse_address(lower).unwrap();
             assert_eq!(checksum(&bytes), good);
             assert_eq!(parse_address(good).unwrap(), bytes);
-            assert_eq!(parse_address(&lower.to_uppercase().replacen("0X", "0x", 1)).unwrap(), bytes);
+            assert_eq!(
+                parse_address(&lower.to_uppercase().replacen("0X", "0x", 1)).unwrap(),
+                bytes
+            );
             // Flip the case of the first letter: still hex, no longer the checksum.
-            let i = good.char_indices().skip(2).find(|(_, c)| c.is_ascii_alphabetic());
+            let i = good
+                .char_indices()
+                .skip(2)
+                .find(|(_, c)| c.is_ascii_alphabetic());
             if let Some((i, c)) = i {
                 let mut bad = good.to_string();
-                let flipped = if c.is_ascii_uppercase() { c.to_ascii_lowercase() } else { c.to_ascii_uppercase() };
+                let flipped = if c.is_ascii_uppercase() {
+                    c.to_ascii_lowercase()
+                } else {
+                    c.to_ascii_uppercase()
+                };
                 bad.replace_range(i..i + 1, &flipped.to_string());
-                if bad.chars().skip(2).any(|c| c.is_ascii_uppercase()) && bad.chars().skip(2).any(|c| c.is_ascii_lowercase()) {
+                if bad.chars().skip(2).any(|c| c.is_ascii_uppercase())
+                    && bad.chars().skip(2).any(|c| c.is_ascii_lowercase())
+                {
                     assert!(parse_address(&bad).is_err(), "{bad}");
                 }
             }
@@ -433,11 +565,17 @@ mod tests {
             let decimals = row["decimals"].as_u64().unwrap() as u8;
             let value = parse_units(row["amount"].as_str().unwrap(), decimals).unwrap();
             assert_eq!(value.to_string(), row["value"].as_str().unwrap());
-            assert_eq!(parse_units(&format_units(value, decimals), decimals).unwrap(), value);
+            assert_eq!(
+                parse_units(&format_units(value, decimals), decimals).unwrap(),
+                value
+            );
         }
         for row in v["invalid"].as_array().unwrap() {
             let decimals = row["decimals"].as_u64().unwrap() as u8;
-            assert!(parse_units(row["amount"].as_str().unwrap(), decimals).is_err(), "{row}");
+            assert!(
+                parse_units(row["amount"].as_str().unwrap(), decimals).is_err(),
+                "{row}"
+            );
         }
         assert_eq!(format_units(U256::from(1_500_000u64), 6), "1.5");
         assert_eq!(format_units(U256::from(5u64), 6), "0.000005");
@@ -446,22 +584,143 @@ mod tests {
     #[test]
     fn quantities_and_networks() {
         assert_eq!(parse_quantity("0x").unwrap(), U256::ZERO);
-        assert_eq!(parse_quantity("0x0f4240").unwrap(), U256::from(1_000_000u64));
+        assert_eq!(
+            parse_quantity("0x0f4240").unwrap(),
+            U256::from(1_000_000u64)
+        );
         assert!(parse_quantity("12").is_err());
         assert_eq!(network("cronos-mainnet").unwrap().chain_id, 25);
         assert_eq!(network("cronos-testnet").unwrap().chain_id, 338);
         assert!(network("ethereum").is_none());
         for n in NETWORKS {
-            assert_eq!(parse_address(n.usdc.address).map(|a| checksum(&a)).unwrap(), n.usdc.address);
+            assert_eq!(
+                parse_address(n.usdc.address).map(|a| checksum(&a)).unwrap(),
+                n.usdc.address
+            );
             assert_eq!(n.usdc.decimals, 6);
         }
         assert_eq!(with_headroom(40_000), 50_000);
+    }
+    const ME: &str = "0x9858effd232b4033e47d90003d41ec34ecaeda94";
+    const YOU: &str = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
+    fn usdc(amount: &str) -> U256 {
+        parse_units(amount, 6).unwrap()
+    }
+    fn cro(amount: &str) -> U256 {
+        parse_units(amount, 18).unwrap()
+    }
+    fn quote(nonce: u64, gwei: u64, estimate: Option<u64>) -> Quote {
+        Quote {
+            nonce: U256::from(nonce),
+            gas_price: U256::from(gwei).saturating_mul_u64(1_000_000_000),
+            estimate: estimate.map(U256::from),
+        }
+    }
+    #[test]
+    fn check_transfer_accepts_a_valid_request() {
+        let r = check_transfer(&CRONOS_TESTNET, ME, YOU, " 1.25 ", usdc("10")).unwrap();
+        assert_eq!(r.value, usdc("1.25"));
+        assert_eq!(checksum(&r.recipient), YOU);
+        assert_eq!(r.data, erc20_transfer(&r.recipient, usdc("1.25")));
+        // The whole balance is allowed; lowercase needs no checksum.
+        assert!(check_transfer(&CRONOS_TESTNET, ME, &YOU.to_lowercase(), "10", usdc("10")).is_ok());
+    }
+    #[test]
+    fn check_transfer_refuses_before_any_network_call() {
+        let n = &CRONOS_MAINNET;
+        let err =
+            |to: &str, amount: &str| check_transfer(n, ME, to, amount, usdc("10")).unwrap_err();
+        assert!(err(ME, "1").contains("your own address"));
+        assert!(err(&ME.to_uppercase().replacen("0X", "0x", 1), "1").contains("your own address"));
+        assert!(err("0xF39Fd6e51aad88F6F4ce6aB8827279cffFb92266", "1").contains("checksum"));
+        assert!(err("0x1234", "1").contains("40 hex characters"));
+        assert!(err(YOU, "0").contains("greater than zero"));
+        assert!(err(YOU, "0.000000").contains("greater than zero"));
+        assert!(err(YOU, "1.0000001").contains("at most 6 decimal places"));
+        assert!(err(YOU, "-1").contains("at most 6"));
+        assert!(err(YOU, "1e3").contains("at most 6"));
+        assert_eq!(err(YOU, "10.000001"), "You have 10 USDC.");
+        assert_eq!(
+            check_transfer(&CRONOS_TESTNET, ME, YOU, "11", usdc("10")).unwrap_err(),
+            "You have 10 devUSDC.e."
+        );
+    }
+    #[test]
+    fn build_transfer_targets_the_network_contract_with_headroom() {
+        for n in NETWORKS {
+            let r = check_transfer(&n, ME, YOU, "2", usdc("5")).unwrap();
+            let tx = build_transfer(&n, &r, quote(7, 5_000, Some(50_000)), cro("1")).unwrap();
+            assert_eq!(tx.chain_id, n.chain_id);
+            assert_eq!(checksum(&tx.to), n.usdc.address);
+            assert_eq!(tx.value, U256::ZERO);
+            assert_eq!(tx.nonce, 7);
+            assert_eq!(tx.gas_limit, 62_500);
+            assert_eq!(tx.data, r.data);
+            assert_eq!(format_units(tx.fee(), 18), "0.3125");
+        }
+    }
+    #[test]
+    fn build_transfer_falls_back_and_refuses_unaffordable_fees() {
+        let n = &CRONOS_TESTNET;
+        let r = check_transfer(n, ME, YOU, "1", usdc("5")).unwrap();
+        // No estimate, a zero estimate, or an absurd one: the fixed fallback.
+        for estimate in [None, Some(0)] {
+            assert_eq!(
+                build_transfer(n, &r, quote(0, 1, estimate), cro("1"))
+                    .unwrap()
+                    .gas_limit,
+                FALLBACK_GAS
+            );
+        }
+        let huge = Quote {
+            estimate: Some(U256::from(u128::MAX)),
+            ..quote(0, 1, None)
+        };
+        assert_eq!(
+            build_transfer(n, &r, huge, cro("1")).unwrap().gas_limit,
+            FALLBACK_GAS
+        );
+        // Exactly at the 20 TCRO ceiling is allowed; one wei over is not.
+        let at = Quote {
+            gas_price: cro("20").div_floor_u64(FALLBACK_GAS),
+            ..quote(0, 0, None)
+        };
+        assert!(build_transfer(n, &r, at, cro("20")).is_ok());
+        let over = Quote {
+            gas_price: U256::from(200_000_000_000_001u64),
+            ..quote(0, 0, None)
+        };
+        assert!(
+            build_transfer(n, &r, over, cro("100"))
+                .unwrap_err()
+                .ends_with("ceiling. Not signing.")
+        );
+        // Affordable by the ceiling but not by the balance.
+        assert_eq!(
+            build_transfer(n, &r, quote(0, 5_000, Some(50_000)), cro("0.3")).unwrap_err(),
+            "You need about 0.3125 TCRO for the network fee."
+        );
+        assert!(build_transfer(n, &r, quote(0, 5_000, Some(50_000)), cro("0.3125")).is_ok());
+        // A nonce that cannot be a u64 is the node lying.
+        let bad = Quote {
+            nonce: U256::from(u128::MAX),
+            ..quote(0, 1, None)
+        };
+        assert!(
+            build_transfer(n, &r, bad, cro("1"))
+                .unwrap_err()
+                .contains("impossible nonce")
+        );
     }
     #[test]
     fn u256_parses_formats_and_bounds() {
         let max = "115792089237316195423570985008687907853269984665640564039457584007913129639935";
         assert_eq!(max.parse::<U256>().unwrap().to_string(), max);
-        assert!("115792089237316195423570985008687907853269984665640564039457584007913129639936".parse::<U256>().is_err());
+        assert!(
+            "115792089237316195423570985008687907853269984665640564039457584007913129639936"
+                .parse::<U256>()
+                .is_err()
+        );
         assert_eq!(U256::from_str_radix("ff", 16).unwrap(), U256::from(255u64));
         assert!(U256::from_str_radix("fg", 16).is_err());
         assert!(U256::from(2u64) > U256::from(1u64));
@@ -469,6 +728,12 @@ mod tests {
         assert_eq!(u64::try_from(U256::from(7u64)), Ok(7));
         assert!(u64::try_from(U256::from(u128::MAX)).is_err());
         assert_eq!(U256::from(3u64).saturating_mul_u64(5), U256::from(15u64));
-        assert_eq!(max.parse::<U256>().unwrap().saturating_mul_u64(2).to_string(), max);
+        assert_eq!(
+            max.parse::<U256>()
+                .unwrap()
+                .saturating_mul_u64(2)
+                .to_string(),
+            max
+        );
     }
 }

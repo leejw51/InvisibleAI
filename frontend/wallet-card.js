@@ -7,9 +7,7 @@
 import { animate } from 'motion';
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
-
-// Standard easeInOutExpo; the same curve as crates/frontend/src/tween.rs.
-export const easeInOutExpo = t => t <= 0 ? 0 : t >= 1 ? 1 : t < 0.5 ? 2 ** (20 * t - 10) / 2 : (2 - 2 ** (-20 * t + 10)) / 2;
+import { easeInOutExpo, digits, money, masked, networkLabel } from './wallet-format.js';
 const reduced = matchMedia('(prefers-reduced-motion: reduce)');
 const W = 1712, H = 1080; // ISO/IEC 7810 ID-1: 85.6 × 53.98 mm
 const ART = { 'cronos-mainnet': '/assets/wallet-card-mainnet.jpg', 'cronos-testnet': '/assets/wallet-card-testnet.jpg' };
@@ -28,17 +26,6 @@ function image(src) {
     img.src = src;
   }));
   return images.get(src);
-}
-function digits(value) {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : 0;
-}
-function money(value, places = 2) {
-  return value.toLocaleString('en-US', { minimumFractionDigits: places, maximumFractionDigits: places });
-}
-function masked(address) {
-  if (!/^0x[0-9a-fA-F]{40}$/.test(address || '')) return '0x•••• •••• •••• ••••';
-  return `${address.slice(0, 6)}  ••••  ••••  ${address.slice(-4)}`;
 }
 function roundRect(ctx, x, y, w, h, r) {
   ctx.beginPath();
@@ -181,7 +168,7 @@ class WalletCard extends HTMLElement {
     // Brand and network
     ctx.font = font(700, 44); ctx.globalAlpha = 0.92;
     ctx.fillText('INVISIBLE AI', 96, 140);
-    const label = this.network === 'cronos-mainnet' ? 'CRONOS MAINNET' : 'CRONOS TESTNET';
+    const label = networkLabel(this.network);
     ctx.font = font(600, 34);
     const lw = ctx.measureText(label).width + 56;
     roundRect(ctx, W - 96 - lw, 92, lw, 64, 32);

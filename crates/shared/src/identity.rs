@@ -23,7 +23,9 @@ impl Identity {
     }
     /// A raw secp256k1 key, as 64 hex characters with or without `0x`.
     pub fn from_private_key(value: &str) -> Result<Self, String> {
-        let invalid = || "Enter a valid private key: 64 hex characters, optionally starting with 0x.".to_string();
+        let invalid = || {
+            "Enter a valid private key: 64 hex characters, optionally starting with 0x.".to_string()
+        };
         let value = value.trim();
         let raw = value.strip_prefix("0x").unwrap_or(value);
         if raw.len() != 64 || !raw.bytes().all(|b| b.is_ascii_hexdigit()) {
@@ -31,7 +33,9 @@ impl Identity {
         }
         let mut bytes = Zeroizing::new([0u8; 32]);
         hex::decode_to_slice(raw, bytes.as_mut()).map_err(|_| invalid())?;
-        SigningKey::from_slice(bytes.as_ref()).map(Self).map_err(|_| invalid())
+        SigningKey::from_slice(bytes.as_ref())
+            .map(Self)
+            .map_err(|_| invalid())
     }
     /// The key as `0x`-prefixed hex, for the browser's local storage only.
     pub fn private_key_hex(&self) -> Zeroizing<String> {
@@ -178,11 +182,27 @@ mod tests {
         let from_phrase = Identity::from_mnemonic(PHRASE).unwrap();
         let key = from_phrase.private_key_hex();
         // Public vector: the private key of the "abandon … about" wallet at index 0.
-        assert_eq!(key.as_str(), "0x1ab42cc412b618bdea3a599e3c9bae199ebf030895b039e9db1e30dafb12b727");
-        for text in [key.as_str(), &key[2..], &format!("  {}  ", key.to_uppercase().replacen("0X", "0x", 1))] {
-            assert_eq!(Identity::from_private_key(text).unwrap().address(), from_phrase.address());
+        assert_eq!(
+            key.as_str(),
+            "0x1ab42cc412b618bdea3a599e3c9bae199ebf030895b039e9db1e30dafb12b727"
+        );
+        for text in [
+            key.as_str(),
+            &key[2..],
+            &format!("  {}  ", key.to_uppercase().replacen("0X", "0x", 1)),
+        ] {
+            assert_eq!(
+                Identity::from_private_key(text).unwrap().address(),
+                from_phrase.address()
+            );
         }
-        for bad in ["", "0x1234", &"0".repeat(64), &"f".repeat(64), &format!("0x{}", "g".repeat(64))] {
+        for bad in [
+            "",
+            "0x1234",
+            &"0".repeat(64),
+            &"f".repeat(64),
+            &format!("0x{}", "g".repeat(64)),
+        ] {
             assert!(Identity::from_private_key(bad).is_err(), "{bad}");
         }
     }

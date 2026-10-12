@@ -2,6 +2,14 @@
 
 > Naming note (2026-10-08): entries below record the UI as tested at the time. Since then the Cloud page became **Autonomous AI** at `/autonomous` (`/cloud` still opens it), Dashboard moved to `/dashboard` (`/status` still works), Devices moved to `/devices`, the Coding agent page and Pinned menu entry were folded into chat and the library, and the product name is Invisible AI.
 
+## Stablecoin wallet: USDC on Cronos — 2026-10-12
+
+Added the **Wallet** page (USDC on Cronos mainnet, devUSDC.e on Cronos testnet), private-key login, and saved-wallet sign-in. Only the derived private key and wallet index are kept, in browser local storage; phrases and keys are never rendered, and leave only through a confirmed **Copy**.
+
+Verified in three layers. **Unit:** 22 Rust tests in `causewaybay-shared` (the Causewaybay Wallet's transaction, EIP-55 and unit vectors; transfer checks and fee ceiling; the 256-bit integer) and 5 `node --test` cases for the card helpers (easeInOutExpo matched to `tween.rs`, money, address masking). **Integration:** `crates/shared/tests/wallet_flow.rs` signs a transfer from a phrase, decodes the raw bytes with an independent RLP decoder and recovers the signer on both chains; `cronos_live.rs` (ignored by default) checked chain ids, the token contracts' `symbol()`/`decimals()` and gas prices on the real nodes, and both nodes refused a throwaway-key transfer for insufficient funds only — after accepting its encoding, chain id and signature. **Browser:** `wallet.spec.mjs` (7) and the `wallet-flow.spec.mjs` journey (new wallet → approval → receive → send → network switch → sign out → back in by key) against a fake Cronos node, checking the exact signed bytes and that no secret reaches the page, local storage beyond the key, or any backend request; `wallet-live.spec.mjs` read real balances on both networks and got a real quote without sending. `make test-wallet` and `make test-wallet-live` passed; `cargo fmt --check` and both Clippy runs were clean.
+
+Regression: 14 related suites (78 tests) on this branch and on `main` failed the same set, all pre-existing (sidebar Admin button and heading wording). `mlx_manager::tests::shutdown_kills_the_worker_process_group` failed once under the full parallel suite and passed 5/5 alone; it is timing-based and unchanged here.
+
 ## Clarify Cloud TextEdit controls — 2026-10-06
 
 Renamed Cloud's ambiguous **Start session / Stop session** buttons to **Start TextEdit replies / Stop TextEdit replies**, including Korean **TextEdit 답변 시작 / 중지** and the other five translations. The optional TextEdit section now explains that replies are added to TextEdit and screen capture works while this feature is off. Existing navigation, capture controls, session context and history are unchanged. The frontend was rebuilt; no backend or client restart was needed.

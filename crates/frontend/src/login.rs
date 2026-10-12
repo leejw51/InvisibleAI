@@ -18,7 +18,7 @@ pub struct Props {
     pub changed: Callback<()>,
 }
 #[derive(Clone, Copy, PartialEq)]
-enum Method {
+pub enum Method {
     Phrase,
     PrivateKey,
 }
@@ -73,7 +73,13 @@ impl Login {
     }
     /// Sign the backend's challenge; only the signature leaves the browser, and
     /// the key is saved to local storage once the backend accepts it.
-    fn sign_in(&mut self, ctx: &Context<Self>, index: u32, identity: Identity, name: Option<String>) {
+    fn sign_in(
+        &mut self,
+        ctx: &Context<Self>,
+        index: u32,
+        identity: Identity,
+        name: Option<String>,
+    ) {
         if self.busy {
             return;
         }
@@ -138,7 +144,8 @@ impl Component for Login {
             Msg::Saved => {
                 let Some((identity, index)) = account::saved() else {
                     self.saved = None;
-                    self.error = "The saved wallet is no longer in this browser. Sign in again.".into();
+                    self.error =
+                        "The saved wallet is no longer in this browser. Sign in again.".into();
                     return true;
                 };
                 self.sign_in(ctx, index, identity, None);

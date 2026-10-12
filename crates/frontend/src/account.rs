@@ -18,7 +18,9 @@ fn storage() -> Option<web_sys::Storage> {
 /// index it was derived at (0 for a key entered directly).
 pub fn remember(identity: &Identity, index: u32) {
     if let Some(storage) = storage() {
-        let value = Zeroizing::new(json!({"key": identity.private_key_hex().as_str(), "index": index}).to_string());
+        let value = Zeroizing::new(
+            json!({"key": identity.private_key_hex().as_str(), "index": index}).to_string(),
+        );
         let _ = storage.set_item(KEY, &value);
     }
 }
@@ -33,7 +35,10 @@ pub fn saved() -> Option<(Identity, u32)> {
     let raw = Zeroizing::new(storage()?.get_item(KEY).ok()??);
     let value: Value = serde_json::from_str(&raw).ok()?;
     let key = Zeroizing::new(value["key"].as_str()?.to_string());
-    let index = value["index"].as_u64().and_then(|i| u32::try_from(i).ok()).unwrap_or(0);
+    let index = value["index"]
+        .as_u64()
+        .and_then(|i| u32::try_from(i).ok())
+        .unwrap_or(0);
     Some((Identity::from_private_key(&key).ok()?, index))
 }
 pub fn identity() -> Option<Identity> {
