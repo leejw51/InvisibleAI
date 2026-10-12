@@ -232,7 +232,7 @@ make build
 make package
 ```
 
-Produces `package/causewaybay-<os>-<arch>.tar.gz`, a SHA-256 checksum, and a clean extracted directory containing:
+Produces `package/invisible-ai-server-<version>-<os>-<arch>.zip`, `package/invisible-ai-client-<version>-<os>-<arch>.zip`, `package/SHA256SUMS` for both, and a clean extracted copy of the server folder. `<version>` is the workspace version in `Cargo.toml` (`make version`). Each zip unpacks into one folder named like the archive and includes `.env.example`, `QUICK.md` (tutorial) and `README.md` (manual), whose sources are in `packaging/`. The server folder contains:
 
 - `bin/server` and `bin/client` — backend and capture binaries.
 - `bin/invisible-apple-ai`, `bin/invisible-mlx`, and `bin/mlx.metallib` — local AI workers and GPU kernels.
@@ -254,9 +254,9 @@ The Devices page shows copyable `./bin/client` commands with the current wallet 
 
 ### Ready-to-run capture client
 
-Run `make package` to produce `package/client.zip` alongside the full server release. The ZIP contains only two executable files: `client` and `go.sh`.
+Run `make package` to produce `package/invisible-ai-client-<version>-<os>-<arch>.zip` alongside the server release. It unpacks into one folder holding two executables, `client` and `go.sh`, plus a client `.env.example`, `QUICK.md` and `README.md`. Copy `.env.example` to `.env` beside `go.sh` to fill in `BACKEND_URL`, `OWNER_WALLET` and `APP_TOKEN`; `go.sh` reads only those keys (and `CAUSEWAYBAY_CLIENT_CONFIG_DIR`) as plain text and never executes the file. Values baked into `go.sh` and variables already exported take precedence.
 
-For a prefilled download, sign in and open **Dashboard → Download client.zip**. The backend inserts its detected **Tailscale IP** (including its listening port) and the **current authenticated wallet** into `go.sh`. Unpack on a matching computer, then run:
+For a prefilled download, sign in and open **Dashboard → Download client.zip** (just `client` and `go.sh`, no folder). The backend inserts its detected **Tailscale IP** (including its listening port) and the **current authenticated wallet** into `go.sh`. Unpack on a matching computer, then run:
 
 ```sh
 ./go.sh

@@ -12,8 +12,9 @@ const backend = 'http://100.64.0.20:4567';
 function fixture(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cwb-launcher-test-'));
   t.after(() => fs.rmSync(root, {recursive: true, force: true}));
-  for (const directory of ['scripts', 'bin', 'build stage']) fs.mkdirSync(path.join(root, directory));
+  for (const directory of ['scripts', 'bin', 'packaging', 'build stage']) fs.mkdirSync(path.join(root, directory));
   for (const file of ['client-go.sh', 'package-client.mjs']) fs.copyFileSync(path.resolve('scripts', file), path.join(root, 'scripts', file));
+  for (const file of ['client.env.example', 'QUICK.md', 'README.md']) fs.copyFileSync(path.resolve('packaging', file), path.join(root, 'packaging', file));
   fs.writeFileSync(path.join(root, 'bin/client'), '#!/bin/sh\nprintf "%s\\n" "$PWD" "${APP_TOKEN-}" "$@" > "$LAUNCH_RECORD"\nexit "${LAUNCH_EXIT_CODE:-0}"\n', {mode: 0o755});
   const stage = path.join(root, 'build stage'), zip = path.join(root, 'client.zip');
   const env = {...process.env, OWNER_WALLET: wallet, PACKAGE_BACKEND_URL: backend, APP_TOKEN: ''};
@@ -24,7 +25,7 @@ function fixture(t) {
     const destination = path.join(root, 'unpacked client');
     fs.mkdirSync(destination);
     execFileSync('unzip', ['-q', zip, '-d', destination]);
-    return destination;
+    return path.join(destination, 'build stage');
   }
   function launch(destination, args = [], overrides = {}, input = '') {
     const record = path.join(root, 'launch-record');
@@ -43,9 +44,12 @@ test('rebuilding removes stale ZIP entries and restores executable launcher perm
   fs.writeFileSync(f.zip, 'old published archive');
   const built = f.build();
   assert.equal(built.status, 0, built.stderr);
-  assert.deepEqual(execFileSync('unzip', ['-Z1', f.zip], {encoding: 'utf8'}).trim().split('\n').sort(), ['client', 'go.sh']);
+  assert.deepEqual(execFileSync('unzip', ['-Z1', f.zip], {encoding: 'utf8'}).trim().split('\n').sort(),
+    ['.env.example', 'QUICK.md', 'README.md', 'client', 'go.sh'].map(file => `build stage/${file}`));
   const unpacked = f.unpack();
   for (const file of ['client', 'go.sh']) fs.accessSync(path.join(unpacked, file), fs.constants.X_OK);
+  assert.equal(fs.readFileSync(path.join(unpacked, '.env.example'), 'utf8'), fs.readFileSync('packaging/client.env.example', 'utf8'));
+  assert.equal(fs.existsSync(path.join(unpacked, '.env')), false);
   assert.equal(fs.readFileSync(path.join(unpacked, 'client'), 'utf8'), fs.readFileSync(path.join(f.root, 'bin/client'), 'utf8'));
 });
 
@@ -109,4 +113,23 @@ test('prefilled package uses an environment token without prompting; missing tok
   assert.equal(launched.status, 0, launched.stderr);
   assert.equal(launched.stdout, '');
   assert.deepEqual(launched.args, [fs.realpathSync(f.root), 'synthetic-environment-token', backend, wallet]);
+});
+
+test('launcher fills missing values from .env without executing it; baked values and the environment win', t => {
+  const f = fixture(t);
+  // The backend URL is baked in; the .env URL must not replace it.
+  const built = f.build({OWNER_WALLET: ''});
+  assert.equal(built.status, 0, built.stderr);
+  const unpacked = f.unpack();
+  fs.writeFileSync(path.join(unpacked, '.env'), [
+    '# synthetic client settings', 'BACKEND_URL=http://100.64.0.99:9999', `OWNER_WALLET=${wallet}`,
+    'APP_TOKEN=synthetic-dotenv-token', 'UNRELATED=$(touch unsafe)', 'PATH=/nowhere',
+  ].join('\n'));
+  const fromFile = f.launch(unpacked);
+  assert.equal(fromFile.status, 0, fromFile.stderr);
+  assert.equal(fromFile.stdout, '');
+  assert.deepEqual(fromFile.args, [fs.realpathSync(f.root), 'synthetic-dotenv-token', backend, wallet]);
+  assert.equal(fs.existsSync(path.join(f.root, 'unsafe')), false);
+  const fromEnvironment = f.launch(unpacked, [], {APP_TOKEN: 'synthetic-environment-token'});
+  assert.deepEqual(fromEnvironment.args, [fs.realpathSync(f.root), 'synthetic-environment-token', backend, wallet]);
 });

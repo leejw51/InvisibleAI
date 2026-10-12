@@ -5,11 +5,13 @@
 # in Cargo.toml. Or manually via workflow_dispatch for a dry run that
 # uploads the artifacts without creating a release.
 #
-#   macos-26 → invisible-ai-<version>-darwin-<arch>.tar.gz   server, client,
-#                                                            web UI, on-device
-#                                                            AI workers
-#              invisible-ai-client-<version>.zip             capture client only
+#   macos-26 → invisible-ai-server-<version>-darwin-<arch>.zip   server, client,
+#                                                                web UI, on-device
+#                                                                AI workers
+#              invisible-ai-client-<version>-darwin-<arch>.zip   capture client only
 #              SHA256SUMS
+#
+# Each zip unpacks into one folder with .env.example, QUICK.md and README.md.
 #
 # `make package` drives everything — Trunk builds the web UI, cargo the server
 # and CLI, Swift the Apple Foundation Models worker, and cmake compiles MLX for
@@ -99,18 +101,17 @@ jobs:
       - name: Package
         run: make package
 
-      # Versioned names, so downloads from two releases never collide.
-      # COPYFILE_DISABLE was already set when package.sh made the tarball.
+      # package.sh already gives the zips versioned names and writes SHA256SUMS.
       - name: Archive
         env:
           VERSION: ${{ steps.version.outputs.version }}
           ARCH: ${{ steps.version.outputs.arch }}
         run: |
           mkdir -p artifacts
-          cp "package/causewaybay-darwin-$ARCH.tar.gz" "artifacts/invisible-ai-$VERSION-darwin-$ARCH.tar.gz"
-          cp package/client.zip "artifacts/invisible-ai-client-$VERSION.zip"
-          ( cd artifacts && shasum -a 256 * > SHA256SUMS )
-          cat artifacts/SHA256SUMS
+          cp "package/invisible-ai-server-$VERSION-darwin-$ARCH.zip" \
+             "package/invisible-ai-client-$VERSION-darwin-$ARCH.zip" \
+             package/SHA256SUMS artifacts/
+          ( cd artifacts && shasum -a 256 -c SHA256SUMS )
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -136,14 +137,15 @@ jobs:
           body: |
             | archive | what is inside |
             | --- | --- |
-            | `invisible-ai-…-darwin-arm64.tar.gz` | backend server, capture client, web UI and the on-device AI workers (Apple Foundation Models, MLX/Qwen) |
-            | `invisible-ai-client-….zip` | the capture client alone, for a MacBook pointing at a remote backend |
+            | `invisible-ai-server-…-darwin-arm64.zip` | backend server, capture client, web UI and the on-device AI workers (Apple Foundation Models, MLX/Qwen) |
+            | `invisible-ai-client-…-darwin-arm64.zip` | the capture client alone, for a MacBook pointing at a remote backend |
 
-            Verify a download against `SHA256SUMS`, then:
+            Each archive includes `.env.example`, `QUICK.md` (start here) and
+            `README.md` (the manual). Verify a download against `SHA256SUMS`, then:
 
             ```sh
-            tar -xzf invisible-ai-*-darwin-arm64.tar.gz
-            cd causewaybay-darwin-arm64 && open "Start Invisible AI.command"
+            unzip invisible-ai-server-*-darwin-arm64.zip
+            cd invisible-ai-server-*-darwin-arm64 && open "Start Invisible AI.command"
             ```
 
             Requires macOS 26 on Apple silicon. Binaries are not notarized; the

@@ -32,7 +32,7 @@ help:
 	@echo '  make start-client     Alias for make start3 (MacBook)'
 	@echo '  make start3 BACKEND_URL=http://STUDIO:3000  Connect to a remote backend'
 	@echo '  make start2 OWNER_WALLET=0x…  Enroll this Mac for TextEdit Auto; saved for later launches'
-	@echo '  make package          Build release bundle + package/client.zip'
+	@echo '  make package          Build package/invisible-ai-{server,client}-<version>-<os>-<arch>.zip'
 	@echo '  make version          Print the workspace version a release tag must match'
 	@echo '  make demo             Run an explicit demo workspace in the foreground'
 	@echo '  make test             Unit, integration, launcher, Chromium/iPad/iPhone tests'

@@ -32,10 +32,18 @@ fs.copyFileSync('bin/client',path.join(stage,'client'));
 fs.chmodSync(path.join(stage,'client'),0o755);
 fs.writeFileSync(path.join(stage,'go.sh'),script,{mode:0o755});
 fs.chmodSync(path.join(stage,'go.sh'),0o755);
+for (const [source,name] of [['packaging/client.env.example','.env.example'],['packaging/QUICK.md','QUICK.md'],['packaging/README.md','README.md']]) {
+  fs.copyFileSync(source,path.join(stage,name));
+  fs.chmodSync(path.join(stage,name),0o644);
+}
+// Entries sit in one folder named after the staging directory, so unzip never spills.
+// Naming them explicitly keeps stale files in the staging directory out of the archive.
+const folder=path.basename(path.resolve(stage));
+const entries=['client','go.sh','.env.example','QUICK.md','README.md'].map(file=>`${folder}/${file}`);
 // A fresh archive prevents deleted or renamed files from surviving a later build.
 const temporary=path.resolve(stage,'client.zip');
 fs.rmSync(temporary,{force:true});
-execFileSync('/usr/bin/zip',['-q','-X',temporary,'client','go.sh'],{cwd:stage,env:{...process.env,COPYFILE_DISABLE:'1'}});
+execFileSync('/usr/bin/zip',['-q','-X',temporary,...entries],{cwd:path.dirname(path.resolve(stage)),env:{...process.env,COPYFILE_DISABLE:'1'}});
 fs.renameSync(temporary,output);
 console.log(`Capture client: ${output}`);
 if (!owner || !url) console.log('Dashboard downloads fill in the current wallet and Tailscale IP automatically. This CLI bundle prompts for missing values.');

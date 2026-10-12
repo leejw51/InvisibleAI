@@ -4,6 +4,21 @@ set -eu
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 backend_url=@@BACKEND_URL@@
 owner_wallet=@@OWNER_WALLET@@
+# Optional .env beside this script (see .env.example). Only known keys are read and
+# nothing in it is executed. Values baked into this launcher and variables already
+# in the environment take precedence.
+if [ -f "$script_dir/.env" ]; then
+  while IFS='=' read -r key value || [ -n "$key" ]; do
+    [ -n "$value" ] || continue
+    case $key in
+      BACKEND_URL) [ -n "$backend_url" ] || backend_url=$value ;;
+      OWNER_WALLET) [ -n "$owner_wallet" ] || owner_wallet=$value ;;
+      APP_TOKEN|CAUSEWAYBAY_CLIENT_CONFIG_DIR)
+        eval "current=\${$key-}"
+        [ -n "$current" ] || export "$key=$value" ;;
+    esac
+  done < "$script_dir/.env"
+fi
 if [ -z "$backend_url" ]; then
   printf 'Backend Tailscale URL (http://100.x.x.x:3000): '
   IFS= read -r backend_url
