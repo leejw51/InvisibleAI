@@ -13,7 +13,7 @@ export CAUSEWAYBAY_BACKEND := $(BACKEND_URL)
 export BIND_ADDR
 export CAUSEWAYBAY_CLIENT_NAME := $(CLIENT_NAME)
 
-.PHONY: help install setup css visuals frontend backend cli build build-debug start start2 start3 stop stop3 status start-server start-client run demo package test test-rust test-e2e check fmt verify test-vision test-semantic test-tags-live test-cloud test-live test-package
+.PHONY: help install setup css visuals frontend backend cli build build-debug start start2 start3 stop stop3 status start-server start-client run demo package test test-rust test-e2e check fmt verify version test-vision test-semantic test-tags-live test-cloud test-live test-package
 help:
 	@echo 'Causewaybay Bot — Mac Studio backend · MacBook capture · iPad web UI'
 	@echo ''
@@ -33,6 +33,7 @@ help:
 	@echo '  make start3 BACKEND_URL=http://STUDIO:3000  Connect to a remote backend'
 	@echo '  make start2 OWNER_WALLET=0x…  Enroll this Mac for TextEdit Auto; saved for later launches'
 	@echo '  make package          Build release bundle + package/client.zip'
+	@echo '  make version          Print the workspace version a release tag must match'
 	@echo '  make demo             Run an explicit demo workspace in the foreground'
 	@echo '  make test             Unit, integration, launcher, Chromium/iPad/iPhone tests'
 	@echo '  make test-backend     Rust backend + capture CLI tests; no frontend needed'
@@ -105,6 +106,10 @@ demo: build
 	./bin/server serve --demo --no-semantic --data-dir '$(CONFIG_DIR)/demo' --assets dist
 package: build apple-ai mlx-ai
 	bash scripts/package.sh
+# The number a release tag `vX.Y.Z` is compared against.
+version:
+	@cargo metadata --no-deps --format-version 1 --manifest-path Cargo.toml \
+		| node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).packages.find(p=>p.name==="causewaybay-server").version))'
 .PHONY: test-backend
 test-backend:
 	env CWBBOT_ADMIN= cargo test -p causewaybay-server -p causewaybay-shared -p causewaybay-cli

@@ -1,0 +1,150 @@
+# Release — build the macOS bundle and attach it to a GitHub release.
+#
+# Triggered by pushing a tag like `v0.1.0` on a commit that is on main, and the
+# tag must match the version of record — `make version`, the workspace version
+# in Cargo.toml. Or manually via workflow_dispatch for a dry run that
+# uploads the artifacts without creating a release.
+#
+#   macos-26 → invisible-ai-<version>-darwin-<arch>.tar.gz   server, client,
+#                                                            web UI, on-device
+#                                                            AI workers
+#              invisible-ai-client-<version>.zip             capture client only
+#              SHA256SUMS
+#
+# `make package` drives everything — Trunk builds the web UI, cargo the server
+# and CLI, Swift the Apple Foundation Models worker, and cmake compiles MLX for
+# the Qwen worker — then scripts/package.sh assembles and archives it. The
+# recipe is the Makefile's, not this file's, so a tagged release and
+# `make package` on a laptop produce the same thing.
+
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  package:
+    name: Package (macOS)
+    # apple-ai and apple-vision need the macOS 26 SDK (Xcode 26).
+    runs-on: macos-26
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Full history, so the tagged commit can be checked against main.
+          fetch-depth: 0
+
+      # Releases come from main only. A tag pushed on a feature branch would
+      # otherwise ship code that never went through review or CI on main.
+      - name: Tag is on main
+        if: github.ref_type == 'tag'
+        run: |
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "tag ${{ github.ref_name }} ($GITHUB_SHA) is not on main" >&2
+            exit 1
+          fi
+
+      # Pinned to the version development happens on — same as CI.
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with:
+          toolchain: 1.99.0
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: |
+            .
+            native/mlx-ai
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          cache: npm
+
+      # A tag that disagrees with the version of record is a mistake worth
+      # stopping for, not shipping — and it is checked before minutes of build.
+      - name: Resolve the version
+        id: version
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          version=$(make version)
+          if [ "${{ github.ref_type }}" = "tag" ] && [ "${TAG#v}" != "$version" ]; then
+            echo "tag $TAG does not match the version of record $version" >&2
+            echo "bump [workspace.package] version in Cargo.toml, or retag" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "arch=$(uname -m)" >> "$GITHUB_OUTPUT"
+
+      - run: npm ci
+
+      - name: Install Trunk
+        run: cargo install trunk --locked
+
+      # Xcode 26 ships without the Metal compiler; MLX needs it to build
+      # mlx.metallib. Download it only when it is missing.
+      - name: Metal toolchain
+        run: xcrun -f metal >/dev/null 2>&1 || xcodebuild -downloadComponent MetalToolchain
+
+      - name: Package
+        run: make package
+
+      # Versioned names, so downloads from two releases never collide.
+      # COPYFILE_DISABLE was already set when package.sh made the tarball.
+      - name: Archive
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          ARCH: ${{ steps.version.outputs.arch }}
+        run: |
+          mkdir -p artifacts
+          cp "package/causewaybay-darwin-$ARCH.tar.gz" "artifacts/invisible-ai-$VERSION-darwin-$ARCH.tar.gz"
+          cp package/client.zip "artifacts/invisible-ai-client-$VERSION.zip"
+          ( cd artifacts && shasum -a 256 * > SHA256SUMS )
+          cat artifacts/SHA256SUMS
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: invisible-ai-macos-${{ steps.version.outputs.arch }}
+          path: artifacts/*
+          if-no-files-found: error
+
+  release:
+    name: Create GitHub release
+    needs: [package]
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
+        with:
+          files: artifacts/*
+          generate_release_notes: true
+          body: |
+            | archive | what is inside |
+            | --- | --- |
+            | `invisible-ai-…-darwin-arm64.tar.gz` | backend server, capture client, web UI and the on-device AI workers (Apple Foundation Models, MLX/Qwen) |
+            | `invisible-ai-client-….zip` | the capture client alone, for a MacBook pointing at a remote backend |
+
+            Verify a download against `SHA256SUMS`, then:
+
+            ```sh
+            tar -xzf invisible-ai-*-darwin-arm64.tar.gz
+            cd causewaybay-darwin-arm64 && open "Start Invisible AI.command"
+            ```
+
+            Requires macOS 26 on Apple silicon. Binaries are not notarized; the
+            first launch may need right-click → Open.

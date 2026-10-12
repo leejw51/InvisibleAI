@@ -159,10 +159,7 @@ mod tests {
         let state = json!({"BackendState":"Running","TailscaleIPs":["fd7a:115c:a1e0::1","100.64.0.10"],"Self":{"DNSName":"studio.tailnet.ts.net."}});
         let endpoints = tailscale_addresses("0.0.0.0:3456".parse().unwrap(), &state);
         assert_eq!(endpoints.len(), 2);
-        assert_eq!(
-            endpoints[0].web_url,
-            "http://studio.tailnet.ts.net:3456"
-        );
+        assert_eq!(endpoints[0].web_url, "http://studio.tailnet.ts.net:3456");
         assert_eq!(endpoints[1].web_url, "http://100.64.0.10:3456");
         assert!(tailscale_addresses("127.0.0.1:3456".parse().unwrap(), &state).is_empty());
         assert!(tailscale_addresses("192.168.1.20:3456".parse().unwrap(), &state).is_empty());
