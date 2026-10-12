@@ -551,6 +551,7 @@ dependencies = [
  "gloo-events 0.2.0",
  "gloo-net 0.6.0",
  "gloo-timers 0.3.0",
+ "hex",
  "idb",
  "js-sys",
  "pulldown-cmark",

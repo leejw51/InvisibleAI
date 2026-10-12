@@ -17,7 +17,15 @@ pub struct Props {
     pub session: Value,
     pub changed: Callback<()>,
 }
+#[derive(Clone, Copy, PartialEq)]
+enum Method {
+    Phrase,
+    PrivateKey,
+}
 pub struct Login {
+    method: Method,
+    saved: Option<String>,
+    copied: Option<bool>,
     phrase: String,
     index: String,
     name: String,
@@ -30,6 +38,10 @@ pub struct Login {
     preview: Option<Timeout>,
 }
 pub enum Msg {
+    Method(Method),
+    Copy,
+    Copied(bool),
+    Saved,
     Phrase(String),
     Index(String),
     Name(String),
@@ -51,6 +63,34 @@ fn wallet_index(value: &str) -> Result<u32, String> {
         .ok_or_else(|| "Wallet index must be a whole number from 0 to 2147483647.".into())
 }
 impl Login {
+    fn identity(&self) -> Result<(u32, Identity), String> {
+        match self.method {
+            Method::PrivateKey => Identity::from_private_key(&self.phrase).map(|id| (0, id)),
+            Method::Phrase => wallet_index(&self.index).and_then(|index| {
+                Identity::from_mnemonic_at(&self.phrase, index).map(|id| (index, id))
+            }),
+        }
+    }
+    /// Sign the backend's challenge; only the signature leaves the browser, and
+    /// the key is saved to local storage once the backend accepts it.
+    fn sign_in(&mut self, ctx: &Context<Self>, index: u32, identity: Identity, name: Option<String>) {
+        if self.busy {
+            return;
+        }
+        self.busy = true;
+        self.error.clear();
+        ctx.link().send_future(async move { Msg::Finished(async {
+            let address = identity.address();
+            let c: Value = api("POST", "/api/auth/challenge", Some(json!({"address":address}))).await?;
+            let message = c["message"].as_str().ok_or("Missing login challenge")?;
+            let host = web_sys::window().unwrap().location().host().unwrap_or_default();
+            if !message.starts_with(&format!("Causewaybay Bot login\nHost: {host}\nAddress: {address}\nNonce: ")) { return Err("Invalid login challenge".into()); }
+            let signature = identity.sign(message)?;
+            let result = api("POST", "/api/auth/verify", Some(json!({"nonce":c["nonce"],"signature":signature,"wallet_index":index,"name":name}))).await?;
+            account::remember(&identity);
+            Ok(result)
+        }.await) });
+    }
     fn preview(&mut self, ctx: &Context<Self>) {
         let link = ctx.link().clone();
         self.preview = Some(Timeout::new(300, move || link.send_message(Msg::Preview)));
@@ -61,6 +101,9 @@ impl Component for Login {
     type Properties = Props;
     fn create(_: &Context<Self>) -> Self {
         Self {
+            method: Method::Phrase,
+            saved: account::saved_address(),
+            copied: None,
             phrase: String::new(),
             index: "0".into(),
             name: String::new(),
@@ -75,6 +118,31 @@ impl Component for Login {
     }
     fn update(&mut self, ctx: &Context<Self>, msg: Msg) -> bool {
         match msg {
+            Msg::Method(method) => {
+                self.phrase.zeroize();
+                self.method = method;
+                self.generated = false;
+                self.recorded = false;
+                self.copied = None;
+                self.error.clear();
+                if !self.custom_name {
+                    self.name.clear();
+                }
+            }
+            Msg::Copy => {
+                let phrase = Zeroizing::new(self.phrase.clone());
+                ctx.link()
+                    .send_future(async move { Msg::Copied(account::copy_secret(phrase).await) });
+            }
+            Msg::Copied(ok) => self.copied = Some(ok),
+            Msg::Saved => {
+                let Some(identity) = account::identity() else {
+                    self.saved = None;
+                    self.error = "The saved wallet is no longer in this browser. Sign in again.".into();
+                    return true;
+                };
+                self.sign_in(ctx, 0, identity, None);
+            }
             Msg::Phrase(v) => {
                 self.phrase.zeroize();
                 self.phrase = v;
@@ -93,16 +161,16 @@ impl Component for Login {
             }
             Msg::Preview => {
                 if !self.custom_name {
-                    self.name = wallet_index(&self.index)
-                        .and_then(|index| Identity::from_mnemonic_at(&self.phrase, index))
-                        .and_then(|id| username(&id.address()))
+                    self.name = self
+                        .identity()
+                        .and_then(|(_, id)| username(&id.address()))
                         .unwrap_or_default();
                 }
             }
             Msg::Generate => {
                 if self.busy
                     || !account::confirm(
-                        "Generate and display a new recovery phrase? Write down the words in order and your wallet index before continuing.",
+                        "Generate a new recovery phrase? It is never shown on screen: use Copy to save it somewhere safe, with your wallet index, before continuing.",
                     )
                 {
                     return false;
@@ -121,8 +189,10 @@ impl Component for Login {
                     Ok(phrase) => {
                         self.phrase.zeroize();
                         self.phrase = phrase.to_string();
+                        self.method = Method::Phrase;
                         self.generated = true;
                         self.recorded = false;
+                        self.copied = None;
                         self.error.clear();
                         ctx.link().send_message(Msg::Preview);
                     }
@@ -133,6 +203,7 @@ impl Component for Login {
                 self.phrase.zeroize();
                 self.generated = false;
                 self.recorded = false;
+                self.copied = None;
                 if !self.custom_name {
                     self.name.clear();
                 }
@@ -143,11 +214,7 @@ impl Component for Login {
                 if self.busy || (self.generated && !self.recorded) {
                     return false;
                 }
-                let result = wallet_index(&self.index).and_then(|index| {
-                    Identity::from_mnemonic_at(&self.phrase, index)
-                        .map(|identity| (index, identity))
-                });
-                match result {
+                match self.identity() {
                     Err(e) => self.error = e,
                     Ok((index, identity)) => {
                         let name = self.custom_name.then(|| self.name.trim().to_string());
@@ -159,22 +226,7 @@ impl Component for Login {
                             self.error = "User name must contain 1 to 80 characters without control characters.".into();
                             return true;
                         }
-                        self.busy = true;
-                        self.error.clear();
-                        let phrase = Zeroizing::new(
-                            self.phrase.split_whitespace().collect::<Vec<_>>().join(" "),
-                        );
-                        ctx.link().send_future(async move { Msg::Finished(async {
-                            let address = identity.address();
-                            let c: Value = api("POST", "/api/auth/challenge", Some(json!({"address":address}))).await?;
-                            let message = c["message"].as_str().ok_or("Missing login challenge")?;
-                            let host = web_sys::window().unwrap().location().host().unwrap_or_default();
-                            if !message.starts_with(&format!("Causewaybay Bot login\nHost: {host}\nAddress: {address}\nNonce: ")) { return Err("Invalid login challenge".into()); }
-                            let signature = identity.sign(message)?;
-                            let result = api("POST", "/api/auth/verify", Some(json!({"nonce":c["nonce"],"signature":signature,"wallet_index":index,"name":name}))).await?;
-                            account::remember(address, index, phrase);
-                            Ok(result)
-                        }.await) });
+                        self.sign_in(ctx, index, identity, name);
                     }
                 }
             }
@@ -186,6 +238,7 @@ impl Component for Login {
                         self.generated = false;
                         self.recorded = false;
                         self.error.clear();
+                        self.saved = account::saved_address();
                         ctx.props().changed.emit(());
                     }
                     Err(e) => {
@@ -236,22 +289,40 @@ impl Component for Login {
                 <button class="secondary-button" onclick={ctx.link().callback(|_|Msg::Account(true))}>{t("Account details")}</button>
                 <button class="text-button" disabled={self.busy} onclick={ctx.link().callback(|_|Msg::Logout)}>{t("Sign out")}</button>
             } else {
-                <h1>{t("Welcome to your space.")}</h1><p>{t("Sign in with your wallet recovery phrase.")}</p>
+                <h1>{t("Welcome to your space.")}</h1><p>{t("Sign in with your wallet recovery phrase or private key.")}</p>
+                if let Some(saved) = &self.saved {
+                    <div class="saved-wallet" data-testid="saved-wallet">
+                        <p class="small-muted">{t("Saved in this browser")}</p>
+                        <p class="wallet-name">{username(saved).unwrap_or_default()}</p>
+                        <code class="wallet-address" aria-label={t("Saved wallet address")}>{saved}</code>
+                        <button class="primary-button" disabled={self.busy} onclick={ctx.link().callback(|_|Msg::Saved)}>{if self.busy{t("Signing in…")}else{t("Continue with saved wallet")}}{icon("arrow")}</button>
+                    </div>
+                    <div class="settings-divider"/>
+                }
+                <div class="filter-tabs login-method" role="group" aria-label={t("Sign-in method")}>
+                    <button aria-pressed={(self.method==Method::Phrase).to_string()} class={classes!((self.method==Method::Phrase).then_some("selected"))} disabled={self.busy} onclick={ctx.link().callback(|_|Msg::Method(Method::Phrase))}>{t("Recovery phrase")}</button>
+                    <button aria-pressed={(self.method==Method::PrivateKey).to_string()} class={classes!((self.method==Method::PrivateKey).then_some("selected"))} disabled={self.busy} onclick={ctx.link().callback(|_|Msg::Method(Method::PrivateKey))}>{t("Private key")}</button>
+                </div>
                 if self.generated {
-                    <h2 class="wallet-backup-title">{t("Write down your recovery phrase")}</h2>
-                    <p>{t("Keep these words in order and your wallet index somewhere safe. You need both to sign in again.")}</p>
-                    {account::words(&self.phrase)}
+                    <h2 class="wallet-backup-title">{t("Save your new recovery phrase")}</h2>
+                    <p>{t("For your safety the words are never shown. Copy them to a password manager or other safe place, with your wallet index. You need both to sign in again.")}</p>
+                    <button class="secondary-button" data-testid="copy-recovery-phrase" disabled={self.busy} onclick={ctx.link().callback(|_|Msg::Copy)}>{icon("copy")}{t("Copy recovery phrase")}</button>
+                    if let Some(ok) = self.copied {<p role="status">{if ok {t("Recovery phrase copied")} else {t("Could not copy. Your browser blocked clipboard access.")}}</p>}
+                } else if self.method == Method::PrivateKey {
+                    <label class="form-label">{t("Private key")}<input type="password" aria-label={t("Private key")} autocomplete="off" spellcheck="false" disabled={self.busy} value={self.phrase.clone()} oninput={ctx.link().callback(|e:InputEvent|Msg::Phrase(e.target_unchecked_into::<HtmlInputElement>().value()))} onkeydown={ctx.link().batch_callback(|e:KeyboardEvent|if e.key()=="Enter"{Some(Msg::Login)}else{None})}/></label>
                 } else {
                     <label class="form-label">{t("Recovery phrase")}<input type="password" aria-label={t("Recovery phrase")} autocomplete="off" spellcheck="false" disabled={self.busy} value={self.phrase.clone()} oninput={ctx.link().callback(|e:InputEvent|Msg::Phrase(e.target_unchecked_into::<HtmlInputElement>().value()))} onkeydown={ctx.link().batch_callback(|e:KeyboardEvent|if e.key()=="Enter"{Some(Msg::Login)}else{None})}/></label>
                 }
-                <label class="form-label">{t("Wallet index")}<input type="number" min="0" max="2147483647" step="1" aria-label={t("Wallet index")} disabled={self.busy} value={self.index.clone()} oninput={ctx.link().callback(|e:InputEvent|Msg::Index(e.target_unchecked_into::<HtmlInputElement>().value()))}/></label>
-                <p class="small-muted">{t("Default: 0. A different index opens a different wallet.")}</p>
+                if self.method == Method::Phrase {
+                    <label class="form-label">{t("Wallet index")}<input type="number" min="0" max="2147483647" step="1" aria-label={t("Wallet index")} disabled={self.busy} value={self.index.clone()} oninput={ctx.link().callback(|e:InputEvent|Msg::Index(e.target_unchecked_into::<HtmlInputElement>().value()))}/></label>
+                    <p class="small-muted">{t("Default: 0. A different index opens a different wallet.")}</p>
+                }
                 <label class="form-label">{t("User name")}<input type="text" maxlength="80" aria-label={t("User name")} autocomplete="off" disabled={self.busy} placeholder={t("Derived from your wallet")} value={self.name.clone()} oninput={ctx.link().callback(|e:InputEvent|Msg::Name(e.target_unchecked_into::<HtmlInputElement>().value()))}/></label>
                 <p class="small-muted">{t("A wallet-derived name is suggested. You can change it here or in Account details. Existing saved names are kept unless you edit this field.")}</p>
                 if self.generated {
-                    <label class="wallet-backup-check"><input type="checkbox" checked={self.recorded} disabled={self.busy} onchange={ctx.link().callback(|e:Event|Msg::Recorded(e.target_unchecked_into::<HtmlInputElement>().checked()))}/>{t("I wrote down my recovery phrase and wallet index.")}</label>
+                    <label class="wallet-backup-check"><input type="checkbox" checked={self.recorded} disabled={self.busy} onchange={ctx.link().callback(|e:Event|Msg::Recorded(e.target_unchecked_into::<HtmlInputElement>().checked()))}/>{t("I saved my recovery phrase and wallet index.")}</label>
                 }
-                <p class="small-muted">{t("Your phrase stays in this tab’s memory until you reload or sign out. It is never sent to the backend or saved in browser storage.")}</p>
+                <p class="small-muted">{t("Your phrase or key is treated like a password: it is never shown, never sent to the backend or to AI, and only the derived private key is saved, in this browser’s local storage.")}</p>
                 <button class="primary-button" disabled={self.busy||self.phrase.trim().is_empty()||(self.generated&&!self.recorded)} onclick={ctx.link().callback(|_|Msg::Login)}>{if self.busy{t("Signing in…")}else{t("Sign in")}}{icon("arrow")}</button>
                 <button class="text-button" disabled={self.busy} onclick={ctx.link().callback(|_|Msg::Generate)}>{t("Create new recovery phrase")}</button>
                 if self.generated {<button class="text-button" disabled={self.busy} onclick={ctx.link().callback(|_|Msg::Existing)}>{t("Use existing recovery phrase")}</button>}

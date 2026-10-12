@@ -207,8 +207,8 @@ for (const action of ['clear','delete','message','all']) {
   });
 }
 
-test('indexed wallet names, confirmation-gated recovery, reload and approval', async ({browser}) => {
-  const context=await browser.newContext(), adminContext=await browser.newContext();
+test('indexed wallet names, copy-only recovery, reload and approval', async ({browser}) => {
+  const context=await browser.newContext({permissions:['clipboard-read','clipboard-write']}), adminContext=await browser.newContext();
   const page=await context.newPage(), admin=await adminContext.newPage();
   const payloads=[];
   page.on('request',r=>{if(r.postData())payloads.push(r.postData());});
@@ -233,42 +233,31 @@ test('indexed wallet names, confirmation-gated recovery, reload and approval', a
     expect((await context.request.get(base+'/api/rooms')).status()).toBe(403);
     await page.getByRole('button',{name:'Account details',exact:true}).click();
     const dialog=page.getByRole('dialog',{name:'Account details'});
-    await expect(dialog.getByLabel('Recovery phrase words')).toHaveCount(0);
-    await expect(dialog.getByLabel('Wallet index',{exact:true})).toHaveCount(0);
-    page.once('dialog',d=>d.dismiss());
-    await dialog.getByRole('button',{name:'Show recovery details'}).click();
-    await expect(dialog.getByLabel('Recovery phrase words')).toHaveCount(0);
-    await expect(dialog.getByLabel('Wallet index',{exact:true})).toHaveCount(0);
-    page.once('dialog',d=>d.accept());
-    await dialog.getByRole('button',{name:'Show recovery details'}).click();
+    // Secrets are never displayed: no reveal, only a confirmation-gated Copy.
+    // Hardhat account 1 (public test vector) is "test … junk" at index 1.
+    const indexedKey='0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d';
+    await expect(dialog.getByRole('button',{name:/Show recovery/})).toHaveCount(0);
     await expect(dialog.getByLabel('Wallet index',{exact:true})).toHaveText('1');
-    expect((await dialog.locator('.recovery-words li').allTextContents()).join(' ')).toBe(memberPhrase);
-    await dialog.getByRole('button',{name:'Hide recovery details'}).click();
-    await expect(dialog.getByLabel('Recovery phrase words')).toHaveCount(0);
+    await page.evaluate(()=>navigator.clipboard.writeText(''));
+    page.once('dialog',d=>d.dismiss());
+    await dialog.getByRole('button',{name:'Copy private key'}).click();
+    expect(await page.evaluate(()=>navigator.clipboard.readText())).toBe('');
+    page.once('dialog',d=>d.accept());
+    await dialog.getByRole('button',{name:'Copy private key'}).click();
+    await expect(dialog.getByText('Private key copied')).toBeVisible();
+    expect(await page.evaluate(()=>navigator.clipboard.readText())).toBe(indexedKey);
+    expect(await page.evaluate(()=>document.documentElement.outerHTML)).not.toContain(indexedKey.slice(2));
     await dialog.getByLabel('User name',{exact:true}).fill('Saved across logins');
     await dialog.getByRole('button',{name:'Save name',exact:true}).click();
-    await expect(dialog.getByRole('status')).toHaveText('Name saved');
+    await expect(dialog.getByRole('status').filter({hasText:'Name saved'})).toHaveText('Name saved');
     await dialog.getByRole('button',{name:'Close account details'}).click();
     await expect(page.getByLabel('Your name',{exact:true})).toHaveText('Saved across logins');
+    // The key survives a reload in local storage; the phrase was never kept.
     await page.reload();
     await page.getByRole('button',{name:'Account details',exact:true}).click();
-    page.once('dialog',d=>d.accept());
-    await dialog.getByRole('button',{name:'Show recovery details'}).click();
     await expect(dialog.getByLabel('Wallet index',{exact:true})).toHaveText('1');
-    await expect(dialog.getByLabel('Recovery phrase words')).toHaveCount(0);
-    await dialog.getByLabel('Re-enter recovery phrase',{exact:true}).fill(rootPhrase);
-    await dialog.getByRole('button',{name:'Verify and show phrase'}).click();
-    await expect(dialog.getByRole('alert')).toContainText('does not match');
-    await dialog.getByLabel('Re-enter recovery phrase',{exact:true}).fill(memberPhrase);
-    page.once('dialog',d=>d.dismiss());
-    await dialog.getByRole('button',{name:'Verify and show phrase'}).click();
-    await expect(dialog.getByLabel('Recovery phrase words')).toHaveCount(0);
-    await dialog.getByLabel('Re-enter recovery phrase',{exact:true}).fill(memberPhrase);
-    page.once('dialog',d=>d.accept());
-    await dialog.getByRole('button',{name:'Verify and show phrase'}).click();
-    expect((await dialog.locator('.recovery-words li').allTextContents()).join(' ')).toBe(memberPhrase);
-    await page.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')));
-    await expect(dialog.getByLabel('Recovery phrase words')).toHaveCount(0);
+    await expect(dialog.getByRole('button',{name:'Copy private key'})).toBeVisible();
+    expect(await page.evaluate(()=>localStorage.getItem('invisible-ai.wallet.key'))).toBe(indexedKey);
     await dialog.getByRole('button',{name:'Close account details'}).click();
     await login(admin,rootPhrase);
     expect((await adminContext.request.patch(base+`/api/admin/users/${info.address}`,{data:{role:'user'}})).status()).toBe(200);
@@ -290,8 +279,9 @@ test('indexed wallet names, confirmation-gated recovery, reload and approval', a
   } finally {await context.close();await adminContext.close();}
 });
 
-test('new recovery phrase requires confirmation and a written backup before registration', async ({page}) => {
-  await page.setViewportSize({width:390,height:844});
+test('new recovery phrase requires confirmation and a copied backup before registration', async ({browser}) => {
+  const context=await browser.newContext({permissions:['clipboard-read','clipboard-write'],viewport:{width:390,height:844}});
+  const page=await context.newPage();
   await page.goto(base);
   const payloads=[];page.on('request',r=>{if(r.postData())payloads.push(r.postData());});
   page.once('dialog',d=>d.dismiss());
@@ -299,29 +289,33 @@ test('new recovery phrase requires confirmation and a written backup before regi
   await expect(page.getByLabel('Recovery phrase words')).toHaveCount(0);
   page.once('dialog',d=>d.accept());
   await page.getByRole('button',{name:'Create new recovery phrase'}).click();
-  await expect(page.locator('.recovery-words li')).toHaveCount(12);
-  const phrase=(await page.locator('.recovery-words li').allTextContents()).join(' ');
+  // The words are never rendered; Copy is the only way out.
+  await expect(page.locator('.recovery-words li')).toHaveCount(0);
+  await page.getByRole('button',{name:'Copy recovery phrase'}).click();
+  await expect(page.getByText('Recovery phrase copied')).toBeVisible();
+  const phrase=await page.evaluate(()=>navigator.clipboard.readText());
+  expect(phrase.split(' ')).toHaveLength(12);
+  expect(await page.evaluate(()=>document.documentElement.outerHTML+document.body.innerText)).not.toContain(phrase);
   await expect(page.getByLabel('User name',{exact:true})).not.toHaveValue('');
   await expect(page.getByRole('button',{name:'Sign in',exact:true})).toBeDisabled();
-  await page.getByLabel('I wrote down my recovery phrase and wallet index.').check();
+  await page.getByLabel('I saved my recovery phrase and wallet index.').check();
   await page.getByLabel('Wallet index',{exact:true}).fill('3');
   await expect(page.getByRole('button',{name:'Sign in',exact:true})).toBeDisabled();
-  await page.getByLabel('I wrote down my recovery phrase and wallet index.').check();
+  await page.getByLabel('I saved my recovery phrase and wallet index.').check();
   await page.getByRole('button',{name:'Sign in',exact:true}).click();
   await expect(page.getByRole('heading',{name:'You’re on the waiting list.'})).toBeVisible();
   const info=await(await page.request.get(base+'/api/auth/info')).json();
   expect(info.wallet_index).toBe(3);expect(info.approved).toBe(false);
   expect((await page.request.post(base+'/api/think',{data:{prompt:'Not approved'}})).status()).toBe(403);
   await page.getByRole('button',{name:'Account details',exact:true}).click();
-  await expect(page.getByLabel('Recovery phrase words')).toHaveCount(0);
-  page.once('dialog',d=>d.accept());
-  await page.getByRole('button',{name:'Show recovery details'}).click();
-  expect((await page.locator('.recovery-words li').allTextContents()).join(' ')).toBe(phrase);
+  await expect(page.getByRole('button',{name:'Copy private key'})).toBeVisible();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
-  await page.getByRole('button',{name:'Hide recovery details'}).click();
   await page.screenshot({path:'test-results/wallet-mobile.png',fullPage:true});
   expect(payloads.join('\n')).not.toContain(phrase);
-  expect(await page.evaluate(()=>JSON.stringify({local:localStorage,session:sessionStorage}))).not.toContain(phrase);
+  const stored=await page.evaluate(()=>JSON.stringify({local:localStorage,session:sessionStorage}));
+  expect(stored).not.toContain(phrase);
+  expect(stored).toContain('invisible-ai.wallet.key');
+  await context.close();
 });
 
 test('a legacy signed-in wallet can still submit its registration', async ({page}) => {

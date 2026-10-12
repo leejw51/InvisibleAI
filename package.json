@@ -5,7 +5,7 @@
     "css": "tailwindcss -i frontend/styles.css -o frontend/assets/app.css --minify",
     "test:e2e": "playwright test",
     "test:scripts": "node --test tests/scripts/*.test.mjs",
-    "visuals": "esbuild frontend/status-diagram.js frontend/wiki-graph.js frontend/everyday-motion.js --bundle --minify --format=esm --outdir=frontend/assets"
+    "visuals": "esbuild frontend/status-diagram.js frontend/wiki-graph.js frontend/everyday-motion.js frontend/wallet-card.js --bundle --minify --format=esm --outdir=frontend/assets"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",

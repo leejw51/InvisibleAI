@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 pub mod chat;
+pub mod evm;
 pub mod invisible;
 pub mod quiz;
 pub mod solved;

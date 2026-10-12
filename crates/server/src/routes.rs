@@ -239,7 +239,7 @@ async fn security_headers(req: Request, next: Next) -> Response {
     h.insert("x-content-type-options", "nosniff".parse().unwrap());
     h.insert("referrer-policy", "no-referrer".parse().unwrap());
     h.insert("x-frame-options", "DENY".parse().unwrap());
-    h.insert("content-security-policy", "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'".parse().unwrap());
+    h.insert("content-security-policy", "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://evm.cronos.org https://evm-t3.cronos.org; object-src 'none'; base-uri 'self'; frame-ancestors 'none'".parse().unwrap());
     h.insert(header::CACHE_CONTROL, "no-store".parse().unwrap());
     res
 }

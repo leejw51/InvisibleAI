@@ -44,6 +44,7 @@ pub fn icon(name: &str) -> Html {
             "M9 18V5l11-2v13M9 7l11-2M9 18a3 3 0 1 1-3-3c1.7 0 3 1.3 3 3ZM20 16a3 3 0 1 1-3-3c1.7 0 3 1.3 3 3Z"
         }
         "copy" => "M9 8h11v13H9ZM15 8V3H4v13h5",
+        "wallet" => "M3 7h18v13H3ZM3 7l13-4v4M16 13.5h1.5",
         "trash" => "M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7",
         "clock" => "M12 7v6l4 2M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0Z",
         "stop" => "M6 6h12v12H6Z",
