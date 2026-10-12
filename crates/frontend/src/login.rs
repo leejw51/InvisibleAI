@@ -87,7 +87,7 @@ impl Login {
             if !message.starts_with(&format!("Causewaybay Bot login\nHost: {host}\nAddress: {address}\nNonce: ")) { return Err("Invalid login challenge".into()); }
             let signature = identity.sign(message)?;
             let result = api("POST", "/api/auth/verify", Some(json!({"nonce":c["nonce"],"signature":signature,"wallet_index":index,"name":name}))).await?;
-            account::remember(&identity);
+            account::remember(&identity, index);
             Ok(result)
         }.await) });
     }
@@ -136,12 +136,12 @@ impl Component for Login {
             }
             Msg::Copied(ok) => self.copied = Some(ok),
             Msg::Saved => {
-                let Some(identity) = account::identity() else {
+                let Some((identity, index)) = account::saved() else {
                     self.saved = None;
                     self.error = "The saved wallet is no longer in this browser. Sign in again.".into();
                     return true;
                 };
-                self.sign_in(ctx, 0, identity, None);
+                self.sign_in(ctx, index, identity, None);
             }
             Msg::Phrase(v) => {
                 self.phrase.zeroize();

@@ -14,6 +14,8 @@ const recipient = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266';
 const testnetUsdc = '0xc01efaaf7c5c61bebfaeb358e1161b537b8bc0e0';
 const mainnetUsdc = '0xc21223249ca28397b4b6541dffaecc539bff0c59';
 const KEY = 'invisible-ai.wallet.key';
+/** The saved wallet as the page stored it: `{ key, index }`, or null. */
+const saved = page => page.evaluate(k => JSON.parse(localStorage.getItem(k) ?? 'null'), KEY);
 let server, dir;
 
 test.beforeAll(async ({ request }) => {
@@ -75,7 +77,7 @@ test('phrase login saves only the private key; the wallet shows balances and sen
   await signIn(page);
   // Local storage holds the derived key, and never the phrase.
   const stored = await page.evaluate(() => JSON.stringify(localStorage));
-  expect(await page.evaluate(k => localStorage.getItem(k), KEY)).toBe(privateKey);
+  expect(await saved(page)).toEqual({ key: privateKey, index: 0 });
   expect(stored).not.toContain('abandon');
 
   await openWallet(page);
@@ -210,7 +212,7 @@ test('private key login, saved wallet on return, and copy-only secrets', async (
 
   await signIn(page, { method: 'key', secret: privateKey.slice(2) });
   expect((await (await page.request.get(base + '/api/auth/info')).json()).address).toBe(address);
-  expect(await page.evaluate(k => localStorage.getItem(k), KEY)).toBe(privateKey);
+  expect(await saved(page)).toEqual({ key: privateKey, index: 0 });
 
   // Account details: no reveal, only Copy.
   await page.getByText('Settings', { exact: true }).click();
@@ -225,19 +227,16 @@ test('private key login, saved wallet on return, and copy-only secrets', async (
   // The backend session ends but the key stays: one click signs back in.
   await context.clearCookies();
   await page.reload();
-  const saved = page.getByTestId('saved-wallet');
-  await expect(saved).toContainText(address);
-  await saved.getByRole('button', { name: 'Continue with saved wallet' }).click();
+  const savedCard = page.getByTestId('saved-wallet');
+  await expect(savedCard).toContainText(address);
+  await savedCard.getByRole('button', { name: 'Continue with saved wallet' }).click();
   await expect(page.getByRole('button', { name: 'Wallet', exact: true })).toBeVisible();
 
   // Signing out forgets the key.
   await page.getByText('Settings', { exact: true }).click();
-  const signOut = page.getByRole('button', { name: 'Sign out' });
-  if (await signOut.count()) {
-    await signOut.click();
-    await expect(page.getByLabel('Recovery phrase', { exact: true })).toBeVisible();
-    expect(await page.evaluate(k => localStorage.getItem(k), KEY)).toBeNull();
-  }
+  await page.getByRole('button', { name: 'Sign out' }).click();
+  await expect(page.getByLabel('Recovery phrase', { exact: true })).toBeVisible();
+  expect(await saved(page)).toBeNull();
 
   // A new recovery phrase is never displayed: it can only be copied.
   await context.clearCookies();
@@ -255,13 +254,61 @@ test('private key login, saved wallet on return, and copy-only secrets', async (
   await page.getByLabel('I saved my recovery phrase and wallet index.').check();
   await signIn2.click();
   await expect.poll(async () => (await (await page.request.get(base + '/api/auth/info')).json()).authenticated).toBe(true);
-  const newKey = await page.evaluate(k => localStorage.getItem(k), KEY);
+  const newKey = (await saved(page)).key;
   expect(newKey).toMatch(/^0x[0-9a-f]{64}$/);
   expect(await page.evaluate(() => JSON.stringify(localStorage))).not.toContain(generated);
   await expectNoSecretOnScreen(page, generated, newKey);
 
   expectNoSecretSent(bodies, privateKey, generated, newKey);
   expect(bodies.filter(b => RPC.test(b.url)).every(b => !b.body.includes('eth_sendRawTransaction'))).toBe(true);
+  await context.close();
+});
+
+test('a saved wallet signs back in at the index it was derived at', async ({ browser }) => {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await page.goto(base);
+  await page.getByLabel('Recovery phrase', { exact: true }).fill('test test test test test test test test test test test junk');
+  await page.getByLabel('Wallet index', { exact: true }).fill('2');
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await expect.poll(async () => (await (await page.request.get(base + '/api/auth/info')).json()).wallet_index).toBe(2);
+  // Hardhat account 2 (public test vector).
+  expect(await saved(page)).toEqual({ key: '0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a', index: 2 });
+  await context.clearCookies();
+  await page.reload();
+  await page.getByRole('button', { name: 'Continue with saved wallet' }).click();
+  await expect.poll(async () => (await (await page.request.get(base + '/api/auth/info')).json()).authenticated).toBe(true);
+  const info = await (await page.request.get(base + '/api/auth/info')).json();
+  expect(info.address).toBe('0x3c44cdddb6a900fa2b585dd299e03d12fa4293bc');
+  expect(info.wallet_index).toBe(2);
+  await context.close();
+});
+
+test('on a plain-HTTP host (no Clipboard API) Copy still works and leaves nothing in the DOM', async ({ browser }) => {
+  const context = await browser.newContext();
+  // LAN/Tailscale hosts are insecure origins, where navigator.clipboard is undefined.
+  await context.addInitScript(() => {
+    Object.defineProperty(Navigator.prototype, 'clipboard', { get: () => undefined, configurable: true });
+    const copies = [];
+    window.__copies = copies;
+    document.addEventListener('copy', () => {
+      const field = document.activeElement;
+      copies.push({ tag: field?.tagName, hidden: field?.getAttribute('aria-hidden'), length: field?.value?.length ?? 0 });
+    }, true);
+  });
+  const page = await context.newPage();
+  page.on('dialog', d => d.accept());
+  await signIn(page);
+  expect(await page.evaluate(() => navigator.clipboard)).toBeUndefined();
+  await page.getByText('Settings', { exact: true }).click();
+  await page.getByRole('button', { name: 'Account details' }).click();
+  await page.getByTestId('copy-private-key').click();
+  await expect(page.getByText('Private key copied')).toBeVisible();
+  // The copy came from the hidden fallback field, holding exactly the key…
+  expect(await page.evaluate(() => window.__copies)).toEqual([{ tag: 'TEXTAREA', hidden: 'true', length: privateKey.length }]);
+  // …and that field is gone, its value wiped, the moment the copy is done.
+  expect(await page.locator('textarea[aria-hidden="true"]').count()).toBe(0);
+  await expectNoSecretOnScreen(page, privateKey, phrase);
   await context.close();
 });
 

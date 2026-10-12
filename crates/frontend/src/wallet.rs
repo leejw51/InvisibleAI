@@ -6,6 +6,7 @@ use causewaybay_shared::evm::{self, LegacyTransaction, Network, U256};
 use causewaybay_shared::identity::username;
 use gloo_timers::callback::Timeout;
 use serde_json::{Value, json};
+use std::collections::HashMap;
 use web_sys::HtmlInputElement;
 use yew::prelude::*;
 
@@ -140,7 +141,8 @@ pub struct Wallet {
     activity: Vec<Activity>,
     generation: u32,
     _fade: Option<Timeout>,
-    _poll: Option<Timeout>,
+    /// One receipt poll per pending transfer, keyed by hash.
+    polls: HashMap<String, Timeout>,
 }
 pub enum Msg {
     Network(&'static str),
@@ -201,7 +203,7 @@ impl Component for Wallet {
             activity: Vec::new(),
             generation: 0,
             _fade: None,
-            _poll: None,
+            polls: HashMap::new(),
         }
     }
     fn update(&mut self, ctx: &Context<Self>, msg: Msg) -> bool {
@@ -346,6 +348,7 @@ impl Component for Wallet {
                 };
                 match status {
                     Some(status) => {
+                        self.polls.remove(&hash);
                         if let Some(row) = self.activity.iter_mut().find(|a| a.hash == hash) {
                             row.status = status;
                         }
@@ -353,7 +356,8 @@ impl Component for Wallet {
                     }
                     None => {
                         let link = ctx.link().clone();
-                        self._poll = Some(Timeout::new(2_000, move || link.send_message(Msg::Poll(hash, attempt + 1))));
+                        let next = hash.clone();
+                        self.polls.insert(hash, Timeout::new(2_000, move || link.send_message(Msg::Poll(next, attempt + 1))));
                         return false;
                     }
                 }

@@ -14,10 +14,12 @@ pub const KEY: &str = "invisible-ai.wallet.key";
 fn storage() -> Option<web_sys::Storage> {
     web_sys::window().and_then(|w| w.local_storage().ok().flatten())
 }
-/// Save the signed-in wallet's private key in this browser.
-pub fn remember(identity: &Identity) {
+/// Save the signed-in wallet's private key in this browser, with the wallet
+/// index it was derived at (0 for a key entered directly).
+pub fn remember(identity: &Identity, index: u32) {
     if let Some(storage) = storage() {
-        let _ = storage.set_item(KEY, identity.private_key_hex().as_str());
+        let value = Zeroizing::new(json!({"key": identity.private_key_hex().as_str(), "index": index}).to_string());
+        let _ = storage.set_item(KEY, &value);
     }
 }
 pub fn forget() {
@@ -25,10 +27,17 @@ pub fn forget() {
         let _ = storage.remove_item(KEY);
     }
 }
-/// The saved wallet, or nothing if storage is empty, blocked or holds junk.
+/// The saved wallet and its index, or nothing if storage is empty, blocked or
+/// holds junk.
+pub fn saved() -> Option<(Identity, u32)> {
+    let raw = Zeroizing::new(storage()?.get_item(KEY).ok()??);
+    let value: Value = serde_json::from_str(&raw).ok()?;
+    let key = Zeroizing::new(value["key"].as_str()?.to_string());
+    let index = value["index"].as_u64().and_then(|i| u32::try_from(i).ok()).unwrap_or(0);
+    Some((Identity::from_private_key(&key).ok()?, index))
+}
 pub fn identity() -> Option<Identity> {
-    let key = Zeroizing::new(storage()?.get_item(KEY).ok()??);
-    Identity::from_private_key(&key).ok()
+    saved().map(|(identity, _)| identity)
 }
 /// The saved wallet's address; derived from the key, so it cannot disagree.
 pub fn saved_address() -> Option<String> {

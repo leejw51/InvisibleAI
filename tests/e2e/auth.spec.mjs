@@ -257,7 +257,7 @@ test('indexed wallet names, copy-only recovery, reload and approval', async ({br
     await page.getByRole('button',{name:'Account details',exact:true}).click();
     await expect(dialog.getByLabel('Wallet index',{exact:true})).toHaveText('1');
     await expect(dialog.getByRole('button',{name:'Copy private key'})).toBeVisible();
-    expect(await page.evaluate(()=>localStorage.getItem('invisible-ai.wallet.key'))).toBe(indexedKey);
+    expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('invisible-ai.wallet.key')))).toEqual({key:indexedKey,index:1});
     await dialog.getByRole('button',{name:'Close account details'}).click();
     await login(admin,rootPhrase);
     expect((await adminContext.request.patch(base+`/api/admin/users/${info.address}`,{data:{role:'user'}})).status()).toBe(200);
