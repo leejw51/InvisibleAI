@@ -180,6 +180,7 @@ pub fn erc20_balance_of(owner: &[u8; 20]) -> Vec<u8> {
 /// itself. The symbol is the contract's own claim, so the address is always
 /// shown beside it.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct CustomToken {
     /// EIP-55 checksummed contract address.
     pub address: String,

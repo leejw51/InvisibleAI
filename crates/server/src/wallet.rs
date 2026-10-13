@@ -366,6 +366,13 @@ mod tests {
             )
             .is_err()
         );
+        // Nor can one ride inside the token.
+        assert!(
+            serde_json::from_value::<NewToken>(json!({"network":"cronos-testnet","token":{
+                "address":WCRO,"symbol":"W","name":"","decimals":18,"private_key":"0x01"
+            }}))
+            .is_err()
+        );
         let add = |network: &str, t: CustomToken| {
             add_token(
                 PrivateState(s.clone()),
