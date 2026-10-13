@@ -12,7 +12,7 @@ use causewaybay_shared::identity::username;
 use causewaybay_shared::registry::{self, Chain, Coin, MAIN_COINS, Net, Standard, WalletSettings};
 use gloo_timers::callback::Timeout;
 use serde_json::{Value, json};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use wasm_bindgen::JsCast;
 use web_sys::HtmlInputElement;
 use yew::prelude::*;
@@ -284,6 +284,12 @@ pub struct Wallet {
     coin: Coin,
     /// Network key → this wallet's receive address there.
     addresses: BTreeMap<String, String>,
+    /// Networks whose address this browser derived itself (or the signed-in
+    /// EVM address); the rest were recorded by an earlier phrase sign-in.
+    verified: BTreeSet<String>,
+    /// Bumped per backend write; only the newest reply is applied, so a slow
+    /// earlier one cannot undo a later choice.
+    saves: u32,
     balances: Option<Balances>,
     loading: bool,
     error: String,
@@ -311,7 +317,7 @@ pub struct Wallet {
 }
 pub enum Msg {
     Settings(Result<WalletSettings, String>),
-    Saved(Result<WalletSettings, String>),
+    Saved(u32, Result<WalletSettings, String>),
     Choose(String),
     Query(String),
     Searching(bool),
@@ -348,25 +354,30 @@ fn short(address: &str) -> String {
 /// Receive addresses: the signed-in EVM address on every EVM network, and the
 /// other chains derived from the saved phrase — or, without one in this
 /// browser, the public addresses an earlier sign-in recorded.
-fn addresses(session_address: &str, settings: &WalletSettings) -> BTreeMap<String, String> {
+fn addresses(
+    session_address: &str,
+    settings: &WalletSettings,
+) -> (BTreeMap<String, String>, BTreeSet<String>) {
     let evm_address = evm::parse_address(session_address)
         .map(|a| evm::checksum(&a))
         .ok();
     let derived = account::saved_mnemonic().zip(account::saved().map(|(_, index)| index));
-    let mut out = BTreeMap::new();
+    let (mut out, mut verified) = (BTreeMap::new(), BTreeSet::new());
     for net in registry::NETS {
-        let address = match net.chain {
+        let own = match net.chain {
             Chain::Evm => evm_address.clone(),
             _ => derived
                 .as_ref()
-                .and_then(|(phrase, index)| chains::address(phrase, *index, net.key).ok())
-                .or_else(|| settings.addresses.get(net.key).cloned()),
+                .and_then(|(phrase, index)| chains::address(phrase, *index, net.key).ok()),
         };
-        if let Some(address) = address {
+        if own.is_some() {
+            verified.insert(net.key.to_string());
+        }
+        if let Some(address) = own.or_else(|| settings.addresses.get(net.key).cloned()) {
             out.insert(net.key.to_string(), address);
         }
     }
-    out
+    (out, verified)
 }
 impl Wallet {
     fn address(ctx: &Context<Self>) -> String {
@@ -411,9 +422,17 @@ impl Wallet {
         }
         ctx.link().send_message(Msg::Refresh);
     }
-    fn save(ctx: &Context<Self>, method: &'static str, url: String, body: Option<Value>) {
+    fn save(
+        &mut self,
+        ctx: &Context<Self>,
+        method: &'static str,
+        url: String,
+        body: Option<Value>,
+    ) {
+        self.saves += 1;
+        let seq = self.saves;
         ctx.link()
-            .send_future(async move { Msg::Saved(api(method, &url, body).await) });
+            .send_future(async move { Msg::Saved(seq, api(method, &url, body).await) });
     }
     fn results(&self) -> Vec<Coin> {
         let Some(settings) = &self.settings else {
@@ -452,6 +471,8 @@ impl Component for Wallet {
             settings: None,
             coin: registry::coin(registry::DEFAULT_COIN).expect("default coin"),
             addresses: BTreeMap::new(),
+            verified: BTreeSet::new(),
+            saves: 0,
             balances: None,
             loading: false,
             error: String::new(),
@@ -484,7 +505,7 @@ impl Component for Wallet {
                     self.error = e;
                     WalletSettings::default()
                 });
-                self.addresses = addresses(&Self::address(ctx), &settings);
+                (self.addresses, self.verified) = addresses(&Self::address(ctx), &settings);
                 // Record the public addresses this browser could derive, once.
                 let fresh: BTreeMap<_, _> = self
                     .addresses
@@ -493,7 +514,7 @@ impl Component for Wallet {
                     .map(|(k, v)| (k.clone(), v.clone()))
                     .collect();
                 if !fresh.is_empty() {
-                    Self::save(
+                    self.save(
                         ctx,
                         "PATCH",
                         "/api/wallet".into(),
@@ -507,7 +528,8 @@ impl Component for Wallet {
                 self.settings = Some(settings);
                 ctx.link().send_message(Msg::Refresh);
             }
-            Msg::Saved(result) => match result {
+            Msg::Saved(seq, _) if seq != self.saves => return false,
+            Msg::Saved(_, result) => match result {
                 Ok(settings) => {
                     let coin = settings.active_coin();
                     self.settings = Some(settings);
@@ -535,7 +557,7 @@ impl Component for Wallet {
                     s.recent.insert(0, key.clone());
                 }
                 self.show(ctx, coin);
-                Self::save(
+                self.save(
                     ctx,
                     "PATCH",
                     "/api/wallet".into(),
@@ -612,7 +634,7 @@ impl Component for Wallet {
                 };
                 self.query.clear();
                 self.searching = false;
-                Self::save(
+                self.save(
                     ctx,
                     "POST",
                     "/api/wallet/tokens".into(),
@@ -628,7 +650,7 @@ impl Component for Wallet {
                 {
                     return false;
                 }
-                Self::save(
+                self.save(
                     ctx,
                     "DELETE",
                     format!("/api/wallet/tokens/{}/{}", self.coin.network, self.coin.id),
@@ -1008,7 +1030,8 @@ impl Component for Wallet {
                         <a class="text-button" href={net.address_url(address)} target="_blank" rel="noopener noreferrer">{t("Explorer")}{icon("arrow")}</a>
                         if let Some(faucet) = net.faucet {<a class="text-button" href={faucet} target="_blank" rel="noopener noreferrer">{t("Faucet")}{icon("arrow")}</a>}
                     </div>
-                    if !coin.can_send() {<p class="small-muted">{format!("{} {}", t("Sending is not available here yet. You can receive and view on"), net.chain.name())}</p>}
+                    if !self.verified.contains(net.key) {<p class="wallet-warning" role="note" data-testid="address-unverified">{icon("info")}{t("Recorded from an earlier sign-in with your recovery phrase; this browser cannot re-derive it. Sign in with the phrase here to confirm it before sharing it for large amounts.")}</p>}
+                if !coin.can_send() {<p class="small-muted">{format!("{} {}", t("Sending is not available here yet. You can receive and view on"), net.chain.name())}</p>}
                 </div>}
             }
             None => {

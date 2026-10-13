@@ -93,6 +93,7 @@ test('two main buttons, one search box for every chain, EVM sends, choices kept 
     await expect(page.getByRole('tab', { name: 'Send' })).toBeDisabled();
     await expect(page.getByTestId('receive-address')).toHaveText(SOLANA);
     await expect(page.getByTestId('wallet-card')).toHaveAttribute('data-network', 'solana-devnet');
+    await expect(page.getByTestId('address-unverified')).toHaveCount(0);
     await page.waitForTimeout(1500);
     await page.screenshot({ path: 'test-results/multichain-3-solana.png' });
 
@@ -173,6 +174,8 @@ test('two main buttons, one search box for every chain, EVM sends, choices kept 
     await box.fill('sol mainnet');
     await box.press('Enter');
     await expect(page.getByTestId('receive-address')).toHaveText(SOLANA);
+    // Recorded, not re-derived here: said so plainly.
+    await expect(page.getByTestId('address-unverified')).toBeVisible();
   });
   expect(errors).toEqual([]);
   await context.close();

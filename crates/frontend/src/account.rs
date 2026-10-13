@@ -103,6 +103,8 @@ pub struct Account {
     saved: bool,
     copied: Option<bool>,
     phrase_copied: Option<bool>,
+    /// Checked once: re-deriving the phrase on every render would lag typing.
+    has_phrase: bool,
     _keyboard: EventListener,
     close_button: NodeRef,
 }
@@ -139,6 +141,7 @@ impl Component for Account {
             saved: false,
             copied: None,
             phrase_copied: None,
+            has_phrase: saved_mnemonic().is_some(),
             _keyboard: keyboard,
             close_button: NodeRef::default(),
         }
@@ -226,7 +229,7 @@ impl Component for Account {
                     <p class="small-muted">{if saved {t("Your private key and recovery phrase are saved in this browser only. They are never shown on screen or sent to the backend.")} else {t("This browser has no saved key for this wallet.")}}</p>
                     if saved {<button class="secondary-button" data-testid="copy-private-key" onclick={ctx.link().callback(|_|Msg::CopyKey)}>{icon("copy")}{t("Copy private key")}</button>}
                     if let Some(ok) = self.copied {<p role="status">{if ok {t("Private key copied")} else {t("Could not copy. Your browser blocked clipboard access.")}}</p>}
-                    if saved && saved_mnemonic().is_some() {<button class="secondary-button" data-testid="copy-saved-phrase" onclick={ctx.link().callback(|_|Msg::CopyPhrase)}>{icon("copy")}{t("Copy recovery phrase")}</button>}
+                    if saved && self.has_phrase {<button class="secondary-button" data-testid="copy-saved-phrase" onclick={ctx.link().callback(|_|Msg::CopyPhrase)}>{icon("copy")}{t("Copy recovery phrase")}</button>}
                     if let Some(ok) = self.phrase_copied {<p role="status">{if ok {t("Recovery phrase copied")} else {t("Could not copy. Your browser blocked clipboard access.")}}</p>}
                 </div>
                 if !self.error.is_empty(){<p class="login-error" role="alert">{t(&self.error)}</p>}
