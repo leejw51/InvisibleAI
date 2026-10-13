@@ -67,7 +67,11 @@ pub fn validate_wallet_index(index: u32) -> Result<(), String> {
     Ok(())
 }
 /// The caller must supply entropy from the operating system/browser CSPRNG.
-pub fn mnemonic_from_entropy(entropy: &[u8; 16]) -> Result<Zeroizing<String>, String> {
+/// A 12-word phrase from 16 bytes of entropy, or a 24-word phrase from 32.
+pub fn mnemonic_from_entropy(entropy: &[u8]) -> Result<Zeroizing<String>, String> {
+    if !matches!(entropy.len(), 16 | 32) {
+        return Err("Could not generate recovery phrase".into());
+    }
     bip39::Mnemonic::from_entropy(entropy)
         .map(|mnemonic| Zeroizing::new(mnemonic.to_string()))
         .map_err(|_| "Could not generate recovery phrase".into())
@@ -160,6 +164,11 @@ mod tests {
     fn indexed_wallets_and_generated_mnemonics_match_public_vectors() {
         let phrase = mnemonic_from_entropy(&[0; 16]).unwrap();
         assert_eq!(phrase.as_str(), PHRASE);
+        // BIP-39's 256-bit all-zero vector: 23 × "abandon" then "art".
+        let long = mnemonic_from_entropy(&[0; 32]).unwrap();
+        assert_eq!(long.as_str(), format!("{}art", "abandon ".repeat(23)));
+        assert!(Identity::from_mnemonic(&long).is_ok());
+        assert!(mnemonic_from_entropy(&[0; 20]).is_err());
         assert_eq!(
             Identity::from_mnemonic_at(PHRASE, 0).unwrap().address(),
             Identity::from_mnemonic(PHRASE).unwrap().address()

@@ -26,6 +26,8 @@ pub struct Login {
     method: Method,
     saved: Option<String>,
     copied: Option<bool>,
+    shown: bool,
+    words: usize,
     phrase: String,
     index: String,
     name: String,
@@ -40,6 +42,8 @@ pub struct Login {
 pub enum Msg {
     Method(Method),
     Copy,
+    Show(bool),
+    Words(usize),
     Copied(bool),
     Saved,
     Phrase(String),
@@ -54,6 +58,18 @@ pub enum Msg {
     Apply,
     Finished(Result<Value, String>),
     Logout,
+}
+/// A fresh BIP-39 phrase of 12 or 24 words from the browser's secure random source.
+fn fresh_phrase(words: usize) -> Result<Zeroizing<String>, String> {
+    let mut entropy = Zeroizing::new([0u8; 32]);
+    let entropy = &mut entropy[..if words == 24 { 32 } else { 16 }];
+    web_sys::window()
+        .ok_or("Browser unavailable")?
+        .crypto()
+        .map_err(|_| "Secure random generation is unavailable")?
+        .get_random_values_with_u8_array(entropy)
+        .map_err(|_| "Secure random generation is unavailable")?;
+    mnemonic_from_entropy(entropy)
 }
 fn wallet_index(value: &str) -> Result<u32, String> {
     value
@@ -110,6 +126,8 @@ impl Component for Login {
             method: Method::Phrase,
             saved: account::saved_address(),
             copied: None,
+            shown: false,
+            words: 12,
             phrase: String::new(),
             index: "0".into(),
             name: String::new(),
@@ -128,6 +146,7 @@ impl Component for Login {
                 self.phrase.zeroize();
                 self.method = method;
                 self.generated = false;
+                self.shown = false;
                 self.recorded = false;
                 self.copied = None;
                 self.error.clear();
@@ -141,6 +160,7 @@ impl Component for Login {
                     .send_future(async move { Msg::Copied(account::copy_secret(phrase).await) });
             }
             Msg::Copied(ok) => self.copied = Some(ok),
+            Msg::Show(v) => self.shown = v && self.generated,
             Msg::Saved => {
                 let Some((identity, index)) = account::saved() else {
                     self.saved = None;
@@ -177,27 +197,26 @@ impl Component for Login {
             Msg::Generate => {
                 if self.busy
                     || !account::confirm(
-                        "Generate a new recovery phrase? It is never shown on screen: use Copy to save it somewhere safe, with your wallet index, before continuing.",
+                        "Generate a new recovery phrase? It stays hidden unless you press Show. Save it somewhere safe, with your wallet index, before continuing.",
                     )
                 {
                     return false;
                 }
-                let result = (|| {
-                    let mut entropy = Zeroizing::new([0u8; 16]);
-                    web_sys::window()
-                        .ok_or("Browser unavailable")?
-                        .crypto()
-                        .map_err(|_| "Secure random generation is unavailable")?
-                        .get_random_values_with_u8_array(entropy.as_mut())
-                        .map_err(|_| "Secure random generation is unavailable")?;
-                    mnemonic_from_entropy(&entropy)
-                })();
-                match result {
+                ctx.link().send_message(Msg::Words(self.words));
+            }
+            Msg::Words(words) => {
+                if self.busy || !matches!(words, 12 | 24) {
+                    return false;
+                }
+                self.words = words;
+                // A new length is a new phrase; nothing has used the old one yet.
+                match fresh_phrase(words) {
                     Ok(phrase) => {
                         self.phrase.zeroize();
                         self.phrase = phrase.to_string();
                         self.method = Method::Phrase;
                         self.generated = true;
+                        self.shown = false;
                         self.recorded = false;
                         self.copied = None;
                         self.error.clear();
@@ -209,6 +228,7 @@ impl Component for Login {
             Msg::Existing => {
                 self.phrase.zeroize();
                 self.generated = false;
+                self.shown = false;
                 self.recorded = false;
                 self.copied = None;
                 if !self.custom_name {
@@ -243,6 +263,7 @@ impl Component for Login {
                     Ok(_) => {
                         self.phrase.zeroize();
                         self.generated = false;
+                        self.shown = false;
                         self.recorded = false;
                         self.error.clear();
                         self.saved = account::saved_address();
@@ -312,8 +333,19 @@ impl Component for Login {
                 </div>
                 if self.generated {
                     <h2 class="wallet-backup-title">{t("Save your new recovery phrase")}</h2>
-                    <p>{t("For your safety the words are never shown. Copy them to a password manager or other safe place, with your wallet index. You need both to sign in again.")}</p>
-                    <button class="secondary-button" data-testid="copy-recovery-phrase" disabled={self.busy} onclick={ctx.link().callback(|_|Msg::Copy)}>{icon("copy")}{t("Copy recovery phrase")}</button>
+                    <p>{t("The words stay hidden until you press Show. Write them down or copy them to a password manager, with your wallet index, and make sure no one can see your screen. You need both to sign in again.")}</p>
+                    <div class="filter-tabs recovery-length" role="group" aria-label={t("Phrase length")}>
+                        {for [12usize, 24].into_iter().map(|n| html!{<button aria-pressed={(self.words==n).to_string()} class={classes!((self.words==n).then_some("selected"))} disabled={self.busy} onclick={ctx.link().callback(move |_|Msg::Words(n))}>{t(if n == 12 {"12 words"} else {"24 words"})}</button>})}
+                    </div>
+                    <div class="recovery-actions">
+                        <button class="secondary-button" data-testid="show-recovery-phrase" aria-pressed={self.shown.to_string()} aria-controls="recovery-words" disabled={self.busy} onclick={ctx.link().callback({let shown = self.shown; move |_|Msg::Show(!shown)})}>{icon(if self.shown {"eye-off"} else {"eye"})}{if self.shown {t("Hide recovery phrase")} else {t("Show recovery phrase")}}</button>
+                        <button class="secondary-button" data-testid="copy-recovery-phrase" disabled={self.busy} onclick={ctx.link().callback(|_|Msg::Copy)}>{icon("copy")}{t("Copy recovery phrase")}</button>
+                    </div>
+                    if self.shown {
+                        <ol id="recovery-words" class="recovery-words" data-testid="recovery-words" aria-label={t("Recovery phrase")} translate="no">
+                            {for self.phrase.split_whitespace().map(|word| html!{<li>{word}</li>})}
+                        </ol>
+                    }
                     if let Some(ok) = self.copied {<p role="status">{if ok {t("Recovery phrase copied")} else {t("Could not copy. Your browser blocked clipboard access.")}}</p>}
                 } else if self.method == Method::PrivateKey {
                     <label class="form-label">{t("Private key")}<input type="password" aria-label={t("Private key")} autocomplete="off" spellcheck="false" disabled={self.busy} value={self.phrase.clone()} oninput={ctx.link().callback(|e:InputEvent|Msg::Phrase(e.target_unchecked_into::<HtmlInputElement>().value()))} onkeydown={ctx.link().batch_callback(|e:KeyboardEvent|if e.key()=="Enter"{Some(Msg::Login)}else{None})}/></label>
@@ -329,7 +361,7 @@ impl Component for Login {
                 if self.generated {
                     <label class="wallet-backup-check"><input type="checkbox" checked={self.recorded} disabled={self.busy} onchange={ctx.link().callback(|e:Event|Msg::Recorded(e.target_unchecked_into::<HtmlInputElement>().checked()))}/>{t("I saved my recovery phrase and wallet index.")}</label>
                 }
-                <p class="small-muted">{t("Your phrase or key is treated like a password: it is never shown, never sent to the backend or to AI, and only the derived private key is saved, in this browser’s local storage.")}</p>
+                <p class="small-muted">{t("Your phrase or key is treated like a password: it is never sent to the backend or to AI, and only the derived private key is saved, in this browser’s local storage.")}</p>
                 <button class="primary-button" disabled={self.busy||self.phrase.trim().is_empty()||(self.generated&&!self.recorded)} onclick={ctx.link().callback(|_|Msg::Login)}>{if self.busy{t("Signing in…")}else{t("Sign in")}}{icon("arrow")}</button>
                 <button class="text-button" disabled={self.busy} onclick={ctx.link().callback(|_|Msg::Generate)}>{t("Create new recovery phrase")}</button>
                 if self.generated {<button class="text-button" disabled={self.busy} onclick={ctx.link().callback(|_|Msg::Existing)}>{t("Use existing recovery phrase")}</button>}

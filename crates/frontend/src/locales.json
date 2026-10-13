@@ -11351,14 +11351,6 @@
     "Guarda tu nueva frase de recuperación",
     "Uložte si novou obnovovací frázi"
   ],
-  "For your safety the words are never shown. Copy them to a password manager or other safe place, with your wallet index. You need both to sign in again.": [
-    "안전을 위해 단어는 화면에 표시되지 않습니다. 지갑 인덱스와 함께 비밀번호 관리자 등 안전한 곳에 복사해 두세요. 다시 로그인하려면 둘 다 필요합니다.",
-    "為咗安全，啲字永遠唔會顯示。請連同錢包索引複製去密碼管理器或者其他安全地方。再登入時兩樣都要用。",
-    "为了安全，这些单词永远不会显示。请连同钱包索引复制到密码管理器或其他安全的地方。再次登录时两者都需要。",
-    "安全のため、単語は画面に表示されません。ウォレットインデックスと一緒にパスワードマネージャーなど安全な場所へコピーしてください。再ログインには両方が必要です。",
-    "Por tu seguridad, las palabras nunca se muestran. Cópialas en un gestor de contraseñas u otro lugar seguro, junto con el índice de la cartera. Necesitarás ambos para volver a iniciar sesión.",
-    "Z bezpečnostních důvodů se slova nikdy nezobrazují. Zkopírujte je spolu s indexem peněženky do správce hesel nebo na jiné bezpečné místo. K opětovnému přihlášení budete potřebovat obojí."
-  ],
   "Copy recovery phrase": [
     "복구 구문 복사",
     "複製錢包助記詞",
@@ -11390,14 +11382,6 @@
     "リカバリーフレーズとウォレットインデックスを保存しました。",
     "He guardado mi frase de recuperación y el índice de la cartera.",
     "Uložil(a) jsem si obnovovací frázi a index peněženky."
-  ],
-  "Your phrase or key is treated like a password: it is never shown, never sent to the backend or to AI, and only the derived private key is saved, in this browser’s local storage.": [
-    "복구 구문이나 키는 비밀번호처럼 다뤄집니다. 화면에 표시되거나 백엔드·AI로 전송되지 않으며, 파생된 개인 키만 이 브라우저의 로컬 저장소에 저장됩니다.",
-    "助記詞或者私鑰會當密碼咁處理：永遠唔會顯示，亦唔會傳去後端或者 AI；只有衍生出嚟嘅私鑰會儲存喺呢個瀏覽器嘅本機儲存空間。",
-    "助记词或私钥会像密码一样处理：永不显示，也不会发送到后端或 AI；只有派生出的私钥会保存在此浏览器的本地存储中。",
-    "フレーズや鍵はパスワードと同じように扱われます。画面に表示されず、バックエンドや AI にも送信されません。派生した秘密鍵だけがこのブラウザのローカルストレージに保存されます。",
-    "Tu frase o clave se trata como una contraseña: nunca se muestra ni se envía al servidor ni a la IA, y solo se guarda la clave privada derivada, en el almacenamiento local de este navegador.",
-    "S frází či klíčem se zachází jako s heslem: nikdy se nezobrazí ani neodešle na backend či AI a uloží se pouze odvozený soukromý klíč, v místním úložišti tohoto prohlížeče."
   ],
   "Your private key is saved in this browser only. It is never shown on screen or sent to the backend.": [
     "개인 키는 이 브라우저에만 저장됩니다. 화면에 표시되거나 백엔드로 전송되지 않습니다.",
@@ -11631,14 +11615,6 @@
     "La cartera guardada ya no está en este navegador. Vuelve a iniciar sesión.",
     "Uložená peněženka už v tomto prohlížeči není. Přihlaste se znovu."
   ],
-  "Generate a new recovery phrase? It is never shown on screen: use Copy to save it somewhere safe, with your wallet index, before continuing.": [
-    "새 복구 구문을 생성할까요? 화면에는 표시되지 않습니다. 계속하기 전에 복사 버튼으로 지갑 인덱스와 함께 안전한 곳에 저장하세요.",
-    "要產生新嘅錢包助記詞嗎？佢唔會喺畫面顯示：繼續之前，請用「複製」連同錢包索引儲存去安全嘅地方。",
-    "要生成新的钱包助记词吗？它不会显示在屏幕上：继续之前，请用“复制”连同钱包索引保存到安全的地方。",
-    "新しいリカバリーフレーズを生成しますか？画面には表示されません。続ける前に「コピー」でウォレットインデックスと一緒に安全な場所へ保存してください。",
-    "¿Generar una nueva frase de recuperación? Nunca se muestra en pantalla: usa Copiar para guardarla en un lugar seguro, junto con el índice de la cartera, antes de continuar.",
-    "Vygenerovat novou obnovovací frázi? Nikdy se nezobrazí na obrazovce: než budete pokračovat, uložte ji tlačítkem Kopírovat spolu s indexem peněženky na bezpečné místo."
-  ],
   "This browser has no saved key for this wallet. Sign in again with your recovery phrase or private key.": [
     "이 브라우저에는 이 지갑의 저장된 키가 없습니다. 복구 구문이나 개인 키로 다시 로그인하세요.",
     "呢個瀏覽器冇儲存呢個錢包嘅私鑰。請用錢包助記詞或者私鑰重新登入。",
@@ -11686,5 +11662,69 @@
     "ネットワークが異なるトランザクションハッシュを返しました。再試行する前にエクスプローラーで確認してください。",
     "La red informó de un hash de transacción distinto. Revisa el explorador antes de reintentarlo.",
     "Síť nahlásila jiný hash transakce. Před dalším pokusem to ověřte v průzkumníku."
+  ],
+  "The words stay hidden until you press Show. Write them down or copy them to a password manager, with your wallet index, and make sure no one can see your screen. You need both to sign in again.": [
+    "단어는 '보기'를 누르기 전까지 숨겨져 있습니다. 지갑 인덱스와 함께 종이에 적거나 비밀번호 관리자에 복사해 두고, 다른 사람이 화면을 보지 않는지 확인하세요. 다시 로그인하려면 둘 다 필요합니다.",
+    "撳「顯示」之前，啲字會一直隱藏。請連同錢包索引寫低或者複製去密碼管理器，並確保冇人睇到你個畫面。再登入時兩樣都要用。",
+    "点击“显示”之前，这些单词会一直隐藏。请连同钱包索引写下来或复制到密码管理器，并确保没有人能看到你的屏幕。再次登录时两者都需要。",
+    "「表示」を押すまで単語は隠れています。ウォレットインデックスと一緒に紙に書き留めるか、パスワードマネージャーにコピーしてください。画面を誰にも見られていないことを確認してください。再ログインには両方が必要です。",
+    "Las palabras permanecen ocultas hasta que pulses Mostrar. Escríbelas o cópialas en un gestor de contraseñas, junto con el índice de la cartera, y asegúrate de que nadie vea tu pantalla. Necesitarás ambos para volver a iniciar sesión.",
+    "Slova zůstanou skrytá, dokud nestisknete Zobrazit. Zapište si je nebo je zkopírujte do správce hesel spolu s indexem peněženky a ujistěte se, že vám nikdo nevidí na obrazovku. K opětovnému přihlášení budete potřebovat obojí."
+  ],
+  "Show recovery phrase": [
+    "복구 구문 보기",
+    "顯示錢包助記詞",
+    "显示钱包助记词",
+    "リカバリーフレーズを表示",
+    "Mostrar frase de recuperación",
+    "Zobrazit obnovovací frázi"
+  ],
+  "Hide recovery phrase": [
+    "복구 구문 숨기기",
+    "隱藏錢包助記詞",
+    "隐藏钱包助记词",
+    "リカバリーフレーズを隠す",
+    "Ocultar frase de recuperación",
+    "Skrýt obnovovací frázi"
+  ],
+  "Phrase length": [
+    "구문 길이",
+    "助記詞長度",
+    "助记词长度",
+    "フレーズの長さ",
+    "Longitud de la frase",
+    "Délka fráze"
+  ],
+  "12 words": [
+    "12단어",
+    "12 個字",
+    "12 个单词",
+    "12 語",
+    "12 palabras",
+    "12 slov"
+  ],
+  "24 words": [
+    "24단어",
+    "24 個字",
+    "24 个单词",
+    "24 語",
+    "24 palabras",
+    "24 slov"
+  ],
+  "Generate a new recovery phrase? It stays hidden unless you press Show. Save it somewhere safe, with your wallet index, before continuing.": [
+    "새 복구 구문을 생성할까요? '보기'를 누르기 전에는 숨겨져 있습니다. 계속하기 전에 지갑 인덱스와 함께 안전한 곳에 보관하세요.",
+    "要產生新嘅錢包助記詞嗎？除非你撳「顯示」，否則會一直隱藏。繼續之前，請連同錢包索引保存喺安全地方。",
+    "要生成新的钱包助记词吗？除非点击“显示”，否则会一直隐藏。继续之前，请连同钱包索引保存在安全的地方。",
+    "新しいリカバリーフレーズを生成しますか？「表示」を押さない限り隠れたままです。続行する前に、ウォレットインデックスと一緒に安全な場所に保管してください。",
+    "¿Generar una nueva frase de recuperación? Permanece oculta a menos que pulses Mostrar. Guárdala en un lugar seguro, junto con el índice de la cartera, antes de continuar.",
+    "Vygenerovat novou obnovovací frázi? Zůstane skrytá, dokud nestisknete Zobrazit. Než budete pokračovat, uložte ji spolu s indexem peněženky na bezpečné místo."
+  ],
+  "Your phrase or key is treated like a password: it is never sent to the backend or to AI, and only the derived private key is saved, in this browser’s local storage.": [
+    "복구 구문과 키는 비밀번호처럼 취급됩니다. 백엔드나 AI로 전송되지 않으며, 파생된 개인 키만 이 브라우저의 로컬 저장소에 저장됩니다.",
+    "助記詞同私鑰會當密碼咁處理：永遠唔會傳去後端或者 AI，只有衍生出嚟嘅私鑰會儲存喺呢個瀏覽器嘅本機儲存空間。",
+    "助记词和私钥被当作密码处理：永远不会发送到后端或 AI，只有派生的私钥会保存在此浏览器的本地存储中。",
+    "フレーズや鍵はパスワードとして扱われます。バックエンドや AI に送信されることはなく、派生した秘密鍵だけがこのブラウザのローカルストレージに保存されます。",
+    "Tu frase o clave se trata como una contraseña: nunca se envía al backend ni a la IA, y solo la clave privada derivada se guarda en el almacenamiento local de este navegador.",
+    "S vaší frází nebo klíčem se zachází jako s heslem: nikdy se neodesílá na backend ani AI a v místním úložišti tohoto prohlížeče se ukládá pouze odvozený soukromý klíč."
   ]
 }

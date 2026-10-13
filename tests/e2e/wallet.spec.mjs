@@ -238,12 +238,12 @@ test('private key login, saved wallet on return, and copy-only secrets', async (
   await expect(page.getByLabel('Recovery phrase', { exact: true })).toBeVisible();
   expect(await saved(page)).toBeNull();
 
-  // A new recovery phrase is never displayed: it can only be copied.
+  // A new recovery phrase stays hidden unless Show is pressed.
   await context.clearCookies();
   await page.evaluate(k => localStorage.removeItem(k), KEY);
   await page.goto(base);
   await page.getByRole('button', { name: 'Create new recovery phrase' }).click();
-  await expect(page.getByRole('list', { name: 'Recovery phrase words' })).toHaveCount(0);
+  await expect(page.getByTestId('recovery-words')).toHaveCount(0);
   const signIn2 = page.getByRole('button', { name: 'Sign in', exact: true });
   await expect(signIn2).toBeDisabled();
   await page.getByTestId('copy-recovery-phrase').click();

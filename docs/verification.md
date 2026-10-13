@@ -2,9 +2,15 @@
 
 > Naming note (2026-10-08): entries below record the UI as tested at the time. Since then the Cloud page became **Autonomous AI** at `/autonomous` (`/cloud` still opens it), Dashboard moved to `/dashboard` (`/status` still works), Devices moved to `/devices`, the Coding agent page and Pinned menu entry were folded into chat and the library, and the product name is Invisible AI.
 
+## Show a new recovery phrase, 12 or 24 words — 2026-10-13
+
+A new recovery phrase can now be written on paper: **Show recovery phrase** lists the words numbered (two columns on a phone), **Hide** removes them from the page, and **Copy** still works. The words start hidden and hide again whenever the phrase changes. **12 words** (default) or **24 words** picks the length; switching generates a new phrase. `mnemonic_from_entropy` now takes 16 or 32 bytes, checked against BIP-39's all-zero vectors (“abandon … about”, “abandon ×23 art”). Translations for the six languages were updated.
+
+Verified: `make test-wallet` (22 Rust, 5 JS, 2 integration, 8 Playwright) passed, and the auth test for a new phrase now checks hidden by default, the shown words equal the copied phrase, Hide, and a 24-word phrase. Clippy for the WASM frontend is clean.
+
 ## Stablecoin wallet: USDC on Cronos — 2026-10-12
 
-Added the **Wallet** page (USDC on Cronos mainnet, devUSDC.e on Cronos testnet), private-key login, and saved-wallet sign-in. Only the derived private key and wallet index are kept, in browser local storage; phrases and keys are never rendered, and leave only through a confirmed **Copy**.
+Added the **Wallet** page (USDC on Cronos mainnet, devUSDC.e on Cronos testnet), private-key login, and saved-wallet sign-in. Only the derived private key and wallet index are kept, in browser local storage; the saved private key is never rendered and leaves only through a confirmed **Copy**.
 
 Verified in three layers. **Unit:** 22 Rust tests in `causewaybay-shared` (the Causewaybay Wallet's transaction, EIP-55 and unit vectors; transfer checks and fee ceiling; the 256-bit integer) and 5 `node --test` cases for the card helpers (easeInOutExpo matched to `tween.rs`, money, address masking). **Integration:** `crates/shared/tests/wallet_flow.rs` signs a transfer from a phrase, decodes the raw bytes with an independent RLP decoder and recovers the signer on both chains; `cronos_live.rs` (ignored by default) checked chain ids, the token contracts' `symbol()`/`decimals()` and gas prices on the real nodes, and both nodes refused a throwaway-key transfer for insufficient funds only — after accepting its encoding, chain id and signature. **Browser:** `wallet.spec.mjs` (7) and the `wallet-flow.spec.mjs` journey (new wallet → approval → receive → send → network switch → sign out → back in by key) against a fake Cronos node, checking the exact signed bytes and that no secret reaches the page, local storage beyond the key, or any backend request; `wallet-live.spec.mjs` read real balances on both networks and got a real quote without sending. `make test-wallet` and `make test-wallet-live` passed; `cargo fmt --check` and both Clippy runs were clean.
 

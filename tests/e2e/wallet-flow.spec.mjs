@@ -50,7 +50,7 @@ test('new wallet → approval → receive → send → network switch → sign o
   page.on('request', r => { if (r.postData()) bodies.push({ url: r.url(), body: r.postData() }); });
   let phrase, address, privateKey;
 
-  await test.step('create a new wallet: the phrase is copied, never shown', async () => {
+  await test.step('create a new wallet: the phrase stays hidden until shown', async () => {
     await page.goto(base);
     await page.getByRole('button', { name: 'Create new recovery phrase' }).click();
     const signIn = page.getByRole('button', { name: 'Sign in', exact: true });

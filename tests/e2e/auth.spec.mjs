@@ -289,13 +289,31 @@ test('new recovery phrase requires confirmation and a copied backup before regis
   await expect(page.getByLabel('Recovery phrase words')).toHaveCount(0);
   page.once('dialog',d=>d.accept());
   await page.getByRole('button',{name:'Create new recovery phrase'}).click();
-  // The words are never rendered; Copy is the only way out.
-  await expect(page.locator('.recovery-words li')).toHaveCount(0);
+  // The words stay hidden until Show is pressed, so they can be written on paper.
+  const words=page.getByTestId('recovery-words');
+  await expect(words).toHaveCount(0);
+  await expect(page.getByRole('button',{name:'12 words'})).toHaveAttribute('aria-pressed','true');
   await page.getByRole('button',{name:'Copy recovery phrase'}).click();
   await expect(page.getByText('Recovery phrase copied')).toBeVisible();
-  const phrase=await page.evaluate(()=>navigator.clipboard.readText());
+  let phrase=await page.evaluate(()=>navigator.clipboard.readText());
   expect(phrase.split(' ')).toHaveLength(12);
   expect(await page.evaluate(()=>document.documentElement.outerHTML+document.body.innerText)).not.toContain(phrase);
+  await page.getByRole('button',{name:'Show recovery phrase'}).click();
+  await expect(words.locator('li')).toHaveText(phrase.split(' '));
+  await expect(page.getByRole('button',{name:'Hide recovery phrase'})).toHaveAttribute('aria-pressed','true');
+  await page.getByRole('button',{name:'Hide recovery phrase'}).click();
+  await expect(words).toHaveCount(0);
+  // 24 words is a new phrase, hidden again until shown.
+  await page.getByRole('button',{name:'24 words'}).click();
+  await expect(words).toHaveCount(0);
+  await page.getByRole('button',{name:'Show recovery phrase'}).click();
+  await expect(words.locator('li')).toHaveCount(24);
+  await page.getByRole('button',{name:'Copy recovery phrase'}).click();
+  await expect.poll(()=>page.evaluate(()=>navigator.clipboard.readText())).not.toBe(phrase);
+  phrase=await page.evaluate(()=>navigator.clipboard.readText());
+  await expect(words.locator('li')).toHaveText(phrase.split(' '));
+  await page.screenshot({path:'test-results/recovery-24-shown.png',fullPage:true});
+  await page.getByRole('button',{name:'Hide recovery phrase'}).click();
   await expect(page.getByLabel('User name',{exact:true})).not.toHaveValue('');
   await expect(page.getByRole('button',{name:'Sign in',exact:true})).toBeDisabled();
   await page.getByLabel('I saved my recovery phrase and wallet index.').check();
