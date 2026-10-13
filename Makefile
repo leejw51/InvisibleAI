@@ -127,10 +127,10 @@ test-scripts:
 .PHONY: test-wallet test-wallet-live
 test-wallet: build-debug
 	cargo test -p causewaybay-shared
-	node --test tests/scripts/wallet-format.test.mjs
-	npx playwright test tests/e2e/wallet.spec.mjs tests/e2e/wallet-flow.spec.mjs --project=chromium
+	node --test tests/scripts/wallet-format.test.mjs tests/scripts/wallet-chains.test.mjs
+	npx playwright test tests/e2e/wallet.spec.mjs tests/e2e/wallet-flow.spec.mjs tests/e2e/wallet-multichain.spec.mjs tests/e2e/wallet-look.spec.mjs --project=chromium
 # Live, read-only: chain ids, token metadata, a node-validated signature, and
-# the Wallet page reading real balances. Never broadcasts a funded transfer.
+# the Wallet page reading real balances on every chain. Never broadcasts a funded transfer.
 test-wallet-live: build-debug
 	cargo test -p causewaybay-shared --test cronos_live -- --ignored
 	RUN_LIVE_WALLET=1 npx playwright test tests/e2e/wallet-live.spec.mjs --project=chromium

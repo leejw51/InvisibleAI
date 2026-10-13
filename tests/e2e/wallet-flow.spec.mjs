@@ -68,7 +68,8 @@ test('new wallet → approval → receive → send → network switch → sign o
     expect(stored.index).toBe(0);
     expect(stored.key).toMatch(/^0x[0-9a-f]{64}$/);
     privateKey = stored.key;
-    expect(await page.evaluate(() => JSON.stringify(localStorage))).not.toContain(phrase);
+    // The phrase is kept in this browser (for the non-EVM chains), and only here.
+    expect(stored.mnemonic).toBe(phrase);
   });
 
   await test.step('an admin approves the new wallet', async () => {
@@ -84,11 +85,18 @@ test('new wallet → approval → receive → send → network switch → sign o
   await test.step('open the wallet on testnet: empty card, receive address copies', async () => {
     await page.getByRole('button', { name: 'Wallet', exact: true }).click();
     const card = page.getByTestId('wallet-card');
+    // A new wallet opens on USDC on Cronos Mainnet; search finds the testnet token.
+    await expect(card).toHaveAttribute('data-network', 'cronos-mainnet');
+    await page.getByRole('combobox', { name: 'Search coins and networks' }).fill('devusdc');
+    await page.getByRole('combobox', { name: 'Search coins and networks' }).press('Enter');
     await expect(card).toHaveAttribute('data-network', 'cronos-testnet');
     await expect(page.getByTestId('asset-balance')).toHaveText('0');
     await expect(card).toHaveAttribute('data-shown-balance', '0.00');
+    await page.getByRole('tab', { name: 'Receive' }).click();
+    await expect(page.getByTestId('receive-address')).toHaveText(new RegExp(address, 'i'));
     await page.getByRole('button', { name: 'Copy address' }).click();
-    await expect.poll(() => clipboard(page)).toBe(address);
+    await expect.poll(async () => (await clipboard(page)).toLowerCase()).toBe(address);
+    await page.getByRole('tab', { name: 'Send' }).click();
     await page.screenshot({ path: 'test-results/flow-1-empty.png' });
   });
 
@@ -96,7 +104,7 @@ test('new wallet → approval → receive → send → network switch → sign o
     rpc.usdc = 100_000_000n; rpc.native = 2n * 10n ** 18n;
     await page.getByRole('button', { name: 'Refresh balances' }).click();
     await expect(page.getByTestId('asset-balance')).toHaveText('100');
-    await expect(page.getByTestId('native-balance')).toHaveText('2');
+    await expect(page.getByTestId('native-balance')).toHaveText('2 TCRO');
     await expect(page.getByTestId('wallet-card')).toHaveAttribute('data-shown-balance', '100.00');
     await page.screenshot({ path: 'test-results/flow-2-funded.png' });
   });
@@ -130,11 +138,12 @@ test('new wallet → approval → receive → send → network switch → sign o
   });
 
   await test.step('switch to mainnet and back: the activity keeps its own network', async () => {
-    await page.getByRole('tab', { name: 'Mainnet' }).click();
+    await page.getByTestId('main-usdc-cronos-mainnet').click();
     await expect(page.getByTestId('wallet-card')).toHaveAttribute('data-network', 'cronos-mainnet');
     await expect(page.getByTestId('asset-balance')).toHaveText('0');
     await expect(page.getByTestId('wallet-activity').getByRole('link')).toHaveAttribute('href', /explorer\.cronos\.org\/testnet\/tx\//);
-    await page.getByRole('tab', { name: 'Testnet' }).click();
+    await page.getByRole('combobox', { name: 'Search coins and networks' }).fill('devusdc');
+    await page.getByRole('combobox', { name: 'Search coins and networks' }).press('Enter');
     await expect(page.getByTestId('asset-balance')).toHaveText('87.66');
   });
 

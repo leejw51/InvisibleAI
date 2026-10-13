@@ -103,6 +103,7 @@ pub fn api_routes() -> Router<Arc<AppState>> {
         .route("/wiki/tag/{tag}", axum::routing::delete(wiki::remove_tag))
         .route("/wallet", get(wallet::get).patch(wallet::update))
         .route("/wallet/tokens", post(wallet::add_token))
+        .route("/wallet/cardano", post(wallet::cardano))
         .route(
             "/wallet/tokens/{network}/{address}",
             axum::routing::delete(wallet::remove_token),
@@ -245,7 +246,7 @@ async fn security_headers(req: Request, next: Next) -> Response {
     h.insert("x-content-type-options", "nosniff".parse().unwrap());
     h.insert("referrer-policy", "no-referrer".parse().unwrap());
     h.insert("x-frame-options", "DENY".parse().unwrap());
-    h.insert("content-security-policy", "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://evm.cronos.org https://evm-t3.cronos.org; object-src 'none'; base-uri 'self'; frame-ancestors 'none'".parse().unwrap());
+    h.insert("content-security-policy", "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://evm.cronos.org https://evm-t3.cronos.org https://arb1.arbitrum.io https://sepolia-rollup.arbitrum.io https://solana-rpc.publicnode.com https://api.devnet.solana.com https://api.testnet.solana.com wss://indexer.preview.midnight.network wss://indexer.devnet.midnight.network https://chronik.e.cash https://chronik-testnet.fabien.cash; object-src 'none'; base-uri 'self'; frame-ancestors 'none'".parse().unwrap());
     h.insert(header::CACHE_CONTROL, "no-store".parse().unwrap());
     res
 }

@@ -122,7 +122,9 @@ When the same wallet signs in on another device, **New thought** resumes the sha
 
 ## Wallet
 
-**Wallet** holds and sends **CRONOS** (CRO, the network's own coin) or **USDC** on Cronos Testnet or Mainnet. **Other ERC-20 token** adds any token by contract address. Its symbol, name and decimals are read from the chain and shown for approval before saving. The selected asset is shown large with its contract address; check it before sending. Network fees are always paid in CRO, so the CRO balance is shown for every asset. The network, the asset picked on each network and the saved tokens are kept on the backend for your account, so signing in again opens the wallet as you left it. Keys are never sent to the backend.
+**Wallet** holds every coin on every network the Causewaybay Wallet supports, plus Arbitrum. The two big buttons open **CRONOS MAINNET** (CRO) and **USDC** on Cronos Mainnet; the search box finds everything else by symbol, network, chain, tag (`testnet`, `stablecoin`, `l2`…) or contract address, and every word you type must match. Paste an ERC-20 contract address to add it on Cronos or Arbitrum after checking what the chain says about it.
+
+The active coin is shown large with its network and contract; check them before sending. Network fees are always paid in the network's own coin, whose balance stays in view. Cronos and Arbitrum coins can be sent; Solana, Cardano, Midnight and eCash are view and receive for now. Their addresses come from your recovery phrase, so sign in with the phrase once on a browser to see them; they are then remembered for your account. Your key and phrase are kept only in this browser; the backend remembers only public choices (the active coin, recent picks, added tokens and addresses), so signing in again opens the wallet as you left it.
 
 ## Wallet login and approval
 

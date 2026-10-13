@@ -1,0 +1,8 @@
+Asset type: credit-card face artwork for the Invisible AI wallet (eCash card).
+Composition: wide landscape at the ISO credit-card ratio, full-bleed abstract artwork with no card edges, no frame and no border. The left third and the bottom third stay calm and low in detail so white text overlays read clearly.
+Subject: smooth rounded waves of glossy sky-blue and teal glass over a dark petrol background, with a gentle pearlescent sheen like a polished coin edge.
+Style/medium: premium fintech metal-card design; polished 3D render, smooth gradients, subtle fine grain, refined specular highlights and gentle depth of field.
+Lighting/mood: friendly, fresh, dependable; deep petrol at the lower left brightening into clear sky-blue at the upper right.
+Constraints: no letters, numbers, words, logos, chips, card numbers, brand marks, people, watermarks or UI. Background is opaque.
+
+Generated with xAI grok-imagine-image-quality on 2026-10-13 by scripts/generate-wallet-art.mjs.

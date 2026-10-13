@@ -88,13 +88,15 @@ impl Login {
         }
     }
     /// Sign the backend's challenge; only the signature leaves the browser, and
-    /// the key is saved to local storage once the backend accepts it.
+    /// the key (and phrase, if any) is saved to local storage once the backend
+    /// accepts it.
     fn sign_in(
         &mut self,
         ctx: &Context<Self>,
         index: u32,
         identity: Identity,
         name: Option<String>,
+        mnemonic: Option<Zeroizing<String>>,
     ) {
         if self.busy {
             return;
@@ -109,7 +111,7 @@ impl Login {
             if !message.starts_with(&format!("Causewaybay Bot login\nHost: {host}\nAddress: {address}\nNonce: ")) { return Err("Invalid login challenge".into()); }
             let signature = identity.sign(message)?;
             let result = api("POST", "/api/auth/verify", Some(json!({"nonce":c["nonce"],"signature":signature,"wallet_index":index,"name":name}))).await?;
-            account::remember(&identity, index);
+            account::remember(&identity, index, mnemonic.as_deref().map(String::as_str));
             Ok(result)
         }.await) });
     }
@@ -168,7 +170,7 @@ impl Component for Login {
                         "The saved wallet is no longer in this browser. Sign in again.".into();
                     return true;
                 };
-                self.sign_in(ctx, index, identity, None);
+                self.sign_in(ctx, index, identity, None, account::saved_mnemonic());
             }
             Msg::Phrase(v) => {
                 self.phrase.zeroize();
@@ -253,7 +255,17 @@ impl Component for Login {
                             self.error = "User name must contain 1 to 80 characters without control characters.".into();
                             return true;
                         }
-                        self.sign_in(ctx, index, identity, name);
+                        // Kept normalized: one space between words, lowercase.
+                        let mnemonic = (self.method == Method::Phrase).then(|| {
+                            Zeroizing::new(
+                                self.phrase
+                                    .split_whitespace()
+                                    .collect::<Vec<_>>()
+                                    .join(" ")
+                                    .to_lowercase(),
+                            )
+                        });
+                        self.sign_in(ctx, index, identity, name, mnemonic);
                     }
                 }
             }
@@ -361,7 +373,7 @@ impl Component for Login {
                 if self.generated {
                     <label class="wallet-backup-check"><input type="checkbox" checked={self.recorded} disabled={self.busy} onchange={ctx.link().callback(|e:Event|Msg::Recorded(e.target_unchecked_into::<HtmlInputElement>().checked()))}/>{t("I saved my recovery phrase and wallet index.")}</label>
                 }
-                <p class="small-muted">{t("Your phrase or key is treated like a password: it is never sent to the backend or to AI, and only the derived private key is saved, in this browser’s local storage.")}</p>
+                <p class="small-muted">{t("Your phrase and key are treated like passwords: they are never sent to the backend or to AI, and are saved only in this browser’s local storage.")}</p>
                 <button class="primary-button" disabled={self.busy||self.phrase.trim().is_empty()||(self.generated&&!self.recorded)} onclick={ctx.link().callback(|_|Msg::Login)}>{if self.busy{t("Signing in…")}else{t("Sign in")}}{icon("arrow")}</button>
                 <button class="text-button" disabled={self.busy} onclick={ctx.link().callback(|_|Msg::Generate)}>{t("Create new recovery phrase")}</button>
                 if self.generated {<button class="text-button" disabled={self.busy} onclick={ctx.link().callback(|_|Msg::Existing)}>{t("Use existing recovery phrase")}</button>}

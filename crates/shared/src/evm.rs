@@ -6,10 +6,9 @@
 use k256::ecdsa::SigningKey;
 use serde::{Deserialize, Serialize};
 use sha3::{Digest, Keccak256};
-use std::collections::BTreeMap;
 pub use u256::{U256, U256Error};
 
-/// The only two networks the wallet harness serves.
+/// An EVM network this wallet can send on: Cronos and Arbitrum.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Network {
     pub key: &'static str,
@@ -23,6 +22,9 @@ pub struct Network {
     /// The fee ceiling in wei: a hostile or broken endpoint's gas price can make
     /// a fee almost anything, so nothing past this is signed.
     pub max_fee_wei: u128,
+    /// Whether a plain coin transfer costs exactly 21,000 gas. Not on Arbitrum,
+    /// which folds the L1 data fee into gas, so there the node's estimate rules.
+    pub exact_native_gas: bool,
     pub usdc: Token,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -43,6 +45,7 @@ pub const CRONOS_MAINNET: Network = Network {
     native: "CRO",
     native_name: "Cronos",
     max_fee_wei: 20_000_000_000_000_000_000, // 20 CRO
+    exact_native_gas: true,
     usdc: Token {
         symbol: "USDC",
         name: "USD Coin",
@@ -59,6 +62,7 @@ pub const CRONOS_TESTNET: Network = Network {
     native: "TCRO",
     native_name: "Cronos test coin",
     max_fee_wei: 20_000_000_000_000_000_000, // 20 TCRO
+    exact_native_gas: true,
     usdc: Token {
         symbol: "devUSDC.e",
         name: "USD Coin (Cronos testnet)",
@@ -66,7 +70,48 @@ pub const CRONOS_TESTNET: Network = Network {
         address: "0xc01efAaF7C5C61bEbFAeb358E1161b537b8bC0e0",
     },
 };
-pub const NETWORKS: [Network; 2] = [CRONOS_TESTNET, CRONOS_MAINNET];
+// Arbitrum's chain ids and USDC rows were read off each chain on 2026-10-13:
+// `eth_chainId` 0xa4b1 and 0x66eee; both contracts answer "USDC"/6.
+pub const ARBITRUM_ONE: Network = Network {
+    key: "arbitrum-one",
+    name: "Arbitrum One",
+    chain_id: 42161,
+    rpc: "https://arb1.arbitrum.io/rpc",
+    explorer: "https://arbiscan.io",
+    native: "ETH",
+    native_name: "Ether on Arbitrum",
+    max_fee_wei: 5_000_000_000_000_000, // 0.005 ETH
+    exact_native_gas: false,
+    usdc: Token {
+        symbol: "USDC",
+        name: "USD Coin",
+        decimals: 6,
+        address: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+    },
+};
+pub const ARBITRUM_SEPOLIA: Network = Network {
+    key: "arbitrum-sepolia",
+    name: "Arbitrum Sepolia",
+    chain_id: 421614,
+    rpc: "https://sepolia-rollup.arbitrum.io/rpc",
+    explorer: "https://sepolia.arbiscan.io",
+    native: "ETH",
+    native_name: "Sepolia Ether on Arbitrum",
+    max_fee_wei: 5_000_000_000_000_000, // 0.005 ETH
+    exact_native_gas: false,
+    usdc: Token {
+        symbol: "USDC",
+        name: "USD Coin (Arbitrum Sepolia)",
+        decimals: 6,
+        address: "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d",
+    },
+};
+pub const NETWORKS: [Network; 4] = [
+    CRONOS_TESTNET,
+    CRONOS_MAINNET,
+    ARBITRUM_SEPOLIA,
+    ARBITRUM_ONE,
+];
 pub fn network(key: &str) -> Option<Network> {
     NETWORKS.into_iter().find(|n| n.key == key)
 }
@@ -334,10 +379,17 @@ pub fn build_transfer(
         .estimate
         .and_then(|e| u64::try_from(e).ok())
         .filter(|e| *e > 0);
+    let exact = network.exact_native_gas;
     let gas_limit = match (native, estimate) {
         // An ordinary address costs exactly 21,000; a contract gets headroom.
-        (true, Some(e)) if e <= NATIVE_GAS => NATIVE_GAS,
-        (true, None) => NATIVE_GAS,
+        (true, Some(e)) if exact && e <= NATIVE_GAS => NATIVE_GAS,
+        (true, None) if exact => NATIVE_GAS,
+        (true, None) => {
+            return Err(format!(
+                "{} could not estimate the fee. Try again in a moment.",
+                network.name
+            ));
+        }
         (false, None) => FALLBACK_GAS,
         (_, Some(e)) => with_headroom(e),
     };
@@ -382,11 +434,11 @@ pub fn build_transfer(
     }
     Ok(tx)
 }
-/// The most CRO that can be sent to an ordinary address at this gas price:
-/// the balance less a 21,000-gas fee, never below zero.
-pub fn max_native(balance: U256, gas_price: U256) -> U256 {
+/// The most of the network's coin that can be sent: the balance less the fee
+/// for `gas_limit` at this gas price, never below zero.
+pub fn max_native(balance: U256, gas_price: U256, gas_limit: u64) -> U256 {
     balance
-        .checked_sub(gas_price.saturating_mul_u64(NATIVE_GAS))
+        .checked_sub(gas_price.saturating_mul_u64(gas_limit))
         .unwrap_or(U256::ZERO)
 }
 
@@ -495,50 +547,6 @@ pub fn imitates_builtin(network: &Network, token: &CustomToken) -> bool {
         || name.contains("USDCOIN")
         || symbol == "CRO"
         || symbol == "TCRO"
-}
-
-/// The wallet choices kept on the backend for each account, so a new sign-in
-/// opens the same network and asset with the same saved tokens. Never a key.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct WalletSettings {
-    /// The network key last opened.
-    pub network: String,
-    /// Network key → asset key (`native`, `usdc` or a saved token's address).
-    pub selected: BTreeMap<String, String>,
-    /// Network key → tokens saved there, oldest first.
-    pub tokens: BTreeMap<String, Vec<CustomToken>>,
-}
-impl Default for WalletSettings {
-    fn default() -> Self {
-        Self {
-            network: CRONOS_TESTNET.key.into(),
-            selected: BTreeMap::new(),
-            tokens: BTreeMap::new(),
-        }
-    }
-}
-impl WalletSettings {
-    pub fn tokens_on(&self, network: &Network) -> &[CustomToken] {
-        self.tokens
-            .get(network.key)
-            .map(Vec::as_slice)
-            .unwrap_or(&[])
-    }
-    /// The asset chosen on `network`: USDC until something else is picked, and
-    /// USDC again if a picked token is no longer saved.
-    pub fn asset_on(&self, network: &Network) -> Asset {
-        match self.selected.get(network.key).map(String::as_str) {
-            Some(NATIVE_KEY) => Asset::Native,
-            Some(address) if address != USDC_KEY => self
-                .tokens_on(network)
-                .iter()
-                .find(|t| t.address.eq_ignore_ascii_case(address))
-                .cloned()
-                .map(Asset::Erc20)
-                .unwrap_or(Asset::Usdc),
-            _ => Asset::Usdc,
-        }
-    }
 }
 
 mod u256 {
@@ -968,7 +976,7 @@ mod tests {
     }
     #[test]
     fn build_transfer_targets_the_network_contract_with_headroom() {
-        for n in NETWORKS {
+        for n in [CRONOS_TESTNET, CRONOS_MAINNET] {
             let r = check_transfer(&n, &Asset::Usdc, ME, YOU, "2", usdc("5")).unwrap();
             let tx = build_transfer(&n, &r, quote(7, 5_000, Some(50_000)), cro("1")).unwrap();
             assert_eq!(tx.chain_id, n.chain_id);
@@ -1112,8 +1120,8 @@ mod tests {
                 .gas_limit,
             50_000
         );
-        assert_eq!(max_native(cro("1.105"), q.gas_price), cro("1"));
-        assert_eq!(max_native(cro("0.1"), q.gas_price), U256::ZERO);
+        assert_eq!(max_native(cro("1.105"), q.gas_price, NATIVE_GAS), cro("1"));
+        assert_eq!(max_native(cro("0.1"), q.gas_price, NATIVE_GAS), U256::ZERO);
         assert_eq!(
             check_transfer(
                 n,
@@ -1229,27 +1237,6 @@ mod tests {
         assert!(!imitates_builtin(n, &token(WCRO, "WCRO", 18)));
     }
     #[test]
-    fn settings_fall_back_to_usdc() {
-        let mut s = WalletSettings::default();
-        assert_eq!(s.network, "cronos-testnet");
-        assert_eq!(s.asset_on(&CRONOS_TESTNET), Asset::Usdc);
-        s.selected
-            .insert("cronos-mainnet".into(), NATIVE_KEY.into());
-        assert_eq!(s.asset_on(&CRONOS_MAINNET), Asset::Native);
-        s.selected
-            .insert("cronos-testnet".into(), WCRO.to_ascii_lowercase());
-        assert_eq!(s.asset_on(&CRONOS_TESTNET), Asset::Usdc, "not saved there");
-        s.tokens
-            .insert("cronos-testnet".into(), vec![token(WCRO, "WCRO", 18)]);
-        assert_eq!(
-            s.asset_on(&CRONOS_TESTNET),
-            Asset::Erc20(token(WCRO, "WCRO", 18))
-        );
-        assert!(s.tokens_on(&CRONOS_MAINNET).is_empty());
-        let json = serde_json::to_value(&s).unwrap();
-        assert_eq!(serde_json::from_value::<WalletSettings>(json).unwrap(), s);
-    }
-    #[test]
     fn u256_adds_and_subtracts_with_carries() {
         let a = U256::from(u128::MAX);
         assert_eq!(
@@ -1268,5 +1255,47 @@ mod tests {
             Some(U256::from(999u64))
         );
         assert!(U256::from(1u64).checked_sub(U256::from(2u64)).is_none());
+    }
+
+    #[test]
+    fn arbitrum_always_uses_the_estimate_and_a_lower_ceiling() {
+        for n in [ARBITRUM_ONE, ARBITRUM_SEPOLIA] {
+            // 0.01 gwei, as Arbitrum charges; an ETH transfer estimated at 30,000.
+            let price = U256::from(10_000_000u64);
+            let r = check_transfer(&n, &Asset::Native, ME, YOU, "0.1", cro("1")).unwrap();
+            let q = Quote {
+                nonce: U256::ZERO,
+                gas_price: price,
+                estimate: Some(U256::from(30_000u64)),
+            };
+            let tx = build_transfer(&n, &r, q, cro("1")).unwrap();
+            assert_eq!((tx.chain_id, tx.gas_limit), (n.chain_id, 37_500));
+            // No estimate is refused rather than guessed at 21,000.
+            let none = Quote {
+                estimate: None,
+                ..q
+            };
+            assert!(
+                build_transfer(&n, &r, none, cro("1"))
+                    .unwrap_err()
+                    .contains("could not estimate")
+            );
+            // A fee past 0.005 ETH is not signed.
+            let greedy = Quote {
+                gas_price: U256::from(1_000_000_000_000u64),
+                ..q
+            };
+            assert!(
+                build_transfer(&n, &r, greedy, cro("100"))
+                    .unwrap_err()
+                    .contains("0.005 ETH ceiling")
+            );
+            let u = check_transfer(&n, &Asset::Usdc, ME, YOU, "1", usdc("2")).unwrap();
+            assert_eq!(checksum(&u.to), n.usdc.address);
+        }
+        assert_eq!(
+            max_native(cro("1"), U256::from(10_000_000u64), 37_500),
+            parse_units("0.999999625", 18).unwrap()
+        );
     }
 }

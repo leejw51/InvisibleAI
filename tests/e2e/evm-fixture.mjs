@@ -55,8 +55,12 @@ export function rlpDecode(bytes) {
 }
 export const big = bytes => bytes.length ? BigInt(hex(bytes)) : 0n;
 const word = n => '0x' + BigInt(n).toString(16).padStart(64, '0');
-export const RPC = /^https:\/\/evm(-t3)?\.cronos\.org\/?$/;
-export const USDC = { mainnet: '0xc21223249ca28397b4b6541dffaecc539bff0c59', testnet: '0xc01efaaf7c5c61bebfaeb358e1161b537b8bc0e0' };
+export const RPC = /^https:\/\/(evm(-t3)?\.cronos\.org|arb1\.arbitrum\.io\/rpc|sepolia-rollup\.arbitrum\.io\/rpc)\/?$/;
+export const USDC = { mainnet: '0xc21223249ca28397b4b6541dffaecc539bff0c59', testnet: '0xc01efaaf7c5c61bebfaeb358e1161b537b8bc0e0', 'arbitrum-one': '0xaf88d065e77c8cc2239327c5edb3a432268e5831', 'arbitrum-sepolia': '0x75faf114eafb1bdbe2f0316df893fd58ce46aa4d' };
+/** Which EVM network a request went to. */
+const networkOf = url => url.includes('-t3') ? 'cronos-testnet' : url.includes('arb1') ? 'arbitrum-one' : url.includes('sepolia-rollup') ? 'arbitrum-sepolia' : 'cronos-mainnet';
+const CHAIN_ID = { 'cronos-testnet': '0x152', 'cronos-mainnet': '0x19', 'arbitrum-one': '0xa4b1', 'arbitrum-sepolia': '0x66eee' };
+const USDC_OF = { 'cronos-testnet': USDC.testnet, 'cronos-mainnet': USDC.mainnet, 'arbitrum-one': USDC['arbitrum-one'], 'arbitrum-sepolia': USDC['arbitrum-sepolia'] };
 /** ABI-encode a `string` return: offset, length, padded bytes. */
 export function abiString(text) {
   const bytes = Buffer.from(text, 'utf8');
@@ -74,23 +78,24 @@ export async function fakeCronos(context, state) {
   state.polls = {};
   await context.route(RPC, async route => {
     const url = route.request().url();
-    const mainnet = !url.includes('-t3');
+    const network = networkOf(url), mainnet = network !== 'cronos-testnet';
     const { id, method, params } = JSON.parse(route.request().postData());
     state.calls.push({ url, method, params });
     const answer = result => route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ jsonrpc: '2.0', id, result }) });
     switch (method) {
-      case 'eth_chainId': return answer(mainnet ? '0x19' : '0x152');
-      case 'eth_getBalance': return answer('0x' + state.native.toString(16));
+      case 'eth_chainId': return answer(CHAIN_ID[network]);
+      case 'eth_getBalance': return answer('0x' + (state.nativeOf?.[network] ?? state.native).toString(16));
       case 'eth_getCode': {
         const to = params[0].toLowerCase();
-        return answer(to === (mainnet ? USDC.mainnet : USDC.testnet) || state.tokens?.[to] ? '0x6080604052' : '0x');
+        return answer(to === USDC_OF[network] || state.tokens?.[to] ? '0x6080604052' : '0x');
       }
       case 'eth_call': {
         // Answer by contract and selector, like a node: USDC, any token in
         // `state.tokens` (keyed by lowercase address), or nothing at all.
         const to = params[0].to.toLowerCase(), selector = params[0].data.slice(0, 10);
-        const usdc = to === (mainnet ? USDC.mainnet : USDC.testnet);
-        const token = usdc ? { symbol: mainnet ? 'USDC' : 'devUSDC.e', name: 'USD Coin', decimals: 6, balance: mainnet ? state.mainnetUsdc ?? 0n : state.usdc } : state.tokens?.[to];
+        const usdc = to === USDC_OF[network];
+        const held = { 'cronos-testnet': state.usdc, 'cronos-mainnet': state.mainnetUsdc ?? 0n }[network] ?? state.arbUsdc?.[network] ?? 0n;
+        const token = usdc ? { symbol: mainnet ? 'USDC' : 'devUSDC.e', name: 'USD Coin', decimals: 6, balance: held } : state.tokens?.[to];
         if (!token) return answer('0x');
         if (selector === '0x70a08231') return answer(word(token.balance ?? 0n));
         if (selector === '0x313ce567') return answer(word(token.decimals));
@@ -99,7 +104,7 @@ export async function fakeCronos(context, state) {
         return answer('0x');
       }
       case 'eth_getTransactionCount': return answer('0x' + (state.nonce ?? 7).toString(16));
-      case 'eth_gasPrice': return answer('0x' + (state.gasPrice ?? 5_000_000_000_000n).toString(16));
+      case 'eth_gasPrice': return answer('0x' + (state.gasPriceOf?.[network] ?? state.gasPrice ?? 5_000_000_000_000n).toString(16));
       // A plain CRO payment costs exactly 21,000; a token call is estimated at 50,000.
       case 'eth_estimateGas': return answer(!params[0].data || params[0].data === '0x' ? '0x5208' : '0xc350');
       case 'eth_sendRawTransaction': {
@@ -117,4 +122,69 @@ export async function fakeCronos(context, state) {
       default: return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ jsonrpc: '2.0', id, error: { code: -32601, message: 'method not found' } }) });
     }
   });
+  await fakeOtherChains(context, state);
+}
+const NIGHT = '0'.repeat(64);
+/**
+ * Solana, eCash (Chronik) and the Midnight indexer, with balances from
+ * `state.sol`, `state.splUsdc`, `state.xec` and `state.night` (base units).
+ * Cardano is read by the backend; see `fakeKoios`. Unset means empty.
+ */
+async function fakeOtherChains(context, state) {
+  const json = (route, body) => route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(body) });
+  await context.route(/^https:\/\/(api\.(devnet|testnet)\.solana\.com|solana-rpc\.publicnode\.com)\/?$/, async route => {
+    const { id, method } = JSON.parse(route.request().postData());
+    const url = route.request().url();
+    state.calls.push({ url, method });
+    if (method === 'getGenesisHash') return json(route, { jsonrpc: '2.0', id, result: url.includes('devnet') ? 'EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG' : url.includes('testnet') ? '4uhcVJyU9pJkvQyS88uRDiswHXSCkY3zQawwpjk2NsNY' : '5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d' });
+    if (method === 'getBalance') return json(route, { jsonrpc: '2.0', id, result: { value: Number(state.sol ?? 0n) } });
+    // getAccountInfo on the associated account, parsed; owned by the asker.
+    const { params } = JSON.parse(route.request().postData());
+    if (!state.splUsdc) return json(route, { jsonrpc: '2.0', id, result: { value: null } });
+    const info = { mint: state.splMint, owner: state.splOwner, tokenAmount: { amount: String(state.splUsdc), decimals: 6 } };
+    return json(route, { jsonrpc: '2.0', id, result: { value: { data: { program: 'spl-token', parsed: { type: 'account', info } } }, account: params[0] } });
+  });
+  await context.route(/chronik(-testnet\.fabien)?\.(e\.)?cash\/script\//, async route => {
+    state.calls.push({ url: route.request().url(), method: 'chronik' });
+    if (!state.xec) return route.fulfill({ status: 404, headers: { 'access-control-allow-origin': '*' }, body: '' });
+    // ScriptUtxos { 2: Utxo { 5: sats } }
+    const varint = n => { const out = []; let v = BigInt(n); do { const b = Number(v & 0x7fn); v >>= 7n; out.push(v ? b | 0x80 : b); } while (v); return out; };
+    const utxo = [0x28, ...varint(state.xec)];
+    return route.fulfill({ status: 200, contentType: 'application/x-protobuf', headers: { 'access-control-allow-origin': '*' }, body: Buffer.from([0x12, ...varint(utxo.length), ...utxo]) });
+  });
+  await context.routeWebSocket(/indexer\.(preview|devnet)\.midnight\.network/, ws => {
+    ws.onMessage(text => {
+      const message = JSON.parse(String(text));
+      if (message.type === 'connection_init') ws.send(JSON.stringify({ type: 'connection_ack' }));
+      if (message.type === 'subscribe') {
+        const addr = message.payload.variables.addr;
+        state.calls.push({ url: ws.url(), method: 'midnight', addr });
+        const next = item => ws.send(JSON.stringify({ id: '1', type: 'next', payload: { data: { unshieldedTransactions: item } } }));
+        next({ __typename: 'UnshieldedTransactionsProgress', highestTransactionId: state.night ? 1 : 0 });
+        if (state.night) next({ __typename: 'UnshieldedTransaction', transaction: { id: 1 }, createdUtxos: [{ owner: addr, tokenType: NIGHT, value: String(state.night), spentAtTransaction: null }] });
+      }
+    });
+  });
+}
+
+/**
+ * A local stand-in for Koios. Cardano is read by the backend, which a browser
+ * route cannot reach, so the server is pointed here with
+ * CAUSEWAYBAY_RPC_CARDANO_<NETWORK>. Returns { url, close, state }.
+ */
+export async function fakeKoios(state = {}) {
+  const http = await import('node:http');
+  const server = http.createServer((req, res) => {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', () => {
+      const address = JSON.parse(body || '{}')._addresses?.[0];
+      (state.calls ??= []).push({ path: req.url, address });
+      const rows = req.url.endsWith('/address_info') ? (state.ada ? [{ address, balance: String(state.ada) }] : []) : [];
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify(rows));
+    });
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  return { url: `http://127.0.0.1:${server.address().port}`, close: () => server.close(), state };
 }

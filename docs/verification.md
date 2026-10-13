@@ -2,6 +2,25 @@
 
 > Naming note (2026-10-08): entries below record the UI as tested at the time. Since then the Cloud page became **Autonomous AI** at `/autonomous` (`/cloud` still opens it), Dashboard moved to `/dashboard` (`/status` still works), Devices moved to `/devices`, the Coding agent page and Pinned menu entry were folded into chat and the library, and the product name is Invisible AI.
 
+## Wallet: every Causewaybay Wallet chain, plus Arbitrum — 2026-10-13
+
+The Wallet page now covers all 14 networks of the Causewaybay Wallet plus Arbitrum One and Sepolia: 14 native coins and 13 registry tokens, with the two Arbitrum USDC rows read off their chains (`symbol()` "USDC", 6 decimals; chain ids 42161 and 421614). It has two main buttons (CRONOS MAINNET, USDC on Cronos Mainnet) and one search box that follows SPEC §2.1: empty matches all, every term must match, and case and `-`/`_`/space are ignored. EVM coins send. Arbitrum always uses the node's gas estimate, because its L1 data fee makes a plain transfer cost more than 21,000 gas, and it caps fees at 0.005 ETH. Other chains are view and receive.
+
+- **Derivation.** Solana, Cardano, Midnight and eCash addresses are derived in the browser from the phrase, which is now kept in local storage beside the key (requested). The port is checked against every index in the Causewaybay Wallet's `multichain.json` and `ecash.json`, and Solana associated token accounts against its three mainnet vectors.
+- **Reads.** Balances come from each chain's own endpoint. Each was probed from a browser origin on 2026-10-13:
+  - `api.mainnet-beta.solana.com` answers 403 to any browser `Origin`, so Solana mainnet is read through PublicNode with a genesis-hash check.
+  - Koios omits CORS headers on its replies, so Cardano is read through `POST /api/wallet/cardano`, a relay of two read-only queries for a public address.
+  - Chronik and the Midnight indexer (a `graphql-transport-ws` replay) are read directly.
+- **Foreign token accounts.** A Solana token account whose owner has been reassigned counts as zero. This was seen on mainnet: the test vector's USDC account now belongs to `usdc8UkQ…`.
+- **Stored on the backend.** SQLite keeps the active coin, recent picks, added tokens and receive addresses (`wallet_state`, `wallet_tokens`, `wallet_addresses`), and nothing else. Payloads reject unknown fields. Account erasure removes the rows.
+
+Verified:
+- **Rust unit tests:** 46 in shared (registry and search, Arbitrum gas, derivation vectors, ATA vectors, settings) and 4 in the server wallet module (persistence, isolation, validation, the Cardano relay's refusals, erasure).
+- **JS unit tests:** 12 (chain readers with stubbed nodes, CashAddr and Chronik protobuf, the Midnight replay rule, masking and the send-burst arc).
+- **Playwright with faked nodes:** 11 wallet tests. These include a journey that reads all five chain families, sends USDC on Arbitrum Sepolia, signs out and clears local storage, then signs back in by private key alone and still finds every address.
+- **Live, read-only:** real balances from ten networks in a real browser.
+- **Visual review:** screenshots at desktop, phone and dark mode.
+
 ## Wallet: CRO, USDC or any ERC-20, with choices kept in SQLite — 2026-10-13
 
 The Wallet page now offers two main choices, **CRONOS** (CRO, the network coin) and **USDC**, plus **Other ERC-20 token**. Adding a token takes a contract address. The page checks that code exists there, reads `symbol()` (string or bytes32), `name()` and `decimals()` from the chain, and previews the result. Symbols that look like CRO or USDC are flagged. Whatever is selected is shown large with its full contract address. The CRO fee balance stays visible for every asset and turns red at zero. A CRO send sets the value with no calldata and uses 21,000 gas. **Max** keeps that fee back, and the review shows amount + fee = total. Before each balance read, a token's decimals are checked against the saved value, and a token whose decimals changed is refused.

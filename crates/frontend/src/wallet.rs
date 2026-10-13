@@ -1,21 +1,26 @@
-//! Wallet: CRO, USDC or any ERC-20 on Cronos, mainnet or testnet, from the key
-//! saved at sign-in. The browser talks to the public Cronos JSON-RPC directly;
-//! the backend keeps only the choices (network, asset, saved tokens) so a new
-//! sign-in opens the wallet as it was left. It never sees the key, and only a
-//! signed transaction ever leaves this page.
+//! Wallet: every coin on every network the Causewaybay Wallet knows, plus
+//! Arbitrum. Two main buttons (Cronos Mainnet's CRO and USDC on Cronos
+//! Mainnet) and one search box reach all of them. Balances are read straight
+//! from each chain's public endpoint; EVM coins can be sent, everything else is
+//! view and receive. The backend keeps only public choices — the active coin,
+//! recent picks, added ERC-20s and receive addresses — so a new sign-in opens
+//! the wallet as it was left. Keys and phrases stay in this browser.
 use crate::{account, api::api, i18n::t, icons::icon};
-use causewaybay_shared::evm::{
-    self, Asset, CustomToken, LegacyTransaction, Network, U256, WalletSettings,
-};
+use causewaybay_shared::chains;
+use causewaybay_shared::evm::{self, Asset, CustomToken, LegacyTransaction, Network, U256};
 use causewaybay_shared::identity::username;
+use causewaybay_shared::registry::{self, Chain, Coin, MAIN_COINS, Net, Standard, WalletSettings};
 use gloo_timers::callback::Timeout;
 use serde_json::{Value, json};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
+use wasm_bindgen::JsCast;
 use web_sys::HtmlInputElement;
 use yew::prelude::*;
 
 /// How long a panel takes to fade out before it leaves the DOM (wallet-card.js).
 const FADE_MS: u32 = 420;
+/// Search rows shown at once; a narrower query finds the rest.
+const MAX_RESULTS: usize = 40;
 
 async fn rpc(network: &Network, method: &str, params: Value) -> Result<Value, String> {
     let body = json!({"jsonrpc":"2.0","id":1,"method":method,"params":params});
@@ -44,7 +49,6 @@ fn quantity(value: &Value) -> Result<U256, String> {
 fn hex_data(bytes: &[u8]) -> String {
     format!("0x{}", hex::encode(bytes))
 }
-/// `eth_call` on a contract, returning the raw bytes it answered.
 async fn call(network: &Network, contract: &str, data: &[u8]) -> Result<Vec<u8>, String> {
     let answer = rpc(
         network,
@@ -68,13 +72,14 @@ async fn check_chain(network: &Network) -> Result<(), String> {
 
 #[derive(Clone, PartialEq)]
 pub struct Balances {
-    /// CRO: it pays every fee, whatever is being sent.
+    /// The network's own coin: it pays every fee, whatever is being sent.
     native: U256,
-    /// The chosen asset; the same as `native` when that is CRO.
+    /// The active coin; the same as `native` when that is what is shown.
     asset: U256,
+    /// EVM only, for Max.
     gas_price: U256,
 }
-async fn balances(network: Network, asset: Asset, address: String) -> Result<Balances, String> {
+async fn evm_balances(network: Network, asset: Asset, address: String) -> Result<Balances, String> {
     let owner = evm::parse_address(&address)?;
     check_chain(&network).await?;
     let native = quantity(&rpc(&network, "eth_getBalance", json!([address, "latest"])).await?)?;
@@ -83,13 +88,13 @@ async fn balances(network: Network, asset: Asset, address: String) -> Result<Bal
         None => native,
         Some(contract) => {
             if let Asset::Erc20(token) = &asset {
-                // The saved decimals decide how much is sent: a contract that
-                // now answers differently is refused, not trusted.
+                // The listed decimals decide how much is sent: a contract that
+                // answers differently is refused, not trusted.
                 let decimals =
                     evm::abi_decimals(&call(&network, &contract, &evm::ERC20_DECIMALS).await?)?;
                 if decimals != token.decimals {
                     return Err(format!(
-                        "{} now reports {decimals} decimals, not {} as saved. Remove it and add it again.",
+                        "{} reports {decimals} decimals, not {} as listed. Not shown.",
                         token.symbol, token.decimals
                     ));
                 }
@@ -107,7 +112,61 @@ async fn balances(network: Network, asset: Asset, address: String) -> Result<Bal
         gas_price,
     })
 }
-/// Read an ERC-20's own description from its contract on `network`.
+/// A non-EVM balance through `window.cwbChains` (frontend/wallet-chains.js).
+async fn js_balance(net: &Net, coin: &Coin, address: &str) -> Result<U256, String> {
+    let unloaded = || "The wallet scripts did not load.".to_string();
+    let window = web_sys::window().ok_or("Browser unavailable")?;
+    let chains = js_sys::Reflect::get(&window, &"cwbChains".into()).map_err(|_| unloaded())?;
+    let read: js_sys::Function = js_sys::Reflect::get(&chains, &"balance".into())
+        .ok()
+        .and_then(|f| f.dyn_into().ok())
+        .ok_or_else(unloaded)?;
+    let parse = |v: Value| js_sys::JSON::parse(&v.to_string()).map_err(|_| unloaded());
+    let net_js = parse(
+        json!({"key": net.key, "chain": net.chain.key(), "endpoint": net.endpoint, "name": net.name}),
+    )?;
+    let mut coin_value = serde_json::to_value(coin).map_err(|e| e.to_string())?;
+    if coin.standard == Standard::SplToken {
+        coin_value["account"] = json!(chains::solana::associated_token_address(address, &coin.id)?);
+    }
+    let coin_js = parse(coin_value)?;
+    let promise: js_sys::Promise = read
+        .call3(&chains, &net_js, &coin_js, &address.into())
+        .map_err(|_| unloaded())?
+        .dyn_into()
+        .map_err(|_| unloaded())?;
+    let value = wasm_bindgen_futures::JsFuture::from(promise)
+        .await
+        .map_err(|e| {
+            js_sys::Reflect::get(&e, &"message".into())
+                .ok()
+                .and_then(|m| m.as_string())
+                .unwrap_or_else(|| format!("Could not read {}.", net.name))
+        })?;
+    value
+        .as_string()
+        .and_then(|s| s.parse::<U256>().ok())
+        .ok_or_else(|| "The network reported a balance that is not a number.".into())
+}
+async fn coin_balances(coin: Coin, address: String) -> Result<Balances, String> {
+    if let Some((network, asset)) = coin.evm_asset() {
+        return evm_balances(network, asset, address).await;
+    }
+    let net = coin.net();
+    let asset = js_balance(net, &coin, &address).await?;
+    let native = if coin.standard == Standard::Native {
+        asset
+    } else {
+        let own = registry::coin(&registry::native_key(net)).ok_or("Unknown network coin")?;
+        js_balance(net, &own, &address).await?
+    };
+    Ok(Balances {
+        native,
+        asset,
+        gas_price: U256::ZERO,
+    })
+}
+/// Read an ERC-20's own description from its contract.
 async fn look_up(network: Network, address: String) -> Result<CustomToken, String> {
     let address = evm::checksum(&evm::parse_address(&address)?);
     check_chain(&network).await?;
@@ -143,17 +202,18 @@ pub struct Prepared {
     amount: String,
     symbol: String,
     fee: String,
-    /// Amount plus fee, when the amount is CRO too.
     total: Option<String>,
 }
 async fn prepare(
-    network: Network,
-    asset: Asset,
+    coin: Coin,
     from: String,
     to: String,
     amount: String,
     have: Balances,
 ) -> Result<Prepared, String> {
+    let (network, asset) = coin
+        .evm_asset()
+        .ok_or("Sending is not available for this coin yet.")?;
     // Everything that can be refused without the network is refused first.
     let request = evm::check_transfer(&network, &asset, &from, &to, &amount, have.asset)?;
     let destination = evm::checksum(&request.to);
@@ -191,7 +251,7 @@ async fn prepare(
     Ok(Prepared {
         to: evm::checksum(&request.recipient),
         amount: evm::format_units(request.amount, asset.decimals(&network)),
-        symbol: asset.symbol(&network),
+        symbol: coin.symbol.clone(),
         fee: evm::format_units(tx.fee(), 18),
         total: native.then(|| {
             evm::format_units(tx.fee().checked_add(request.value).unwrap_or(U256::MAX), 18)
@@ -209,48 +269,59 @@ struct Activity {
     to: String,
     status: &'static str,
 }
+#[derive(Clone, Copy, PartialEq)]
+pub enum Tab {
+    Receive,
+    Send,
+}
 #[derive(Properties, PartialEq)]
 pub struct Props {
     pub session: Value,
     pub copy: Callback<String>,
 }
 pub struct Wallet {
-    /// The backend's copy of this account's choices; `None` until it answers.
     settings: Option<WalletSettings>,
-    network: Network,
-    asset: Asset,
+    coin: Coin,
+    /// Network key → this wallet's receive address there.
+    addresses: BTreeMap<String, String>,
     balances: Option<Balances>,
     loading: bool,
     error: String,
+    query: String,
+    searching: bool,
+    highlight: usize,
+    preview: Option<(String, CustomToken)>,
+    preview_error: String,
+    looking: bool,
+    tab: Tab,
     to: String,
     amount: String,
     review: Option<Prepared>,
     review_leaving: bool,
     preparing: bool,
     sending: bool,
-    /// The "Other ERC-20" panel.
-    others: bool,
-    token_address: String,
-    token_preview: Option<CustomToken>,
-    token_checking: bool,
-    token_error: String,
+    /// Bumped on every confirmed send; the card plays its send animation.
+    sent: u32,
+    last_sent: String,
     activity: Vec<Activity>,
     generation: u32,
     _fade: Option<Timeout>,
-    /// One receipt poll per pending transfer, keyed by hash.
+    _blur: Option<Timeout>,
     polls: HashMap<String, Timeout>,
 }
 pub enum Msg {
     Settings(Result<WalletSettings, String>),
     Saved(Result<WalletSettings, String>),
-    Network(&'static str),
-    Asset(String),
-    Others(bool),
-    TokenAddress(String),
-    LookUp,
+    Choose(String),
+    Query(String),
+    Searching(bool),
+    Blurred,
+    Key(KeyboardEvent),
+    LookUp(&'static str),
     LookedUp(String, Result<CustomToken, String>),
     AddToken,
-    RemoveToken(String),
+    RemoveToken,
+    Tab(Tab),
     Refresh,
     Loaded(u32, Result<Balances, String>),
     To(String),
@@ -266,10 +337,36 @@ pub enum Msg {
     Receipt(String, u32, Result<Value, String>),
 }
 fn short(address: &str) -> String {
-    if address.len() < 12 {
+    let chars: Vec<char> = address.chars().collect();
+    if chars.len() < 14 {
         return address.into();
     }
-    format!("{}…{}", &address[..6], &address[address.len() - 4..])
+    let head: String = chars[..8].iter().collect();
+    let tail: String = chars[chars.len() - 6..].iter().collect();
+    format!("{head}…{tail}")
+}
+/// Receive addresses: the signed-in EVM address on every EVM network, and the
+/// other chains derived from the saved phrase — or, without one in this
+/// browser, the public addresses an earlier sign-in recorded.
+fn addresses(session_address: &str, settings: &WalletSettings) -> BTreeMap<String, String> {
+    let evm_address = evm::parse_address(session_address)
+        .map(|a| evm::checksum(&a))
+        .ok();
+    let derived = account::saved_mnemonic().zip(account::saved().map(|(_, index)| index));
+    let mut out = BTreeMap::new();
+    for net in registry::NETS {
+        let address = match net.chain {
+            Chain::Evm => evm_address.clone(),
+            _ => derived
+                .as_ref()
+                .and_then(|(phrase, index)| chains::address(phrase, *index, net.key).ok())
+                .or_else(|| settings.addresses.get(net.key).cloned()),
+        };
+        if let Some(address) = address {
+            out.insert(net.key.to_string(), address);
+        }
+    }
+    out
 }
 impl Wallet {
     fn address(ctx: &Context<Self>) -> String {
@@ -282,6 +379,9 @@ impl Wallet {
     fn unlocked(ctx: &Context<Self>) -> bool {
         account::saved_address().is_some_and(|a| a == Self::address(ctx))
     }
+    fn receive_address(&self) -> Option<String> {
+        self.addresses.get(&self.coin.network).cloned()
+    }
     fn close_review(&mut self, ctx: &Context<Self>) {
         if self.review.is_none() || self.review_leaving {
             return;
@@ -292,27 +392,54 @@ impl Wallet {
             link.send_message(Msg::Removed)
         }));
     }
-    /// Show what the settings say for the current network, refreshing the
-    /// balances only if the asset actually changed.
-    fn apply(&mut self, ctx: &Context<Self>, settings: WalletSettings) {
-        let asset = settings.asset_on(&self.network);
-        self.settings = Some(settings);
-        if asset != self.asset {
-            self.asset = asset;
-            self.reset_view();
-            ctx.link().send_message(Msg::Refresh);
+    fn show(&mut self, ctx: &Context<Self>, coin: Coin) {
+        if coin == self.coin {
+            return;
         }
-    }
-    fn reset_view(&mut self) {
+        // Receive was forced by a view-only coin, not chosen: give Send back.
+        if !self.coin.can_send() && coin.can_send() {
+            self.tab = Tab::Send;
+        }
+        self.coin = coin;
         self.balances = None;
         self.review = None;
         self.review_leaving = false;
         self.amount.clear();
         self.error.clear();
+        if !self.coin.can_send() {
+            self.tab = Tab::Receive;
+        }
+        ctx.link().send_message(Msg::Refresh);
     }
     fn save(ctx: &Context<Self>, method: &'static str, url: String, body: Option<Value>) {
         ctx.link()
             .send_future(async move { Msg::Saved(api(method, &url, body).await) });
+    }
+    fn results(&self) -> Vec<Coin> {
+        let Some(settings) = &self.settings else {
+            return vec![];
+        };
+        let all = settings.all_coins();
+        if self.query.trim().is_empty() {
+            // Recent picks first, then everything in registry order.
+            let mut rows: Vec<Coin> = settings
+                .recent
+                .iter()
+                .filter_map(|k| all.iter().find(|c| &c.key == k).cloned())
+                .collect();
+            rows.extend(
+                all.iter()
+                    .filter(|c| !settings.recent.contains(&c.key))
+                    .cloned(),
+            );
+            rows.truncate(MAX_RESULTS);
+            return rows;
+        }
+        registry::search(&self.query, &all)
+            .into_iter()
+            .take(MAX_RESULTS)
+            .cloned()
+            .collect()
     }
 }
 impl Component for Wallet {
@@ -323,25 +450,30 @@ impl Component for Wallet {
             .send_future(async { Msg::Settings(api("GET", "/api/wallet", None).await) });
         Self {
             settings: None,
-            network: evm::CRONOS_TESTNET,
-            asset: Asset::Usdc,
+            coin: registry::coin(registry::DEFAULT_COIN).expect("default coin"),
+            addresses: BTreeMap::new(),
             balances: None,
             loading: false,
             error: String::new(),
+            query: String::new(),
+            searching: false,
+            highlight: 0,
+            preview: None,
+            preview_error: String::new(),
+            looking: false,
+            tab: Tab::Send,
             to: String::new(),
             amount: String::new(),
             review: None,
             review_leaving: false,
             preparing: false,
             sending: false,
-            others: false,
-            token_address: String::new(),
-            token_preview: None,
-            token_checking: false,
-            token_error: String::new(),
+            sent: 0,
+            last_sent: String::new(),
             activity: Vec::new(),
             generation: 0,
             _fade: None,
+            _blur: None,
             polls: HashMap::new(),
         }
     }
@@ -352,112 +484,144 @@ impl Component for Wallet {
                     self.error = e;
                     WalletSettings::default()
                 });
-                self.network = evm::network(&settings.network).unwrap_or(evm::CRONOS_TESTNET);
-                self.asset = settings.asset_on(&self.network);
-                self.others = matches!(self.asset, Asset::Erc20(_));
+                self.addresses = addresses(&Self::address(ctx), &settings);
+                // Record the public addresses this browser could derive, once.
+                let fresh: BTreeMap<_, _> = self
+                    .addresses
+                    .iter()
+                    .filter(|(k, v)| settings.addresses.get(*k) != Some(*v))
+                    .map(|(k, v)| (k.clone(), v.clone()))
+                    .collect();
+                if !fresh.is_empty() {
+                    Self::save(
+                        ctx,
+                        "PATCH",
+                        "/api/wallet".into(),
+                        Some(json!({"addresses": fresh})),
+                    );
+                }
+                self.coin = settings.active_coin();
+                if !self.coin.can_send() {
+                    self.tab = Tab::Receive;
+                }
                 self.settings = Some(settings);
                 ctx.link().send_message(Msg::Refresh);
             }
             Msg::Saved(result) => match result {
-                Ok(settings) => self.apply(ctx, settings),
+                Ok(settings) => {
+                    let coin = settings.active_coin();
+                    self.settings = Some(settings);
+                    self.show(ctx, coin);
+                }
                 Err(e) => self.error = e,
             },
-            Msg::Network(key) => {
-                let Some(network) = evm::network(key) else {
-                    return false;
-                };
-                if network == self.network || self.sending {
+            Msg::Choose(key) => {
+                if self.sending {
                     return false;
                 }
-                self.network = network;
-                self.asset = self
+                let Some(coin) = self
                     .settings
                     .as_ref()
-                    .map(|s| s.asset_on(&network))
-                    .unwrap_or(Asset::Usdc);
-                self.others = matches!(self.asset, Asset::Erc20(_));
-                self.token_preview = None;
-                self.token_error.clear();
-                self.reset_view();
-                if let Some(s) = &mut self.settings {
-                    s.network = key.into();
-                }
-                Self::save(
-                    ctx,
-                    "PATCH",
-                    "/api/wallet".into(),
-                    Some(json!({"network":key})),
-                );
-                ctx.link().send_message(Msg::Refresh);
-            }
-            Msg::Asset(key) => {
-                if self.sending || self.asset.key() == key {
-                    return false;
-                }
-                let Some(settings) = &mut self.settings else {
+                    .and_then(|s| s.all_coins().into_iter().find(|c| c.key == key))
+                else {
                     return false;
                 };
-                settings
-                    .selected
-                    .insert(self.network.key.into(), key.clone());
-                self.asset = settings.asset_on(&self.network);
-                if !matches!(self.asset, Asset::Erc20(_)) {
-                    self.others = false;
+                self.searching = false;
+                self.query.clear();
+                self.preview = None;
+                if let Some(s) = &mut self.settings {
+                    s.active = key.clone();
+                    s.recent.retain(|k| *k != key);
+                    s.recent.insert(0, key.clone());
                 }
-                self.reset_view();
+                self.show(ctx, coin);
                 Self::save(
                     ctx,
                     "PATCH",
                     "/api/wallet".into(),
-                    Some(json!({"network":self.network.key,"asset":key})),
+                    Some(json!({"active": key})),
                 );
-                ctx.link().send_message(Msg::Refresh);
             }
-            Msg::Others(open) => {
-                self.others = open;
-                self.token_error.clear();
+            Msg::Query(v) => {
+                self.query = v;
+                self.searching = true;
+                self.highlight = 0;
+                self.preview = None;
+                self.preview_error.clear();
             }
-            Msg::TokenAddress(v) => {
-                self.token_address = v;
-                self.token_preview = None;
-                self.token_error.clear();
+            Msg::Searching(open) => {
+                self._blur = None;
+                self.searching = open;
             }
-            Msg::LookUp => {
-                if self.token_checking {
+            Msg::Blurred => {
+                // Late enough that a click on a result lands first.
+                let link = ctx.link().clone();
+                self._blur = Some(Timeout::new(160, move || {
+                    link.send_message(Msg::Searching(false))
+                }));
+                return false;
+            }
+            Msg::Key(e) => {
+                let rows = self.results();
+                match e.key().as_str() {
+                    "ArrowDown" => {
+                        e.prevent_default();
+                        self.searching = true;
+                        self.highlight = (self.highlight + 1).min(rows.len().saturating_sub(1));
+                    }
+                    "ArrowUp" => {
+                        e.prevent_default();
+                        self.highlight = self.highlight.saturating_sub(1);
+                    }
+                    "Enter" => {
+                        e.prevent_default();
+                        if let Some(coin) = rows.get(self.highlight) {
+                            ctx.link().send_message(Msg::Choose(coin.key.clone()));
+                        }
+                    }
+                    "Escape" => self.searching = false,
+                    _ => return false,
+                }
+            }
+            Msg::LookUp(network) => {
+                let Some(evm_network) = evm::network(network) else {
+                    return false;
+                };
+                if self.looking {
                     return false;
                 }
-                self.token_checking = true;
-                self.token_preview = None;
-                self.token_error.clear();
-                let (network, address) = (self.network, self.token_address.trim().to_string());
+                self.looking = true;
+                self.preview = None;
+                self.preview_error.clear();
+                let address = self.query.trim().to_string();
                 ctx.link().send_future(async move {
-                    Msg::LookedUp(network.key.into(), look_up(network, address).await)
+                    Msg::LookedUp(network.into(), look_up(evm_network, address).await)
                 });
             }
             Msg::LookedUp(network, result) => {
-                self.token_checking = false;
-                if network != self.network.key {
-                    return true;
-                }
+                self.looking = false;
+                self.searching = false;
                 match result {
-                    Ok(token) => self.token_preview = Some(token),
-                    Err(e) => self.token_error = e,
+                    Ok(token) => self.preview = Some((network, token)),
+                    Err(e) => self.preview_error = e,
                 }
             }
             Msg::AddToken => {
-                let Some(token) = self.token_preview.take() else {
+                let Some((network, token)) = self.preview.take() else {
                     return false;
                 };
-                self.token_address.clear();
+                self.query.clear();
+                self.searching = false;
                 Self::save(
                     ctx,
                     "POST",
                     "/api/wallet/tokens".into(),
-                    Some(json!({"network":self.network.key,"token":token})),
+                    Some(json!({"network": network, "token": token})),
                 );
             }
-            Msg::RemoveToken(address) => {
-                if self.sending
+            Msg::RemoveToken => {
+                if !self.coin.custom
+                    || self.sending
                     || !account::confirm(
                         "Remove this token from your list? Its balance stays on the chain, and you can add it again any time.",
                     )
@@ -467,24 +631,28 @@ impl Component for Wallet {
                 Self::save(
                     ctx,
                     "DELETE",
-                    format!("/api/wallet/tokens/{}/{}", self.network.key, address),
+                    format!("/api/wallet/tokens/{}/{}", self.coin.network, self.coin.id),
                     None,
                 );
             }
+            Msg::Tab(tab) => {
+                if tab == Tab::Send && !self.coin.can_send() {
+                    return false;
+                }
+                self.tab = tab;
+            }
             Msg::Refresh => {
-                if !Self::unlocked(ctx) || self.settings.is_none() {
+                let Some(address) = self.receive_address() else {
+                    return true;
+                };
+                if self.settings.is_none() {
                     return true;
                 }
                 self.generation += 1;
                 self.loading = true;
-                let (generation, network, asset, address) = (
-                    self.generation,
-                    self.network,
-                    self.asset.clone(),
-                    Self::address(ctx),
-                );
+                let (generation, coin) = (self.generation, self.coin.clone());
                 ctx.link().send_future(async move {
-                    Msg::Loaded(generation, balances(network, asset, address).await)
+                    Msg::Loaded(generation, coin_balances(coin, address).await)
                 });
             }
             Msg::Loaded(generation, result) => {
@@ -506,36 +674,37 @@ impl Component for Wallet {
                 self.error.clear();
             }
             Msg::Max => {
-                if let Some(b) = &self.balances {
-                    // CRO keeps back enough for the fee of the send itself.
-                    let max = match self.asset {
-                        Asset::Native => evm::max_native(b.native, b.gas_price),
+                if let (Some(b), Some((network, asset))) = (&self.balances, self.coin.evm_asset()) {
+                    // The network's coin keeps back the fee for the send itself.
+                    let max = match asset {
+                        Asset::Native => evm::max_native(
+                            b.native,
+                            b.gas_price,
+                            if network.exact_native_gas {
+                                evm::NATIVE_GAS
+                            } else {
+                                evm::FALLBACK_GAS
+                            },
+                        ),
                         _ => b.asset,
                     };
-                    self.amount = evm::format_units(max, self.asset.decimals(&self.network));
+                    self.amount = evm::format_units(max, asset.decimals(&network));
                 }
             }
             Msg::Review => {
                 let Some(have) = self.balances.clone() else {
                     return false;
                 };
-                if self.preparing || self.sending {
+                if self.preparing || self.sending || !self.coin.can_send() {
                     return false;
                 }
                 self.preparing = true;
                 self.error.clear();
-                let (generation, network, asset, from) = (
-                    self.generation,
-                    self.network,
-                    self.asset.clone(),
-                    Self::address(ctx),
-                );
+                let (generation, coin, from) =
+                    (self.generation, self.coin.clone(), Self::address(ctx));
                 let (to, amount) = (self.to.clone(), self.amount.clone());
                 ctx.link().send_future(async move {
-                    Msg::Prepared(
-                        generation,
-                        prepare(network, asset, from, to, amount, have).await,
-                    )
+                    Msg::Prepared(generation, prepare(coin, from, to, amount, have).await)
                 });
             }
             Msg::Prepared(generation, result) => {
@@ -560,6 +729,9 @@ impl Component for Wallet {
                 let Some(prepared) = self.review.clone() else {
                     return false;
                 };
+                let Some((network, _)) = self.coin.evm_asset() else {
+                    return false;
+                };
                 if self.sending || self.review_leaving {
                     return false;
                 }
@@ -580,7 +752,6 @@ impl Component for Wallet {
                 };
                 drop(identity);
                 self.sending = true;
-                let network = self.network;
                 ctx.link().send_future(async move {
                     Msg::Sent(async {
                         let hash = rpc(&network, "eth_sendRawTransaction", json!([signed.raw_hex()])).await?;
@@ -596,10 +767,18 @@ impl Component for Wallet {
                 self.sending = false;
                 match result {
                     Ok((hash, prepared)) => {
+                        self.sent += 1;
+                        self.last_sent =
+                            format!("{}|{}|{}", self.sent, prepared.amount, prepared.symbol);
+                        let network = self
+                            .coin
+                            .evm_asset()
+                            .map(|(n, _)| n)
+                            .unwrap_or(evm::CRONOS_MAINNET);
                         self.activity.insert(
                             0,
                             Activity {
-                                network: self.network,
+                                network,
                                 hash: hash.clone(),
                                 amount: prepared.amount,
                                 symbol: prepared.symbol,
@@ -665,26 +844,24 @@ impl Component for Wallet {
         true
     }
     fn view(&self, ctx: &Context<Self>) -> Html {
-        let address = Self::address(ctx);
-        let network = self.network;
-        let asset = &self.asset;
-        let unlocked = Self::unlocked(ctx);
         let link = ctx.link();
-        let intro = html! {<div class="page-intro"><div><div class="eyebrow">{icon("shield")}{t("YOUR CRONOS WALLET")}</div><h1>{t("Your money on Cronos, simply.")}</h1><p>{t("Hold and send CRO, USDC or any ERC-20 token on Cronos. Your key stays in this browser and signs every transfer here.")}</p></div></div>};
-        let Some(settings) = &self.settings else {
-            return html! {<section class="wallet-page" data-testid="wallet-page">{intro}<p class="small-muted" role="status">{t("Loading your wallet…")}</p></section>};
+        let intro = html! {<div class="wallet-intro"><div class="eyebrow">{icon("wallet")}{t("YOUR WALLET")}</div><h1>{t("Every coin, one calm place.")}</h1></div>};
+        if self.settings.is_none() {
+            return html! {<section class="wallet-page" data-testid="wallet-page">{intro}<div class="wallet-skeleton" role="status" aria-label={t("Loading your wallet…")}><span/><span/><span/></div></section>};
         };
-        let symbol = asset.symbol(&network);
-        let decimals = asset.decimals(&network);
-        let native_asset = matches!(asset, Asset::Native);
+        let coin = &self.coin;
+        let net = coin.net();
+        let unlocked = Self::unlocked(ctx);
+        let receive = self.receive_address();
         let held = self
             .balances
             .as_ref()
-            .map(|b| evm::format_units(b.asset, decimals));
-        let native = self
+            .map(|b| evm::format_units(b.asset, coin.decimals));
+        let fee = self
             .balances
             .as_ref()
-            .map(|b| evm::format_units(b.native, 18));
+            .map(|b| evm::format_units(b.native, net.decimals));
+        let native = coin.standard == Standard::Native;
         let no_fee = self.balances.as_ref().is_some_and(|b| b.native.is_zero());
         let state = if self.sending {
             "sending"
@@ -693,169 +870,206 @@ impl Component for Wallet {
         } else {
             "ready"
         };
-        let kind = match asset {
-            Asset::Native => "native",
-            Asset::Usdc => "usdc",
-            Asset::Erc20(_) => "erc20",
+        let kind = if native {
+            "native"
+        } else if coin.tags.iter().any(|t| t == "usd") {
+            "usd"
+        } else {
+            "token"
         };
-        let summary = match (&held, &native) {
-            (Some(h), Some(n)) if !native_asset => format!(
-                "{} {}: {h} {symbol}, {n} {}",
-                t("Wallet card"),
-                network.name,
-                network.native
-            ),
-            (Some(h), _) => format!("{} {}: {h} {symbol}", t("Wallet card"), network.name),
-            _ => format!("{} {}", t("Wallet card"), network.name),
+        let summary = match &held {
+            Some(h) => format!("{} {}: {h} {}", t("Wallet card"), net.name, coin.symbol),
+            None => format!("{} {}", t("Wallet card"), net.name),
         };
-        let tab = |key: &'static str, label: &'static str| {
-            let on = network.key == key;
-            html! {<button role="tab" aria-selected={on.to_string()} class={classes!(on.then_some("selected"))} disabled={self.sending} onclick={link.callback(move |_|Msg::Network(key))}>{t(label)}</button>}
-        };
-        // The two main choices: CRONOS and USDC.
-        let main = |key: &'static str, title: &'static str, sub: String, detail: &'static str| {
-            let on = asset.key() == key;
-            html! {<button role="radio" aria-checked={on.to_string()} data-testid={format!("asset-{key}")} class={classes!("wallet-asset-option", on.then_some("selected"))} disabled={self.sending} onclick={link.callback(move |_|Msg::Asset(key.into()))}>
-                <span class="wallet-asset-title">{title}</span><span class="wallet-asset-symbol">{sub}</span><span class="wallet-asset-detail">{t(detail)}</span>
-            </button>}
-        };
-        let custom = match asset {
-            Asset::Erc20(token) => Some(token.clone()),
+        let holder = ctx.props().session["name"]
+            .as_str()
+            .map(str::to_owned)
+            .or_else(|| username(&Self::address(ctx)).ok())
+            .unwrap_or_default();
+
+        // The two main buttons.
+        let main = MAIN_COINS.iter().map(|key| {
+            let on = coin.key == *key;
+            let (label, sub) = if *key == "cro-cronos-mainnet" {
+                ("CRONOS MAINNET", t("CRO · pays fees"))
+            } else {
+                ("USDC", t("Stablecoin on Cronos"))
+            };
+            html! {<button aria-pressed={on.to_string()} data-testid={format!("main-{key}")} disabled={self.sending} onclick={link.callback(move |_| Msg::Choose((*key).into()))}><strong>{label}</strong><small>{sub}</small></button>}
+        });
+
+        // Search: every coin on every network, plus "add this contract" rows.
+        let rows = self.results();
+        let query_address = evm::parse_address(self.query.trim()).is_ok();
+        let search = html! {<div class={classes!("wallet-search", self.searching.then_some("is-open"))}>
+            <label class="wallet-search-box">{icon("search")}
+                <input type="search" role="combobox" aria-expanded={self.searching.to_string()} aria-controls="wallet-search-results" aria-label={t("Search coins and networks")} placeholder={t("Search coins, networks or a contract address")} autocomplete="off" spellcheck="false" value={self.query.clone()}
+                    oninput={link.callback(|e: InputEvent| Msg::Query(e.target_unchecked_into::<HtmlInputElement>().value()))}
+                    onfocus={link.callback(|_| Msg::Searching(true))} onblur={link.callback(|_| Msg::Blurred)} onkeydown={link.callback(Msg::Key)}/>
+                <kbd>{rows.len()}</kbd>
+            </label>
+            if self.searching {
+                <div class="wallet-search-panel" data-motion="">
+                    <ul id="wallet-search-results" role="listbox" aria-label={t("Coins")} data-stagger="" data-testid="search-results">
+                        {for rows.iter().enumerate().map(|(i, c)| {
+                            let n = c.net();
+                            let key = c.key.clone();
+                            let on = c.key == coin.key;
+                            html! {<li role="option" aria-selected={on.to_string()} data-key={c.key.clone()} class={classes!((i == self.highlight).then_some("is-highlighted"))}
+                                onmousedown={link.callback(move |e: MouseEvent| { e.prevent_default(); Msg::Choose(key.clone()) })}>
+                                <span class={classes!("coin-badge", n.chain.key())}>{c.symbol.chars().take(4).collect::<String>()}</span>
+                                <span class="coin-text"><strong>{&c.symbol}</strong><span>{&c.name}</span></span>
+                                <span class="coin-net">{n.name}{if n.testnet { html!{<em>{t("test")}</em>} } else { html!{} }}</span>
+                                <span class={classes!("coin-can", c.can_send().then_some("send"))}>{if c.can_send() { t("Send") } else { t("View") }}</span>
+                            </li>}
+                        })}
+                    </ul>
+                    if rows.is_empty() && !query_address {<p class="small-muted wallet-search-empty">{t("Nothing matches. Try a symbol, a network or a contract address.")}</p>}
+                    if query_address {
+                        <div class="wallet-search-add" data-testid="search-add">
+                            <span class="small-muted">{t("Add this contract as a token on")}</span>
+                            {for evm::NETWORKS.iter().map(|n| { let key = n.key; html! {<button class="chip-button" disabled={self.looking} onmousedown={link.callback(move |e: MouseEvent| { e.prevent_default(); Msg::LookUp(key) })}>{n.name}</button>} })}
+                        </div>
+                    }
+                </div>
+            }
+        </div>};
+        let preview = self.preview.as_ref().map(|(network, token)| {
+            let n = registry::net_of(network).map(|n| n.name).unwrap_or_default();
+            let lookalike = evm::network(network).is_some_and(|en| evm::imitates_builtin(&en, token));
+            html! {<div class="wallet-token-preview" data-motion="" data-testid="token-preview">
+                <span class="wallet-asset-big">{&token.symbol}</span><span class="wallet-asset-name">{&token.name}</span>
+                <dl><dt>{t("Network")}</dt><dd>{n}</dd><dt>{t("Contract")}</dt><dd><code>{&token.address}</code></dd><dt>{t("Decimals")}</dt><dd>{token.decimals}</dd></dl>
+                if lookalike {<p class="wallet-warning" role="alert">{icon("info")}{t("This token's name looks like CRO or USDC, but it is a different contract. Check the address before sending.")}</p>}
+                <button class="primary-button" data-testid="add-token" onclick={link.callback(|_| Msg::AddToken)}>{t("Add and use this token")}{icon("arrow")}</button>
+            </div>}
+        });
+
+        // Exactly which coin this is, large: symbol, name, network, contract.
+        let id_link = match net.chain {
+            Chain::Evm | Chain::Solana if !coin.id.is_empty() => Some(net.address_url(&coin.id)),
             _ => None,
         };
-        let tokens = settings.tokens_on(&network);
-        let explorer_address = |a: &str| format!("{}/address/{}", network.explorer, a);
-        // Exactly which asset this page sends: large, with its contract.
-        let identity = html! {<div class={classes!("wallet-asset-identity", kind)} data-testid="asset-identity" data-motion="" aria-live="polite">
-            <div class="wallet-asset-identity-main">
-                <span class="wallet-asset-big" data-testid="asset-symbol">{&symbol}</span>
-                <span class="wallet-asset-name">{asset.name(&network)}</span>
+        let lookalike = coin.custom
+            && evm::network(&coin.network).is_some_and(|en| {
+                evm::imitates_builtin(
+                    &en,
+                    &CustomToken {
+                        address: coin.id.clone(),
+                        symbol: coin.symbol.clone(),
+                        name: coin.name.clone(),
+                        decimals: coin.decimals,
+                    },
+                )
+            });
+        let identity = html! {<div class={classes!("wallet-coin", net.chain.key())} data-testid="asset-identity" aria-live="polite">
+            <div class="wallet-coin-head">
+                <span class="wallet-asset-big" data-testid="asset-symbol">{&coin.symbol}</span>
+                <span class="wallet-coin-tags">
+                    <span class={classes!("chain-pill", net.chain.key())}>{net.chain.name()}</span>
+                    <span class="net-pill" data-testid="asset-network">{net.name}</span>
+                    if net.testnet {<span class="test-pill">{t("Test network")}</span>}
+                    if !coin.can_send() {<span class="view-pill">{t("View and receive")}</span>}
+                </span>
             </div>
-            <p class="wallet-asset-kind">{match asset {
-                Asset::Native => format!("{} · {}", t("Native coin"), network.name),
-                Asset::Usdc => format!("{} · {}", t("Stablecoin (ERC-20)"), network.name),
-                Asset::Erc20(_) => format!("{} · {}", t("Custom ERC-20 token"), network.name),
-            }}</p>
-            if let Some(contract) = asset.contract(&network) {
-                <div class="wallet-asset-contract"><span class="small-muted">{t("Contract")}</span><code data-testid="asset-contract">{contract.clone()}</code>
-                    <button class="icon-button" aria-label={t("Copy contract address")} onclick={ctx.props().copy.reform({let c=contract.clone(); move |_|c.clone()})}>{icon("copy")}</button>
-                    <a href={explorer_address(&contract)} target="_blank" rel="noopener noreferrer">{t("Explorer")}{icon("arrow")}</a></div>
+            <p class="wallet-asset-name">{&coin.name}</p>
+            if coin.id.is_empty() {
+                <p class="wallet-coin-id small-muted">{format!("{} {}", t("The network's own coin. It pays every fee on"), net.name)}</p>
             } else {
-                <p class="wallet-asset-contract small-muted">{t("No contract: CRO is the network's own coin, and it pays every network fee.")}</p>
+                <div class="wallet-coin-id"><span class="small-muted">{match coin.standard { Standard::SplToken => t("Mint"), Standard::CardanoAsset => t("Asset"), _ => t("Contract") }}</span>
+                    <code data-testid="asset-contract">{coin.id.clone()}</code>
+                    <button class="icon-button" aria-label={t("Copy contract address")} onclick={ctx.props().copy.reform({ let c = coin.id.clone(); move |_| c.clone() })}>{icon("copy")}</button>
+                    if let Some(href) = id_link {<a href={href} target="_blank" rel="noopener noreferrer">{t("Explorer")}{icon("arrow")}</a>}
+                </div>
             }
-            if let Some(token) = &custom {
-                if evm::imitates_builtin(&network, token) {
-                    <p class="wallet-warning" role="alert" data-testid="lookalike-warning">{icon("info")}{t("This token's name looks like CRO or USDC, but it is a different contract. Check the address before sending.")}</p>
-                }
+            if lookalike {<p class="wallet-warning" role="alert" data-testid="lookalike-warning">{icon("info")}{t("This token's name looks like CRO or USDC, but it is a different contract. Check the address before sending.")}</p>}
+            if coin.custom {<button class="text-button" onclick={link.callback(|_| Msg::RemoveToken)}>{t("Remove from my list")}</button>}
+        </div>};
+
+        let balances = html! {<div class="wallet-balance-strip" aria-live="polite">
+            <div class="wallet-balance-main"><span class="small-muted">{t("Balance")}</span>
+                <strong><span data-testid="asset-balance">{held.clone().unwrap_or_else(|| "—".into())}</span><em>{&coin.symbol}</em></strong></div>
+            <div class={classes!("wallet-fee", no_fee.then_some("is-empty"), native.then_some("is-native"))} data-testid="fee-balance">
+                {icon("info")}
+                <span>{if native { format!("{} {}", t("Network fees are paid from this balance, in"), net.symbol) } else { format!("{} {}", t("Network fees are paid in"), net.symbol) }}</span>
+                <strong data-testid="native-balance">{fee.clone().map(|f| format!("{f} {}", net.symbol)).unwrap_or_else(|| "—".into())}</strong>
+                if no_fee && coin.can_send() {<small>{format!("{} {}", t("Add some of this network's coin to pay fees before sending:"), net.symbol)}</small>}
+            </div>
+            <button class="icon-button" aria-label={t("Refresh balances")} disabled={self.loading || receive.is_none()} onclick={link.callback(|_| Msg::Refresh)}>{icon("refresh")}</button>
+        </div>};
+
+        let receive_panel = match &receive {
+            Some(address) => {
+                html! {<div class="wallet-receive" data-motion="" data-testid="receive-panel">
+                    <span class="small-muted">{t("Your address on")}{" "}{net.name}</span>
+                    <code class="wallet-address" data-testid="receive-address" aria-label={t("Your wallet address")}>{address.clone()}</code>
+                    <div class="wallet-receive-actions">
+                        <button class="secondary-button" onclick={ctx.props().copy.reform({ let a = address.clone(); move |_| a.clone() })}>{icon("copy")}{t("Copy address")}</button>
+                        <a class="text-button" href={net.address_url(address)} target="_blank" rel="noopener noreferrer">{t("Explorer")}{icon("arrow")}</a>
+                        if let Some(faucet) = net.faucet {<a class="text-button" href={faucet} target="_blank" rel="noopener noreferrer">{t("Faucet")}{icon("arrow")}</a>}
+                    </div>
+                    if !coin.can_send() {<p class="small-muted">{format!("{} {}", t("Sending is not available here yet. You can receive and view on"), net.chain.name())}</p>}
+                </div>}
             }
-        </div>};
-        // CRO pays every fee, so its balance is always in view.
-        let fees = html! {<div class={classes!("wallet-fee", no_fee.then_some("is-empty"), native_asset.then_some("is-native"))} data-testid="fee-balance" role="status">
-            {icon("info")}
-            <span>{if native_asset {
-                format!("{} {}", t("Network fees are paid from this balance, in"), network.native)
-            } else {
-                format!("{} {}", t("Network fees are paid in"), network.native)
-            }}</span>
-            <strong>{native.clone().map(|n| format!("{n} {}", network.native)).unwrap_or_else(||"—".into())}</strong>
-            if no_fee {<small>{t("Add some CRO to this wallet to pay network fees before sending.")}</small>}
-        </div>};
-        html! {<section class="wallet-page" data-testid="wallet-page">
+            None => {
+                html! {<div class="wallet-locked" data-motion="" role="status" data-testid="phrase-needed"><h2>{t("Recovery phrase needed")}</h2><p>{format!("{} {}", net.chain.name(), t("addresses come from your recovery phrase. Sign out and sign in with it once on this browser to see them; they are then remembered for your account."))}</p></div>}
+            }
+        };
+        let send_panel = if !unlocked {
+            html! {<div class="wallet-locked" role="status"><h2>{t("Wallet locked on this browser")}</h2><p>{t("Sign out and sign in again with your recovery phrase or private key to save this wallet's key in this browser.")}</p></div>}
+        } else if let Some(p) = &self.review {
+            html! {<div class={classes!("wallet-review", self.review_leaving.then_some("is-leaving"))} data-motion="" data-testid="wallet-review" role="dialog" aria-label={t("Review transfer")}>
+                <div class="eyebrow">{t("REVIEW")}</div>
+                <p class="wallet-review-amount"><strong>{&p.amount}</strong>{" "}<span data-testid="review-symbol">{&p.symbol}</span></p>
+                <dl>
+                    <dt>{t("To")}</dt><dd><code>{&p.to}</code></dd>
+                    <dt>{t("Network")}</dt><dd>{net.name}</dd>
+                    if !coin.id.is_empty() {<dt>{t("Token contract")}</dt><dd><code>{coin.id.clone()}</code></dd>}
+                    <dt>{t("Network fee, at most")}</dt><dd>{&p.fee}{" "}{net.symbol}</dd>
+                    if let Some(total) = &p.total {<dt>{t("Total, at most")}</dt><dd><strong>{total}{" "}{net.symbol}</strong></dd>}
+                </dl>
+                <div class="modal-footer">
+                    <button class="text-button" disabled={self.sending} onclick={link.callback(|_| Msg::Cancel)}>{t("Cancel")}</button>
+                    <button class="primary-button" data-testid="wallet-confirm" data-flight-origin="" disabled={self.sending || self.review_leaving} onclick={link.callback(|_| Msg::Send)}>{if self.sending { t("Sending…") } else { t("Confirm and send") }}{icon("send")}</button>
+                </div>
+            </div>}
+        } else {
+            html! {<form class="wallet-send" data-motion="" onsubmit={link.callback(|e: SubmitEvent| { e.prevent_default(); Msg::Review })}>
+                <div class="wallet-amount-hero" aria-hidden="true"><span class="wallet-amount-roll" data-roll="" data-testid="amount-roll" data-value={self.amount.trim().to_string()}></span><em>{&coin.symbol}</em></div>
+                <label class="form-label">{t("Amount")}<span class="wallet-amount-field"><input type="text" inputmode="decimal" aria-label={t("Amount")} placeholder="0.00" autocomplete="off" value={self.amount.clone()} oninput={link.callback(|e: InputEvent| Msg::Amount(e.target_unchecked_into::<HtmlInputElement>().value()))}/><span class="wallet-amount-symbol" data-testid="send-symbol">{&coin.symbol}</span><button type="button" class="chip-button" onclick={link.callback(|_| Msg::Max)}>{t("Max")}</button></span></label>
+                <label class="form-label">{t("Recipient address")}<input type="text" aria-label={t("Recipient address")} placeholder="0x…" autocomplete="off" spellcheck="false" value={self.to.clone()} oninput={link.callback(|e: InputEvent| Msg::To(e.target_unchecked_into::<HtmlInputElement>().value()))}/></label>
+                <button class="primary-button" type="submit" disabled={self.preparing || self.balances.is_none() || self.to.trim().is_empty() || self.amount.trim().is_empty()}>{if self.preparing { t("Checking…") } else { t("Review transfer") }}{icon("arrow")}</button>
+            </form>}
+        };
+        let tab = |which: Tab, label: &'static str, enabled: bool| {
+            let on = self.tab == which;
+            html! {<button role="tab" aria-selected={on.to_string()} disabled={!enabled || self.sending} onclick={link.callback(move |_| Msg::Tab(which))}>{t(label)}</button>}
+        };
+
+        html! {<section class={classes!("wallet-page", format!("chain-{}", net.chain.key()))} data-testid="wallet-page">
             {intro}
-            <div class="wallet-network filter-tabs" role="tablist" aria-label={t("Network")}>{tab("cronos-testnet","Testnet")}{tab("cronos-mainnet","Mainnet")}</div>
-            if network.chain_id == 25 {<p class="wallet-mainnet-note" data-motion="" role="note">{icon("info")}{t("Mainnet moves real funds. Double-check every address.")}</p>}
-            <div class="wallet-assets" role="radiogroup" aria-label={t("Asset")}>
-                {main(evm::NATIVE_KEY, "CRONOS", network.native.to_string(), "Network coin · pays fees")}
-                {main(evm::USDC_KEY, "USDC", network.usdc.symbol.to_string(), "Stablecoin · 1 USDC ≈ 1 US dollar")}
+            <div class="wallet-stage">
+                <cwb-wallet-card role="img" aria-label={summary} data-testid="wallet-card" data-network={net.key} data-coin={coin.key.clone()} data-state={state} data-kind={kind}
+                    data-address={receive.clone().unwrap_or_default()} data-holder={holder} data-symbol={coin.symbol.clone()} data-native-symbol={net.symbol}
+                    data-balance={held.clone().unwrap_or_else(|| "0".into())} data-native={fee.clone().unwrap_or_else(|| "0".into())} data-send={self.last_sent.clone()}></cwb-wallet-card>
             </div>
-            <button class={classes!("text-button","wallet-other-toggle",(self.others||custom.is_some()).then_some("selected"))} aria-expanded={self.others.to_string()} data-testid="asset-other" disabled={self.sending} onclick={link.callback({let open=self.others; move |_|Msg::Others(!open)})}>
-                {match &custom {Some(c) => format!("{}: {}", t("Other ERC-20"), c.symbol), None => t("Other ERC-20 token")}}{icon(if self.others {"up"} else {"down"})}
-            </button>
-            if self.others {
-                <div class="wallet-others" data-motion="" data-testid="wallet-others">
-                    if !tokens.is_empty() {
-                        <ul class="wallet-token-list" aria-label={t("Saved tokens")}>{for tokens.iter().map(|token| {
-                            let key = token.address.to_ascii_lowercase();
-                            let on = asset.key() == key;
-                            html!{<li class={classes!(on.then_some("selected"))}>
-                                <button class="wallet-token-pick" role="radio" aria-checked={on.to_string()} disabled={self.sending} onclick={link.callback({let k=key.clone(); move |_|Msg::Asset(k.clone())})}><strong>{&token.symbol}</strong><span>{&token.name}</span><code>{short(&token.address)}</code></button>
-                                <button class="icon-button" aria-label={format!("{} {}", t("Remove"), token.symbol)} disabled={self.sending} onclick={link.callback({let a=token.address.clone(); move |_|Msg::RemoveToken(a.clone())})}>{icon("close")}</button>
-                            </li>}
-                        })}</ul>
-                    }
-                    <form class="wallet-token-add" onsubmit={link.callback(|e:SubmitEvent|{e.prevent_default();Msg::LookUp})}>
-                        <label class="form-label">{t("Token contract address")}<input type="text" aria-label={t("Token contract address")} placeholder="0x…" autocomplete="off" spellcheck="false" value={self.token_address.clone()} oninput={link.callback(|e:InputEvent|Msg::TokenAddress(e.target_unchecked_into::<HtmlInputElement>().value()))}/></label>
-                        <button class="secondary-button" type="submit" disabled={self.token_checking||self.token_address.trim().is_empty()}>{if self.token_checking {t("Checking…")} else {t("Look up token")}}</button>
-                    </form>
-                    if let Some(token) = &self.token_preview {
-                        <div class="wallet-token-preview" data-motion="" data-testid="token-preview">
-                            <span class="wallet-asset-big">{&token.symbol}</span>
-                            <span class="wallet-asset-name">{&token.name}</span>
-                            <dl>
-                                <dt>{t("Network")}</dt><dd>{network.name}</dd>
-                                <dt>{t("Contract")}</dt><dd><code>{&token.address}</code></dd>
-                                <dt>{t("Decimals")}</dt><dd>{token.decimals}</dd>
-                            </dl>
-                            if evm::imitates_builtin(&network, token) {
-                                <p class="wallet-warning" role="alert">{icon("info")}{t("This token's name looks like CRO or USDC, but it is a different contract. Check the address before sending.")}</p>
-                            }
-                            <button class="primary-button" data-testid="add-token" onclick={link.callback(|_|Msg::AddToken)}>{t("Add and use this token")}{icon("arrow")}</button>
-                        </div>
-                    }
-                    if !self.token_error.is_empty() {<p class="login-error" role="alert">{t(&self.token_error)}</p>}
-                </div>
-            }
+            <div class="wallet-choose">
+                <div class="wallet-main" role="group" aria-label={t("Main coins")} data-glider=""><span class="glider" aria-hidden="true"></span>{for main}</div>
+                {search}
+            </div>
+            {for preview}
+            if !self.preview_error.is_empty() {<p class="login-error" role="alert">{t(&self.preview_error)}</p>}
+            if !net.testnet && coin.can_send() {<p class="wallet-mainnet-note" role="note">{icon("info")}{t("Mainnet moves real funds. Double-check every address.")}</p>}
             {identity}
-            <div class="wallet-layout">
-                <div class="wallet-card-column" data-motion="">
-                    <cwb-wallet-card role="img" aria-label={summary} data-testid="wallet-card" data-network={network.key} data-state={state} data-kind={kind} data-address={address.clone()} data-holder={ctx.props().session["name"].as_str().map(str::to_owned).or_else(||username(&address).ok()).unwrap_or_default()} data-symbol={symbol.clone()} data-native-symbol={network.native} data-balance={held.clone().unwrap_or_else(||"0".into())} data-native={native.clone().unwrap_or_else(||"0".into())}></cwb-wallet-card>
-                    <div class="wallet-balances" aria-live="polite">
-                        <div><span class="small-muted">{&symbol}</span><strong data-testid="asset-balance">{held.clone().unwrap_or_else(||"—".into())}</strong></div>
-                        if !native_asset {<div><span class="small-muted">{network.native}{" · "}{t("for fees")}</span><strong data-testid="native-balance">{native.clone().unwrap_or_else(||"—".into())}</strong></div>}
-                        <button class="icon-button" aria-label={t("Refresh balances")} disabled={self.loading||!unlocked} onclick={link.callback(|_|Msg::Refresh)}>{icon("refresh")}</button>
-                    </div>
-                    {fees}
-                    <div class="wallet-receive">
-                        <span class="small-muted">{t("Receive on")}{" "}{network.name}</span>
-                        <code class="wallet-address" aria-label={t("Your wallet address")}>{address.clone()}</code>
-                        <button class="secondary-button" onclick={ctx.props().copy.reform({let a=address.clone(); move |_|a.clone()})}>{icon("copy")}{t("Copy address")}</button>
-                    </div>
-                </div>
-                <div class="wallet-actions" data-motion="" data-motion-delay="0.12">
-                    if !unlocked {
-                        <div class="wallet-locked" role="status"><h2>{t("Wallet locked on this browser")}</h2><p>{t("Sign out and sign in again with your recovery phrase or private key to save this wallet's key in this browser.")}</p></div>
-                    } else if let Some(p) = &self.review {
-                        <div class={classes!("wallet-review", self.review_leaving.then_some("is-leaving"))} data-motion="" data-testid="wallet-review" role="dialog" aria-label={t("Review transfer")}>
-                            <div class="eyebrow">{t("REVIEW")}</div>
-                            <p class="wallet-review-amount"><strong>{&p.amount}</strong>{" "}<span data-testid="review-symbol">{&p.symbol}</span></p>
-                            <dl>
-                                <dt>{t("To")}</dt><dd><code>{&p.to}</code></dd>
-                                <dt>{t("Network")}</dt><dd>{network.name}</dd>
-                                if let Some(contract) = asset.contract(&network) {<dt>{t("Token contract")}</dt><dd><code>{contract}</code></dd>}
-                                <dt>{t("Network fee, at most")}</dt><dd>{&p.fee}{" "}{network.native}</dd>
-                                if let Some(total) = &p.total {<dt>{t("Total, at most")}</dt><dd><strong>{total}{" "}{network.native}</strong></dd>}
-                            </dl>
-                            <div class="modal-footer">
-                                <button class="text-button" disabled={self.sending} onclick={link.callback(|_|Msg::Cancel)}>{t("Cancel")}</button>
-                                <button class="primary-button" data-testid="wallet-confirm" disabled={self.sending||self.review_leaving} onclick={link.callback(|_|Msg::Send)}>{if self.sending {t("Sending…")} else {t("Confirm and send")}}{icon("arrow")}</button>
-                            </div>
-                        </div>
-                    } else {
-                        <form class="wallet-send" onsubmit={link.callback(|e:SubmitEvent|{e.prevent_default();Msg::Review})}>
-                            <h2>{t("Send")}{" "}<span data-testid="send-symbol">{&symbol}</span></h2>
-                            <label class="form-label">{t("Recipient address")}<input type="text" aria-label={t("Recipient address")} placeholder="0x…" autocomplete="off" spellcheck="false" value={self.to.clone()} oninput={link.callback(|e:InputEvent|Msg::To(e.target_unchecked_into::<HtmlInputElement>().value()))}/></label>
-                            <label class="form-label">{t("Amount")}<span class="wallet-amount-field"><input type="text" inputmode="decimal" aria-label={t("Amount")} placeholder="0.00" autocomplete="off" value={self.amount.clone()} oninput={link.callback(|e:InputEvent|Msg::Amount(e.target_unchecked_into::<HtmlInputElement>().value()))}/><span class="wallet-amount-symbol">{&symbol}</span><button type="button" class="chip-button" onclick={link.callback(|_|Msg::Max)}>{t("Max")}</button></span></label>
-                            <button class="primary-button" type="submit" disabled={self.preparing||self.balances.is_none()||self.to.trim().is_empty()||self.amount.trim().is_empty()}>{if self.preparing {t("Checking…")} else {t("Review transfer")}}{icon("arrow")}</button>
-                        </form>
-                    }
-                    if !self.error.is_empty() {<p class="login-error" role="alert" data-motion="">{t(&self.error)}</p>}
-                    if !self.activity.is_empty() {
-                        <div class="wallet-activity" data-motion=""><h3>{t("This session")}</h3><ul>{for self.activity.iter().map(|a|html!{
-                            <li data-motion="" data-testid="wallet-activity"><span><strong>{&a.amount}{" "}{&a.symbol}</strong><small>{t("to")}{" "}{short(&a.to)}</small></span><span class={classes!("wallet-status", a.status.to_lowercase())}>{t(a.status)}</span><a href={format!("{}/tx/{}",a.network.explorer,a.hash)} target="_blank" rel="noopener noreferrer">{t("Explorer")}{icon("arrow")}</a></li>
-                        })}</ul></div>
-                    }
-                </div>
-            </div>
+            {balances}
+            <div class="wallet-tabs filter-tabs" role="tablist" aria-label={t("Wallet actions")} data-glider=""><span class="glider" aria-hidden="true"></span>{tab(Tab::Send, "Send", coin.can_send())}{tab(Tab::Receive, "Receive", true)}</div>
+            <div class="wallet-panel">{if self.tab == Tab::Send && coin.can_send() { send_panel } else { receive_panel }}</div>
+            if !self.error.is_empty() {<p class="login-error" role="alert" data-motion="">{t(&self.error)}</p>}
+            if !self.activity.is_empty() {
+                <div class="wallet-activity" data-motion=""><h3>{t("This session")}</h3><ul data-stagger="">{for self.activity.iter().map(|a| html! {
+                    <li data-testid="wallet-activity"><span><strong>{&a.amount}{" "}{&a.symbol}</strong><small>{t("to")}{" "}{short(&a.to)}</small></span><span class={classes!("wallet-status", a.status.to_lowercase())}>{t(a.status)}</span><a href={registry::net_of(a.network.key).map(|n| n.tx_url(&a.hash)).unwrap_or_default()} target="_blank" rel="noopener noreferrer">{t("Explorer")}{icon("arrow")}</a></li>
+                })}</ul></div>
+            }
         </section>}
     }
 }

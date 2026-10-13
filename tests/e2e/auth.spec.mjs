@@ -330,9 +330,12 @@ test('new recovery phrase requires confirmation and a copied backup before regis
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   await page.screenshot({path:'test-results/wallet-mobile.png',fullPage:true});
   expect(payloads.join('\n')).not.toContain(phrase);
-  const stored=await page.evaluate(()=>JSON.stringify({local:localStorage,session:sessionStorage}));
-  expect(stored).not.toContain(phrase);
-  expect(stored).toContain('invisible-ai.wallet.key');
+  // The phrase is kept in local storage beside the key (for the non-EVM
+  // chains), and nowhere else: not in session storage, not in any request.
+  const local=await page.evaluate(()=>JSON.parse(localStorage.getItem('invisible-ai.wallet.key')));
+  expect(local.mnemonic).toBe(phrase);
+  expect(await page.evaluate(()=>JSON.stringify(sessionStorage))).not.toContain(phrase);
+  await expect(page.getByRole('button',{name:'Copy recovery phrase'})).toBeVisible();
   await context.close();
 });
 

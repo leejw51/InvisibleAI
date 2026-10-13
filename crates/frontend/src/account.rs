@@ -1,7 +1,8 @@
-//! The wallet's private key is the one secret the browser keeps, and it is kept
-//! only in local storage: never rendered, never sent to the backend or an AI
-//! prompt. The recovery phrase is never stored at all; a signed-in phrase is
-//! reduced to its derived key. Secrets leave only through an explicit Copy.
+//! The wallet's secrets — its private key and, after a phrase sign-in, the
+//! recovery phrase — are kept only in this browser's local storage: never
+//! rendered, never sent to the backend or an AI prompt. The phrase is kept
+//! because Solana, Cardano, Midnight and eCash addresses derive from it, not
+//! from the EVM key. Secrets leave only through an explicit Copy.
 use crate::{api::api, clipboard, i18n::t, icons::icon};
 use causewaybay_shared::identity::Identity;
 use gloo_events::EventListener;
@@ -15,12 +16,15 @@ fn storage() -> Option<web_sys::Storage> {
     web_sys::window().and_then(|w| w.local_storage().ok().flatten())
 }
 /// Save the signed-in wallet's private key in this browser, with the wallet
-/// index it was derived at (0 for a key entered directly).
-pub fn remember(identity: &Identity, index: u32) {
+/// index it was derived at (0 for a key entered directly) and, when signed in
+/// by phrase, the phrase itself.
+pub fn remember(identity: &Identity, index: u32, mnemonic: Option<&str>) {
     if let Some(storage) = storage() {
-        let value = Zeroizing::new(
-            json!({"key": identity.private_key_hex().as_str(), "index": index}).to_string(),
-        );
+        let mut value = json!({"key": identity.private_key_hex().as_str(), "index": index});
+        if let Some(phrase) = mnemonic {
+            value["mnemonic"] = json!(phrase);
+        }
+        let value = Zeroizing::new(value.to_string());
         let _ = storage.set_item(KEY, &value);
     }
 }
@@ -40,6 +44,18 @@ pub fn saved() -> Option<(Identity, u32)> {
         .and_then(|i| u32::try_from(i).ok())
         .unwrap_or(0);
     Some((Identity::from_private_key(&key).ok()?, index))
+}
+/// The saved recovery phrase, when this wallet was signed in by phrase.
+pub fn saved_mnemonic() -> Option<Zeroizing<String>> {
+    let raw = Zeroizing::new(storage()?.get_item(KEY).ok()??);
+    let value: Value = serde_json::from_str(&raw).ok()?;
+    let phrase = Zeroizing::new(value["mnemonic"].as_str()?.to_string());
+    // Only a phrase that still derives the saved key counts.
+    let (identity, index) = saved()?;
+    Identity::from_mnemonic_at(&phrase, index)
+        .ok()
+        .filter(|id| id.address() == identity.address())
+        .map(|_| phrase)
 }
 pub fn identity() -> Option<Identity> {
     saved().map(|(identity, _)| identity)
@@ -86,6 +102,7 @@ pub struct Account {
     error: String,
     saved: bool,
     copied: Option<bool>,
+    phrase_copied: Option<bool>,
     _keyboard: EventListener,
     close_button: NodeRef,
 }
@@ -94,7 +111,9 @@ pub enum Msg {
     Save,
     Saved(Result<Value, String>),
     CopyKey,
+    CopyPhrase,
     Copied(bool),
+    PhraseCopied(bool),
 }
 impl Component for Account {
     type Message = Msg;
@@ -119,6 +138,7 @@ impl Component for Account {
             error: String::new(),
             saved: false,
             copied: None,
+            phrase_copied: None,
             _keyboard: keyboard,
             close_button: NodeRef::default(),
         }
@@ -171,7 +191,22 @@ impl Component for Account {
                 ctx.link()
                     .send_future(async move { Msg::Copied(copy_secret(key).await) });
             }
+            Msg::CopyPhrase => {
+                let Some(phrase) = saved_mnemonic() else {
+                    self.error =
+                        "This browser has no saved recovery phrase for this wallet.".into();
+                    return true;
+                };
+                if !confirm(
+                    "Copy your recovery phrase to the clipboard? It controls this wallet on every chain. Clear your clipboard after saving it somewhere safe.",
+                ) {
+                    return false;
+                }
+                ctx.link()
+                    .send_future(async move { Msg::PhraseCopied(copy_secret(phrase).await) });
+            }
             Msg::Copied(ok) => self.copied = Some(ok),
+            Msg::PhraseCopied(ok) => self.phrase_copied = Some(ok),
         }
         true
     }
@@ -188,9 +223,11 @@ impl Component for Account {
                 if self.saved {<p role="status">{t("Name saved")}</p>}
                 <div class="wallet-recovery">
                     <p>{t("Wallet index")}{": "}<strong aria-label={t("Wallet index")}>{index}</strong></p>
-                    <p class="small-muted">{if saved {t("Your private key is saved in this browser only. It is never shown on screen or sent to the backend.")} else {t("This browser has no saved key for this wallet.")}}</p>
+                    <p class="small-muted">{if saved {t("Your private key and recovery phrase are saved in this browser only. They are never shown on screen or sent to the backend.")} else {t("This browser has no saved key for this wallet.")}}</p>
                     if saved {<button class="secondary-button" data-testid="copy-private-key" onclick={ctx.link().callback(|_|Msg::CopyKey)}>{icon("copy")}{t("Copy private key")}</button>}
                     if let Some(ok) = self.copied {<p role="status">{if ok {t("Private key copied")} else {t("Could not copy. Your browser blocked clipboard access.")}}</p>}
+                    if saved && saved_mnemonic().is_some() {<button class="secondary-button" data-testid="copy-saved-phrase" onclick={ctx.link().callback(|_|Msg::CopyPhrase)}>{icon("copy")}{t("Copy recovery phrase")}</button>}
+                    if let Some(ok) = self.phrase_copied {<p role="status">{if ok {t("Recovery phrase copied")} else {t("Could not copy. Your browser blocked clipboard access.")}}</p>}
                 </div>
                 if !self.error.is_empty(){<p class="login-error" role="alert">{t(&self.error)}</p>}
             </div>

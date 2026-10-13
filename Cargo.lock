@@ -373,6 +373,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2af50177e190e07a26ab74f8b1efbfe2ef87da2116221318cb1c2e82baf7de06"
 
 [[package]]
+name = "bech32"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "32637268377fc7b10a8c6d51de3e7fba1ce5dd371a96e342b34e6078db558e7f"
+
+[[package]]
 name = "bincode"
 version = "1.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -473,6 +479,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bf88ba1141d185c399bee5288d850d63b8369520c1eafc32a0430b5b6c287bf4"
 dependencies = [
  "sha2",
+ "tinyvec",
 ]
 
 [[package]]
@@ -607,13 +614,21 @@ dependencies = [
 name = "causewaybay-shared"
 version = "0.1.0"
 dependencies = [
+ "bech32",
  "bip32",
  "bip39",
+ "bs58",
+ "cryptoxide",
+ "ed25519-bip32",
  "hex",
+ "hmac",
  "k256",
+ "pbkdf2",
  "reqwest",
+ "ripemd",
  "serde",
  "serde_json",
+ "sha2",
  "sha3",
  "zeroize",
 ]
@@ -938,6 +953,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "cryptoxide"
+version = "0.6.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6572a18bf8335f71cb3813d5f0e0a8381e3caa1d91d73aa1209c78645ba33f1b"
+
+[[package]]
 name = "cssparser"
 version = "0.38.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1181,6 +1202,15 @@ dependencies = [
  "rfc6979",
  "signature",
  "spki",
+]
+
+[[package]]
+name = "ed25519-bip32"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "10c212afef25445afd5cd3fc05941661b0473e681d7a39991b46c2821dbb9ba6"
+dependencies = [
+ "cryptoxide",
 ]
 
 [[package]]

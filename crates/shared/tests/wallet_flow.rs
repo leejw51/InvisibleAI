@@ -2,7 +2,7 @@
 //! phrase → key → checks → transaction → signature — then the raw bytes are
 //! decoded independently and the signer is recovered from the signature, the
 //! way a Cronos node would. No network.
-use causewaybay_shared::evm::{self, CRONOS_MAINNET, CRONOS_TESTNET, NETWORKS, Quote, U256};
+use causewaybay_shared::evm::{self, CRONOS_MAINNET, CRONOS_TESTNET, Quote, U256};
 use causewaybay_shared::identity::Identity;
 use k256::ecdsa::{RecoveryId, Signature, VerifyingKey};
 use sha3::{Digest, Keccak256};
@@ -77,7 +77,8 @@ fn phrase_to_signed_usdc_transfer_recovers_to_the_sender_on_both_networks() {
     let by_key = Identity::from_private_key(&identity.private_key_hex()).unwrap();
     assert_eq!(by_key.address(), from);
 
-    for network in NETWORKS {
+    // Cronos only: the 5,000 gwei price below is far past Arbitrum's 0.005 ETH ceiling.
+    for network in [CRONOS_TESTNET, CRONOS_MAINNET] {
         let request = evm::check_transfer(
             &network,
             &evm::Asset::Usdc,

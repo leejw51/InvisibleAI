@@ -11383,14 +11383,6 @@
     "He guardado mi frase de recuperación y el índice de la cartera.",
     "Uložil(a) jsem si obnovovací frázi a index peněženky."
   ],
-  "Your private key is saved in this browser only. It is never shown on screen or sent to the backend.": [
-    "개인 키는 이 브라우저에만 저장됩니다. 화면에 표시되거나 백엔드로 전송되지 않습니다.",
-    "私鑰只會儲存喺呢個瀏覽器。佢永遠唔會喺畫面顯示，亦唔會傳去後端。",
-    "私钥只保存在此浏览器中。它永远不会显示在屏幕上，也不会发送到后端。",
-    "秘密鍵はこのブラウザにのみ保存されます。画面に表示されることも、バックエンドへ送信されることもありません。",
-    "Tu clave privada solo se guarda en este navegador. Nunca se muestra en pantalla ni se envía al servidor.",
-    "Váš soukromý klíč je uložen pouze v tomto prohlížeči. Nikdy se nezobrazí na obrazovce ani neodešle na backend."
-  ],
   "This browser has no saved key for this wallet.": [
     "이 브라우저에는 이 지갑의 저장된 키가 없습니다.",
     "呢個瀏覽器冇儲存呢個錢包嘅私鑰。",
@@ -11446,14 +11438,6 @@
     "残高を更新",
     "Actualizar saldos",
     "Obnovit zůstatky"
-  ],
-  "Receive on": [
-    "받을 네트워크:",
-    "收款網絡：",
-    "收款网络：",
-    "受け取りネットワーク:",
-    "Recibir en",
-    "Přijímat na síti"
   ],
   "Copy address": [
     "주소 복사",
@@ -11687,14 +11671,6 @@
     "¿Generar una nueva frase de recuperación? Permanece oculta a menos que pulses Mostrar. Guárdala en un lugar seguro, junto con el índice de la cartera, antes de continuar.",
     "Vygenerovat novou obnovovací frázi? Zůstane skrytá, dokud nestisknete Zobrazit. Než budete pokračovat, uložte ji spolu s indexem peněženky na bezpečné místo."
   ],
-  "Your phrase or key is treated like a password: it is never sent to the backend or to AI, and only the derived private key is saved, in this browser’s local storage.": [
-    "복구 구문과 키는 비밀번호처럼 취급됩니다. 백엔드나 AI로 전송되지 않으며, 파생된 개인 키만 이 브라우저의 로컬 저장소에 저장됩니다.",
-    "助記詞同私鑰會當密碼咁處理：永遠唔會傳去後端或者 AI，只有衍生出嚟嘅私鑰會儲存喺呢個瀏覽器嘅本機儲存空間。",
-    "助记词和私钥被当作密码处理：永远不会发送到后端或 AI，只有派生的私钥会保存在此浏览器的本地存储中。",
-    "フレーズや鍵はパスワードとして扱われます。バックエンドや AI に送信されることはなく、派生した秘密鍵だけがこのブラウザのローカルストレージに保存されます。",
-    "Tu frase o clave se trata como una contraseña: nunca se envía al backend ni a la IA, y solo la clave privada derivada se guarda en el almacenamiento local de este navegador.",
-    "S vaší frází nebo klíčem se zachází jako s heslem: nikdy se neodesílá na backend ani AI a v místním úložišti tohoto prohlížeče se ukládá pouze odvozený soukromý klíč."
-  ],
   "Add and use this token": [
     "이 토큰 추가 후 사용",
     "加入並使用呢個代幣",
@@ -11702,14 +11678,6 @@
     "このトークンを追加して使う",
     "Añadir y usar este token",
     "Přidat a použít tento token"
-  ],
-  "Add some CRO to this wallet to pay network fees before sending.": [
-    "보내기 전에 네트워크 수수료를 낼 CRO를 이 지갑에 넣어 주세요.",
-    "傳送之前，請先喺呢個錢包加啲 CRO 嚟俾網絡手續費。",
-    "发送之前，请先向此钱包充值一些 CRO 用于支付网络手续费。",
-    "送金する前に、ネットワーク手数料用の CRO をこのウォレットに入れてください。",
-    "Añade algo de CRO a esta cartera para pagar las comisiones de red antes de enviar.",
-    "Před odesláním si do této peněženky pošlete trochu CRO na síťové poplatky."
   ],
   "Asset": [
     "자산",
@@ -11735,14 +11703,6 @@
     "Copiar dirección del contrato",
     "Kopírovat adresu kontraktu"
   ],
-  "Custom ERC-20 token": [
-    "직접 추가한 ERC-20 토큰",
-    "自行加入嘅 ERC-20 代幣",
-    "自定义 ERC-20 代币",
-    "追加した ERC-20 トークン",
-    "Token ERC-20 personalizado",
-    "Vlastní token ERC-20"
-  ],
   "Decimals": [
     "소수 자릿수",
     "小數位",
@@ -11750,14 +11710,6 @@
     "小数点以下の桁数",
     "Decimales",
     "Desetinná místa"
-  ],
-  "Hold and send CRO, USDC or any ERC-20 token on Cronos. Your key stays in this browser and signs every transfer here.": [
-    "Cronos에서 CRO, USDC 또는 모든 ERC-20 토큰을 보관하고 보내세요. 키는 이 브라우저에만 있고 모든 송금은 여기서 서명됩니다.",
-    "喺 Cronos 持有同傳送 CRO、USDC 或者任何 ERC-20 代幣。你嘅私鑰只會留喺呢個瀏覽器，每筆轉賬都喺度簽署。",
-    "在 Cronos 上持有和发送 CRO、USDC 或任何 ERC-20 代币。你的私钥只保存在此浏览器中，每笔转账都在这里签名。",
-    "Cronos で CRO、USDC、または任意の ERC-20 トークンを保有・送金できます。鍵はこのブラウザにだけあり、すべての送金はここで署名されます。",
-    "Guarda y envía CRO, USDC o cualquier token ERC-20 en Cronos. Tu clave se queda en este navegador y firma aquí cada transferencia.",
-    "Držte a posílejte CRO, USDC nebo jakýkoli token ERC-20 na síti Cronos. Váš klíč zůstává v tomto prohlížeči a podepisuje zde každý převod."
   ],
   "Loading your wallet…": [
     "지갑을 불러오는 중…",
@@ -11767,14 +11719,6 @@
     "Cargando tu cartera…",
     "Načítání peněženky…"
   ],
-  "Look up token": [
-    "토큰 조회",
-    "查詢代幣",
-    "查询代币",
-    "トークンを調べる",
-    "Buscar token",
-    "Vyhledat token"
-  ],
   "Mainnet moves real funds. Double-check every address.": [
     "메인넷은 실제 자금을 옮깁니다. 모든 주소를 다시 확인하세요.",
     "主網會轉移真實資金。請再三檢查每個地址。",
@@ -11782,22 +11726,6 @@
     "メインネットでは実際の資金が動きます。すべてのアドレスを再確認してください。",
     "La red principal mueve fondos reales. Comprueba bien cada dirección.",
     "Hlavní síť přesouvá skutečné prostředky. Každou adresu si dvakrát zkontrolujte."
-  ],
-  "Native coin": [
-    "네트워크 기본 코인",
-    "網絡原生幣",
-    "网络原生币",
-    "ネイティブコイン",
-    "Moneda nativa",
-    "Nativní mince"
-  ],
-  "Network coin · pays fees": [
-    "네트워크 코인 · 수수료 지불",
-    "網絡幣 · 用嚟俾手續費",
-    "网络币 · 用于支付手续费",
-    "ネットワークのコイン · 手数料の支払い",
-    "Moneda de la red · paga las comisiones",
-    "Mince sítě · platí poplatky"
   ],
   "Network fees are paid from this balance, in": [
     "네트워크 수수료는 이 잔액에서 지불됩니다. 단위:",
@@ -11815,54 +11743,6 @@
     "Las comisiones de red se pagan en",
     "Síťové poplatky se platí v"
   ],
-  "No contract: CRO is the network's own coin, and it pays every network fee.": [
-    "컨트랙트 없음: CRO는 네트워크 자체 코인이며 모든 네트워크 수수료를 냅니다.",
-    "冇合約：CRO 係網絡本身嘅幣，所有網絡手續費都用佢支付。",
-    "无合约：CRO 是网络自身的币，所有网络手续费都用它支付。",
-    "コントラクトなし：CRO はネットワーク自身のコインで、すべてのネットワーク手数料を支払います。",
-    "Sin contrato: CRO es la moneda propia de la red y paga todas las comisiones.",
-    "Bez kontraktu: CRO je vlastní mince sítě a platí všechny síťové poplatky."
-  ],
-  "Other ERC-20": [
-    "다른 ERC-20",
-    "其他 ERC-20",
-    "其他 ERC-20",
-    "その他の ERC-20",
-    "Otro ERC-20",
-    "Jiný ERC-20"
-  ],
-  "Other ERC-20 token": [
-    "다른 ERC-20 토큰",
-    "其他 ERC-20 代幣",
-    "其他 ERC-20 代币",
-    "その他の ERC-20 トークン",
-    "Otro token ERC-20",
-    "Jiný token ERC-20"
-  ],
-  "Saved tokens": [
-    "저장한 토큰",
-    "已儲存嘅代幣",
-    "已保存的代币",
-    "保存したトークン",
-    "Tokens guardados",
-    "Uložené tokeny"
-  ],
-  "Stablecoin (ERC-20)": [
-    "스테이블코인 (ERC-20)",
-    "穩定幣 (ERC-20)",
-    "稳定币 (ERC-20)",
-    "ステーブルコイン (ERC-20)",
-    "Stablecoin (ERC-20)",
-    "Stablecoin (ERC-20)"
-  ],
-  "Stablecoin · 1 USDC ≈ 1 US dollar": [
-    "스테이블코인 · 1 USDC ≈ 1 미국 달러",
-    "穩定幣 · 1 USDC ≈ 1 美元",
-    "稳定币 · 1 USDC ≈ 1 美元",
-    "ステーブルコイン · 1 USDC ≈ 1 米ドル",
-    "Stablecoin · 1 USDC ≈ 1 dólar estadounidense",
-    "Stablecoin · 1 USDC ≈ 1 americký dolar"
-  ],
   "This token's name looks like CRO or USDC, but it is a different contract. Check the address before sending.": [
     "이 토큰 이름은 CRO나 USDC처럼 보이지만 다른 컨트랙트입니다. 보내기 전에 주소를 확인하세요.",
     "呢個代幣個名似 CRO 或者 USDC，但係另一個合約。傳送之前請檢查地址。",
@@ -11879,14 +11759,6 @@
     "Contrato del token",
     "Kontrakt tokenu"
   ],
-  "Token contract address": [
-    "토큰 컨트랙트 주소",
-    "代幣合約地址",
-    "代币合约地址",
-    "トークンのコントラクトアドレス",
-    "Dirección del contrato del token",
-    "Adresa kontraktu tokenu"
-  ],
   "Total, at most": [
     "합계, 최대",
     "總數，最多",
@@ -11895,22 +11767,6 @@
     "Total, como máximo",
     "Celkem, nejvýše"
   ],
-  "YOUR CRONOS WALLET": [
-    "나의 CRONOS 지갑",
-    "你嘅 CRONOS 錢包",
-    "你的 CRONOS 钱包",
-    "あなたの CRONOS ウォレット",
-    "TU CARTERA CRONOS",
-    "VAŠE PENĚŽENKA CRONOS"
-  ],
-  "Your money on Cronos, simply.": [
-    "Cronos 위의 내 자산, 간단하게.",
-    "你喺 Cronos 嘅資產，簡簡單單。",
-    "你在 Cronos 上的资产，简单明了。",
-    "Cronos のあなたの資産を、シンプルに。",
-    "Tu dinero en Cronos, sin complicaciones.",
-    "Vaše peníze na Cronosu, jednoduše."
-  ],
   "Remove this token from your list? Its balance stays on the chain, and you can add it again any time.": [
     "이 토큰을 목록에서 지울까요? 잔액은 체인에 그대로 남고, 언제든 다시 추가할 수 있습니다.",
     "要喺清單移除呢個代幣嗎？餘額仍然留喺鏈上，你隨時可以再加返。",
@@ -11918,5 +11774,245 @@
     "このトークンをリストから削除しますか？残高はチェーン上に残り、いつでも再追加できます。",
     "¿Quitar este token de tu lista? Su saldo sigue en la cadena y puedes volver a añadirlo cuando quieras.",
     "Odebrat tento token ze seznamu? Jeho zůstatek zůstane na řetězci a můžete ho kdykoli přidat znovu."
+  ],
+  "YOUR WALLET": [
+    "나의 지갑",
+    "你嘅錢包",
+    "你的钱包",
+    "あなたのウォレット",
+    "TU CARTERA",
+    "VAŠE PENĚŽENKA"
+  ],
+  "Every coin, one calm place.": [
+    "모든 코인을 한곳에서 차분하게.",
+    "所有幣，一個安靜嘅地方。",
+    "所有币，一个安静的地方。",
+    "すべてのコインを、ひとつの静かな場所に。",
+    "Todas tus monedas, en un solo lugar tranquilo.",
+    "Všechny mince na jednom klidném místě."
+  ],
+  "CRO · pays fees": [
+    "CRO · 수수료 지불",
+    "CRO · 用嚟俾手續費",
+    "CRO · 用于支付手续费",
+    "CRO · 手数料の支払い",
+    "CRO · paga las comisiones",
+    "CRO · platí poplatky"
+  ],
+  "Stablecoin on Cronos": [
+    "Cronos의 스테이블코인",
+    "Cronos 上嘅穩定幣",
+    "Cronos 上的稳定币",
+    "Cronos のステーブルコイン",
+    "Stablecoin en Cronos",
+    "Stablecoin na Cronosu"
+  ],
+  "Search coins and networks": [
+    "코인과 네트워크 검색",
+    "搜尋幣同網絡",
+    "搜索币和网络",
+    "コインとネットワークを検索",
+    "Buscar monedas y redes",
+    "Hledat mince a sítě"
+  ],
+  "Search coins, networks or a contract address": [
+    "코인, 네트워크 또는 컨트랙트 주소 검색",
+    "搜尋幣、網絡或者合約地址",
+    "搜索币、网络或合约地址",
+    "コイン、ネットワーク、コントラクトアドレスを検索",
+    "Busca monedas, redes o una dirección de contrato",
+    "Hledejte mince, sítě nebo adresu kontraktu"
+  ],
+  "Coins": [
+    "코인",
+    "幣",
+    "币",
+    "コイン",
+    "Monedas",
+    "Mince"
+  ],
+  "test": [
+    "테스트",
+    "測試",
+    "测试",
+    "テスト",
+    "prueba",
+    "test"
+  ],
+  "View": [
+    "보기",
+    "查看",
+    "查看",
+    "表示",
+    "Ver",
+    "Zobrazit"
+  ],
+  "Nothing matches. Try a symbol, a network or a contract address.": [
+    "일치하는 항목이 없습니다. 심볼, 네트워크 또는 컨트랙트 주소로 검색해 보세요.",
+    "搵唔到。試吓用符號、網絡或者合約地址。",
+    "没有匹配项。试试符号、网络或合约地址。",
+    "一致するものがありません。シンボル、ネットワーク、コントラクトアドレスで試してください。",
+    "No hay coincidencias. Prueba con un símbolo, una red o una dirección de contrato.",
+    "Nic neodpovídá. Zkuste symbol, síť nebo adresu kontraktu."
+  ],
+  "Add this contract as a token on": [
+    "이 컨트랙트를 토큰으로 추가할 네트워크:",
+    "將呢個合約加做代幣，網絡：",
+    "将此合约添加为代币，网络：",
+    "このコントラクトをトークンとして追加するネットワーク：",
+    "Añadir este contrato como token en",
+    "Přidat tento kontrakt jako token na"
+  ],
+  "Test network": [
+    "테스트 네트워크",
+    "測試網絡",
+    "测试网络",
+    "テストネットワーク",
+    "Red de prueba",
+    "Testovací síť"
+  ],
+  "View and receive": [
+    "보기 및 받기",
+    "查看同接收",
+    "查看和接收",
+    "表示と受け取り",
+    "Ver y recibir",
+    "Zobrazit a přijmout"
+  ],
+  "The network's own coin. It pays every fee on": [
+    "네트워크 자체 코인입니다. 모든 수수료를 이것으로 냅니다:",
+    "網絡本身嘅幣，所有手續費都用佢支付：",
+    "网络自身的币，所有手续费都用它支付：",
+    "ネットワーク自身のコインで、すべての手数料を支払います：",
+    "La moneda propia de la red. Paga todas las comisiones en",
+    "Vlastní mince sítě. Platí všechny poplatky na"
+  ],
+  "Mint": [
+    "민트",
+    "Mint",
+    "Mint",
+    "ミント",
+    "Mint",
+    "Mint"
+  ],
+  "Remove from my list": [
+    "내 목록에서 제거",
+    "喺我嘅清單移除",
+    "从我的列表移除",
+    "リストから削除",
+    "Quitar de mi lista",
+    "Odebrat ze seznamu"
+  ],
+  "Balance": [
+    "잔액",
+    "餘額",
+    "余额",
+    "残高",
+    "Saldo",
+    "Zůstatek"
+  ],
+  "Add some of this network's coin to pay fees before sending:": [
+    "보내기 전에 수수료로 쓸 이 네트워크의 코인을 넣어 주세요:",
+    "傳送之前，請加啲呢個網絡嘅幣嚟俾手續費：",
+    "发送之前，请充值一些此网络的币用于支付手续费：",
+    "送金前に、手数料用のこのネットワークのコインを入れてください：",
+    "Añade algo de la moneda de esta red para pagar comisiones antes de enviar:",
+    "Před odesláním si přidejte minci této sítě na poplatky:"
+  ],
+  "Your address on": [
+    "내 주소:",
+    "你喺呢個網絡嘅地址：",
+    "你在此网络的地址：",
+    "あなたのアドレス：",
+    "Tu dirección en",
+    "Vaše adresa na"
+  ],
+  "Faucet": [
+    "포싯",
+    "水龍頭",
+    "水龙头",
+    "フォーセット",
+    "Faucet",
+    "Faucet"
+  ],
+  "Sending is not available here yet. You can receive and view on": [
+    "아직 이곳에서는 보낼 수 없습니다. 받기와 보기는 가능합니다:",
+    "呢度暫時未可以傳送。可以接收同查看：",
+    "这里暂时还不能发送。可以接收和查看：",
+    "ここではまだ送金できません。受け取りと表示は可能です：",
+    "Aquí aún no se puede enviar. Puedes recibir y ver en",
+    "Odesílání zde zatím není k dispozici. Přijímat a zobrazovat můžete na"
+  ],
+  "Recovery phrase needed": [
+    "복구 구문 필요",
+    "需要錢包助記詞",
+    "需要钱包助记词",
+    "リカバリーフレーズが必要です",
+    "Se necesita la frase de recuperación",
+    "Je potřeba obnovovací fráze"
+  ],
+  "addresses come from your recovery phrase. Sign out and sign in with it once on this browser to see them; they are then remembered for your account.": [
+    "주소는 복구 구문에서 만들어집니다. 이 브라우저에서 로그아웃 후 복구 구문으로 한 번 로그인하면 표시되며, 이후 계정에 기억됩니다.",
+    "地址由錢包助記詞產生。喺呢個瀏覽器登出，再用助記詞登入一次就會見到，之後會記住喺你嘅帳戶。",
+    "地址由钱包助记词生成。在此浏览器退出后用助记词登录一次即可看到，之后会为你的账户记住。",
+    "アドレスはリカバリーフレーズから作られます。このブラウザでサインアウトしてフレーズで一度サインインすると表示され、その後アカウントに記憶されます。",
+    "Las direcciones salen de tu frase de recuperación. Cierra sesión e inicia sesión con ella una vez en este navegador para verlas; después se recuerdan en tu cuenta.",
+    "adresy vycházejí z vaší obnovovací fráze. Odhlaste se a jednou se s ní přihlaste v tomto prohlížeči; poté si je váš účet zapamatuje."
+  ],
+  "Main coins": [
+    "주요 코인",
+    "主要幣",
+    "主要币",
+    "主なコイン",
+    "Monedas principales",
+    "Hlavní mince"
+  ],
+  "Wallet actions": [
+    "지갑 작업",
+    "錢包操作",
+    "钱包操作",
+    "ウォレットの操作",
+    "Acciones de la cartera",
+    "Akce peněženky"
+  ],
+  "Your private key and recovery phrase are saved in this browser only. They are never shown on screen or sent to the backend.": [
+    "개인 키와 복구 구문은 이 브라우저에만 저장됩니다. 화면에 표시되거나 백엔드로 전송되지 않습니다.",
+    "你嘅私鑰同錢包助記詞只會儲存喺呢個瀏覽器，永遠唔會顯示喺畫面或者傳去後端。",
+    "你的私钥和钱包助记词只保存在此浏览器中，永远不会显示在屏幕上或发送到后端。",
+    "秘密鍵とリカバリーフレーズはこのブラウザにのみ保存され、画面に表示されたりバックエンドに送信されたりすることはありません。",
+    "Tu clave privada y tu frase de recuperación se guardan solo en este navegador. Nunca se muestran en pantalla ni se envían al backend.",
+    "Váš soukromý klíč a obnovovací fráze jsou uloženy pouze v tomto prohlížeči. Nikdy se nezobrazují ani neodesílají na backend."
+  ],
+  "Your phrase and key are treated like passwords: they are never sent to the backend or to AI, and are saved only in this browser’s local storage.": [
+    "복구 구문과 키는 비밀번호처럼 취급됩니다. 백엔드나 AI로 전송되지 않으며 이 브라우저의 로컬 저장소에만 저장됩니다.",
+    "助記詞同私鑰會當密碼咁處理：永遠唔會傳去後端或者 AI，只會儲存喺呢個瀏覽器嘅本機儲存空間。",
+    "助记词和私钥被当作密码处理：永远不会发送到后端或 AI，只保存在此浏览器的本地存储中。",
+    "フレーズと鍵はパスワードとして扱われます。バックエンドや AI に送信されることはなく、このブラウザのローカルストレージにのみ保存されます。",
+    "Tu frase y tu clave se tratan como contraseñas: nunca se envían al backend ni a la IA, y solo se guardan en el almacenamiento local de este navegador.",
+    "S frází a klíčem se zachází jako s hesly: nikdy se neodesílají na backend ani AI a ukládají se pouze v místním úložišti tohoto prohlížeče."
+  ],
+  "Receive": [
+    "받기",
+    "接收",
+    "接收",
+    "受け取る",
+    "Recibir",
+    "Přijmout"
+  ],
+  "Copy your recovery phrase to the clipboard? It controls this wallet on every chain. Clear your clipboard after saving it somewhere safe.": [
+    "복구 구문을 클립보드에 복사할까요? 모든 체인에서 이 지갑을 제어합니다. 안전한 곳에 저장한 뒤 클립보드를 지우세요.",
+    "要將錢包助記詞複製到剪貼簿嗎？佢控制住呢個錢包喺所有鏈上嘅資產。儲存喺安全地方之後請清除剪貼簿。",
+    "要将钱包助记词复制到剪贴板吗？它控制此钱包在所有链上的资产。保存到安全的地方后请清除剪贴板。",
+    "リカバリーフレーズをクリップボードにコピーしますか？すべてのチェーンでこのウォレットを管理します。安全な場所に保存したらクリップボードを消去してください。",
+    "¿Copiar tu frase de recuperación al portapapeles? Controla esta cartera en todas las cadenas. Borra el portapapeles después de guardarla en un lugar seguro.",
+    "Zkopírovat obnovovací frázi do schránky? Ovládá tuto peněženku na všech řetězcích. Po uložení na bezpečné místo schránku vymažte."
+  ],
+  "This browser has no saved recovery phrase for this wallet.": [
+    "이 브라우저에는 이 지갑의 복구 구문이 저장되어 있지 않습니다.",
+    "呢個瀏覽器冇儲存呢個錢包嘅助記詞。",
+    "此浏览器没有保存此钱包的助记词。",
+    "このブラウザにはこのウォレットのリカバリーフレーズが保存されていません。",
+    "Este navegador no tiene guardada la frase de recuperación de esta cartera.",
+    "Tento prohlížeč nemá uloženou obnovovací frázi této peněženky."
   ]
 }

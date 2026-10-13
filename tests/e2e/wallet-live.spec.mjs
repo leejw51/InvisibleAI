@@ -22,7 +22,7 @@ test.beforeAll(async ({ request }) => {
 });
 test.afterAll(() => { server?.kill('SIGTERM'); });
 
-test('real Cronos testnet and mainnet: balances load and a transfer is quoted, never sent', async ({ page }) => {
+test('real nodes on every chain: balances load, and a Cronos testnet transfer is quoted, never sent', async ({ page }) => {
   test.setTimeout(90000);
   const sent = [];
   page.on('request', r => { if (/cronos\.org/.test(r.url()) && r.postData()?.includes('eth_sendRawTransaction')) sent.push(r.url()); });
@@ -32,18 +32,28 @@ test('real Cronos testnet and mainnet: balances load and a transfer is quoted, n
   await page.getByRole('button', { name: 'Wallet', exact: true }).click();
 
   const wallet = page.getByTestId('wallet-page');
-  for (const [tab, chain] of [['Testnet', 'cronos-testnet'], ['Mainnet', 'cronos-mainnet']]) {
-    await page.getByRole('tab', { name: tab }).click();
-    await expect(page.getByTestId('wallet-card')).toHaveAttribute('data-network', chain);
-    // A real number from the real node, and no "different chain" refusal.
-    await expect(page.getByTestId('asset-balance')).toHaveText(/^\d+(\.\d+)?$/, { timeout: 30000 });
-    await expect(page.getByTestId('native-balance')).toHaveText(/^\d+(\.\d+)?$/);
+  const box = page.getByRole('combobox', { name: 'Search coins and networks' });
+  // One coin per network family, read from the real public node of each chain.
+  for (const [query, network] of [
+    ['devusdc', 'cronos-testnet'], ['usdc cronos mainnet', 'cronos-mainnet'],
+    ['usdc arbitrum sepolia', 'arbitrum-sepolia'], ['eth arbitrum one', 'arbitrum-one'],
+    ['sol devnet', 'solana-devnet'], ['usdc solana mainnet', 'solana-mainnet'],
+    ['tada preprod', 'cardano-preprod'], ['ada mainnet', 'cardano-mainnet'],
+    ['xec mainnet', 'ecash-mainnet'], ['night preview', 'midnight-preview'],
+  ]) {
+    await box.fill(query);
+    await box.press('Enter');
+    await expect(page.getByTestId('wallet-card')).toHaveAttribute('data-network', network);
+    // A real number from the real node, and no refusal.
+    await expect(page.getByTestId('asset-balance')).toHaveText(/^\d+(\.\d+)?$/, { timeout: 45000 });
+    await expect(page.getByTestId('native-balance')).toHaveText(/^\d+(\.\d+)? \S+$/);
     await expect(wallet.getByRole('alert')).toHaveCount(0);
   }
 
   // On testnet, ask for a quote: either the balance covers it and the node
   // quotes a fee, or the wallet refuses for the balance — both are real paths.
-  await page.getByRole('tab', { name: 'Testnet' }).click();
+  await box.fill('devusdc');
+  await box.press('Enter');
   await expect(page.getByTestId('asset-balance')).toHaveText(/^\d/, { timeout: 30000 });
   await page.getByLabel('Recipient address').fill('0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266');
   await page.getByLabel('Amount', { exact: true }).fill('0.01');
