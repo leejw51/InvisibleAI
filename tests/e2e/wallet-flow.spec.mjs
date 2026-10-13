@@ -85,8 +85,8 @@ test('new wallet → approval → receive → send → network switch → sign o
     await page.getByRole('button', { name: 'Wallet', exact: true }).click();
     const card = page.getByTestId('wallet-card');
     await expect(card).toHaveAttribute('data-network', 'cronos-testnet');
-    await expect(page.getByTestId('usdc-balance')).toHaveText('0');
-    await expect(card).toHaveAttribute('data-shown-usdc', '0.00');
+    await expect(page.getByTestId('asset-balance')).toHaveText('0');
+    await expect(card).toHaveAttribute('data-shown-balance', '0.00');
     await page.getByRole('button', { name: 'Copy address' }).click();
     await expect.poll(() => clipboard(page)).toBe(address);
     await page.screenshot({ path: 'test-results/flow-1-empty.png' });
@@ -95,9 +95,9 @@ test('new wallet → approval → receive → send → network switch → sign o
   await test.step('funds arrive: refresh tweens the card to the new balance', async () => {
     rpc.usdc = 100_000_000n; rpc.native = 2n * 10n ** 18n;
     await page.getByRole('button', { name: 'Refresh balances' }).click();
-    await expect(page.getByTestId('usdc-balance')).toHaveText('100');
+    await expect(page.getByTestId('asset-balance')).toHaveText('100');
     await expect(page.getByTestId('native-balance')).toHaveText('2');
-    await expect(page.getByTestId('wallet-card')).toHaveAttribute('data-shown-usdc', '100.00');
+    await expect(page.getByTestId('wallet-card')).toHaveAttribute('data-shown-balance', '100.00');
     await page.screenshot({ path: 'test-results/flow-2-funded.png' });
   });
 
@@ -120,7 +120,7 @@ test('new wallet → approval → receive → send → network switch → sign o
     const row = page.getByTestId('wallet-activity');
     await expect(row).toContainText('Pending');
     await expect(row).toContainText('Confirmed', { timeout: 15000 });
-    await expect(page.getByTestId('usdc-balance')).toHaveText('87.66');
+    await expect(page.getByTestId('asset-balance')).toHaveText('87.66');
     expect(rpc.sent).toHaveLength(1);
     const [, , , to, , data, v] = rlpDecode(unhex(rpc.sent[0].raw));
     expect(hex(to)).toBe('0xc01efaaf7c5c61bebfaeb358e1161b537b8bc0e0');
@@ -132,10 +132,10 @@ test('new wallet → approval → receive → send → network switch → sign o
   await test.step('switch to mainnet and back: the activity keeps its own network', async () => {
     await page.getByRole('tab', { name: 'Mainnet' }).click();
     await expect(page.getByTestId('wallet-card')).toHaveAttribute('data-network', 'cronos-mainnet');
-    await expect(page.getByTestId('usdc-balance')).toHaveText('0');
+    await expect(page.getByTestId('asset-balance')).toHaveText('0');
     await expect(page.getByTestId('wallet-activity').getByRole('link')).toHaveAttribute('href', /explorer\.cronos\.org\/testnet\/tx\//);
     await page.getByRole('tab', { name: 'Testnet' }).click();
-    await expect(page.getByTestId('usdc-balance')).toHaveText('87.66');
+    await expect(page.getByTestId('asset-balance')).toHaveText('87.66');
   });
 
   await test.step('account details copy the private key; sign out forgets it', async () => {
@@ -158,7 +158,7 @@ test('new wallet → approval → receive → send → network switch → sign o
     await expect(page.getByRole('button', { name: 'Wallet', exact: true })).toBeVisible();
     expect((await info(page)).address).toBe(address);
     await page.getByRole('button', { name: 'Wallet', exact: true }).click();
-    await expect(page.getByTestId('usdc-balance')).toHaveText('87.66');
+    await expect(page.getByTestId('asset-balance')).toHaveText('87.66');
     await page.screenshot({ path: 'test-results/flow-5-back.png' });
   });
 

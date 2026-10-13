@@ -2,6 +2,14 @@
 
 > Naming note (2026-10-08): entries below record the UI as tested at the time. Since then the Cloud page became **Autonomous AI** at `/autonomous` (`/cloud` still opens it), Dashboard moved to `/dashboard` (`/status` still works), Devices moved to `/devices`, the Coding agent page and Pinned menu entry were folded into chat and the library, and the product name is Invisible AI.
 
+## Wallet: CRO, USDC or any ERC-20, with choices kept in SQLite — 2026-10-13
+
+The Wallet page now offers two main choices, **CRONOS** (CRO, the network coin) and **USDC**, plus **Other ERC-20 token**. Adding a token takes a contract address. The page checks that code exists there, reads `symbol()` (string or bytes32), `name()` and `decimals()` from the chain, and previews the result. Symbols that look like CRO or USDC are flagged. Whatever is selected is shown large with its full contract address. The CRO fee balance stays visible for every asset and turns red at zero. A CRO send sets the value with no calldata and uses 21,000 gas. **Max** keeps that fee back, and the review shows amount + fee = total. Before each balance read, a token's decimals are checked against the saved value, and a token whose decimals changed is refused.
+
+Choices are kept per account in the backend's SQLite (`wallet_settings`, `wallet_selections`, `wallet_tokens`): the network, the asset picked on each network, and saved tokens. Routes: `GET/PATCH /api/wallet`, `POST /api/wallet/tokens`, `DELETE /api/wallet/tokens/{network}/{address}`. Payloads use `deny_unknown_fields`, so a key or phrase field is rejected. Account erasure deletes the rows. Wallet calls use HTTP rather than the WebSocket, because requests sent while the socket reconnects after login were being lost.
+
+Verified: 30 shared unit tests (native transfer against the Cronos testnet vector, the CRO fee rule, ERC-20 metadata decoding, label cleaning, look-alikes, settings fallback, U256 add/sub), 3 integration tests (including a CRO transfer decoded and recovered), 2 server tests (per-owner persistence, isolation, validation, the 50-token cap and erasure), and 9 Playwright wallet tests. One of them runs the whole journey: send CRO, refuse a non-contract, flag a look-alike, add WCRO, send it, sign out, clear local storage, sign back in by key and find WCRO still selected, with mainnet keeping its own choice.
+
 ## Show a new recovery phrase, 12 or 24 words — 2026-10-13
 
 A new recovery phrase can now be written on paper: **Show recovery phrase** lists the words numbered (two columns on a phone), **Hide** removes them from the page, and **Copy** still works. The words start hidden and hide again whenever the phrase changes. **12 words** (default) or **24 words** picks the length; switching generates a new phrase. `mnemonic_from_entropy` now takes 16 or 32 bytes, checked against BIP-39's all-zero vectors (“abandon … about”, “abandon ×23 art”). Translations for the six languages were updated.

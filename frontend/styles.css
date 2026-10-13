@@ -1726,6 +1726,57 @@ cwb-wallet-card[data-renderer="2d"]>canvas{inset:8% 6%;width:88%!important;heigh
 .saved-wallet .wallet-name{margin-top:4px!important;font-weight:600;color:#7b5c93!important}
 .login-method{margin-top:18px}
 .login-card .settings-divider{margin:20px 0 0}
+/* Asset choice: CRONOS and USDC are the two main options; any ERC-20 is secondary. */
+.wallet-assets{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:0 0 10px}
+.wallet-asset-option{display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:18px 20px;border-radius:18px;border:1.5px solid #e6dbee;background:#fffdfc;text-align:left;transition:border-color .5s var(--wallet-ease),background .5s var(--wallet-ease),box-shadow .5s var(--wallet-ease),transform .5s var(--wallet-ease)}
+.wallet-asset-option:hover{transform:translateY(-1px)}
+.wallet-asset-option.selected{border-color:#9b7cc4;background:linear-gradient(160deg,#f6f0fd,#fffdfc);box-shadow:0 18px 40px -26px #6b4c9a80}
+.wallet-asset-title{font-size:22px;font-weight:700;letter-spacing:.6px;color:#4f3a69}
+.wallet-asset-symbol{font-size:13px;font-weight:600;color:#8d6aa5}
+.wallet-asset-detail{font-size:12px;color:#a99ab6}
+.wallet-other-toggle{display:inline-flex;align-items:center;gap:6px;margin:0 0 14px;font-size:13px}
+.wallet-other-toggle svg{width:14px;height:14px}
+.wallet-other-toggle.selected{color:#6f5487;font-weight:600}
+.wallet-others{display:flex;flex-direction:column;gap:14px;padding:18px;margin-bottom:18px;border-radius:18px;background:#fffdfc;border:1px solid #ece2f0}
+.wallet-token-list{display:flex;flex-direction:column;gap:8px}
+.wallet-token-list li{display:flex;align-items:center;gap:8px;border-radius:12px;background:#f8f4fb;border:1.5px solid transparent;transition:border-color .5s var(--wallet-ease)}
+.wallet-token-list li.selected{border-color:#9b7cc4}
+.wallet-token-pick{flex:1;display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:baseline;padding:10px 12px;text-align:left;min-width:0}
+.wallet-token-pick strong{color:#4f3a69}.wallet-token-pick span{color:#a08cb2;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.wallet-token-pick code{font-size:11px;color:#8d6aa5}
+.wallet-token-add{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end}
+.wallet-token-add .secondary-button{margin-bottom:2px}
+.wallet-token-preview{display:flex;flex-direction:column;gap:6px;padding:18px;border-radius:16px;border:1.5px dashed #c9b3e2;background:#faf6fe}
+.wallet-token-preview dl,.wallet-asset-identity dl{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:13px;margin:6px 0}
+.wallet-token-preview dt{color:#a08cb2}.wallet-token-preview dd{color:#5f4a76;word-break:break-all}
+.wallet-token-preview .primary-button{align-self:flex-start;margin-top:6px}
+/* Exactly which asset this page sends, large enough that it cannot be missed. */
+.wallet-asset-identity{display:flex;flex-direction:column;gap:6px;padding:20px 24px;margin:0 0 22px;border-radius:20px;border:1px solid #e3d6ee;background:linear-gradient(120deg,#f7f1fd,#fffdfc 60%)}
+.wallet-asset-identity.native{background:linear-gradient(120deg,#eef3fb,#fffdfc 60%);border-color:#d5e0f0}
+.wallet-asset-identity.erc20{background:linear-gradient(120deg,#fbf5ea,#fffdfc 60%);border-color:#ecdcbc}
+.wallet-asset-identity-main{display:flex;align-items:baseline;flex-wrap:wrap;gap:6px 16px}
+.wallet-asset-big{font-size:44px;line-height:1.05;font-weight:800;letter-spacing:-1.2px;color:#3f2d57;overflow-wrap:anywhere}
+.wallet-asset-name{font-size:17px;color:#7b5c93}
+.wallet-asset-kind{font-size:13px;color:#8a76a0}
+.wallet-asset-contract{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;font-size:12px}
+.wallet-asset-contract code{word-break:break-all;color:#5f4a76}
+.wallet-asset-contract a{display:inline-flex;align-items:center;gap:4px;color:#8d6aa5}
+.wallet-asset-contract a svg,.wallet-asset-contract .icon-button svg{width:13px;height:13px}
+.wallet-warning{display:flex;gap:8px;align-items:flex-start;padding:10px 12px;border-radius:12px;background:#fbeaea;border:1px solid #efc9c9;color:#9a4a4c;font-size:13px;line-height:1.5}
+.wallet-warning svg{width:15px;height:15px;flex:none;margin-top:2px}
+/* CRO pays every fee, so its balance is always visible. */
+.wallet-fee{display:grid;grid-template-columns:auto 1fr auto;gap:4px 10px;align-items:center;padding:14px 18px;border-radius:16px;background:#eef3fb;border:1px solid #d5e0f0;color:#4c6286;font-size:13px}
+.wallet-fee svg{width:15px;height:15px}
+.wallet-fee strong{font-size:16px;font-variant-numeric:tabular-nums}
+.wallet-fee small{grid-column:1/-1;color:#9a4a4c}
+.wallet-fee.is-empty{background:#fbeaea;border-color:#efc9c9;color:#9a4a4c}
+.wallet-amount-symbol{flex:none;margin-top:8px;font-size:13px;font-weight:600;color:#8d6aa5}
+@media(max-width:560px){.wallet-asset-title{font-size:18px}.wallet-asset-big{font-size:34px}.wallet-token-add{grid-template-columns:1fr}.wallet-token-pick{grid-template-columns:auto 1fr}.wallet-token-pick code{grid-column:1/-1}}
+:root[data-theme="dark"] :is(.wallet-asset-option,.wallet-others,.wallet-asset-identity,.wallet-token-preview){background:#24202d;border-color:var(--line)}
+:root[data-theme="dark"] .wallet-asset-option.selected{border-color:#9b7cc4;background:#2d2640}
+:root[data-theme="dark"] :is(.wallet-asset-title,.wallet-asset-big,.wallet-token-pick strong,.wallet-asset-contract code,.wallet-token-preview dd){color:#eadff7}
+:root[data-theme="dark"] .wallet-token-list li{background:#2b2536}
+:root[data-theme="dark"] .wallet-fee{background:#1f2836;border-color:#34445c;color:#b8cbe8}
+:root[data-theme="dark"] :is(.wallet-fee.is-empty,.wallet-warning){background:#3a2426;border-color:#5c3a3d;color:#f0b8ba}
 @media(max-width:860px){.wallet-layout{grid-template-columns:1fr;gap:20px}cwb-wallet-card{border-radius:20px}}
 @media(max-width:700px){.wallet-balances strong{font-size:17px}.wallet-send,.wallet-review,.wallet-locked,.wallet-activity{padding:18px}.wallet-review-amount strong{font-size:32px}}
 :root[data-theme="dark"] cwb-wallet-card{background:radial-gradient(120% 90% at 70% 10%,#2f2645 0%,#1d1a25 55%,transparent 80%)}

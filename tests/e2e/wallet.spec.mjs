@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fakeCronos, rlpDecode, unhex, hex, big, RPC } from './evm-fixture.mjs';
+import { fakeCronos, rlpDecode, unhex, hex, big, RPC, USDC } from './evm-fixture.mjs';
 
 const base = 'http://127.0.0.1:3124';
 // Public BIP-39 / Hardhat test vectors; never use these wallets for assets.
@@ -60,7 +60,9 @@ async function signIn(page, { method = 'phrase', secret = phrase } = {}) {
   await expect.poll(async () => (await (await page.request.get(base + '/api/auth/info')).json()).authenticated).toBe(true);
   await expect(page.getByRole('button', { name: 'Wallet', exact: true })).toBeVisible();
 }
-async function openWallet(page) {
+/** Tests share one account on one server: start each from testnet USDC unless told not to. */
+async function openWallet(page, { reset = true } = {}) {
+  if (reset) expect((await page.request.patch(base + '/api/wallet', { data: { network: 'cronos-testnet', asset: 'usdc' } })).status()).toBe(200);
   await page.getByRole('button', { name: 'Wallet', exact: true }).click();
   await expect(page.getByTestId('wallet-page')).toBeVisible();
 }
@@ -81,12 +83,12 @@ test('phrase login saves only the private key; the wallet shows balances and sen
   expect(stored).not.toContain('abandon');
 
   await openWallet(page);
-  await expect(page.getByTestId('usdc-balance')).toHaveText('25.5');
+  await expect(page.getByTestId('asset-balance')).toHaveText('25.5');
   await expect(page.getByTestId('native-balance')).toHaveText('5');
   const card = page.getByTestId('wallet-card');
   await expect(card).toHaveAttribute('data-network', 'cronos-testnet');
   await expect(card).toHaveAttribute('data-renderer', /^(webgl|2d)$/);
-  await expect(card).toHaveAttribute('data-shown-usdc', '25.50');
+  await expect(card).toHaveAttribute('data-shown-balance', '25.50');
   await expect(card).toHaveAttribute('aria-label', /devUSDC\.e/);
   expect(rpc.calls.every(c => c.url.startsWith('https://evm-t3.cronos.org'))).toBe(true);
 
@@ -157,9 +159,9 @@ test('mainnet is a separate card: USDC contract, chain 25 and a real-funds note'
   await page.getByRole('tab', { name: 'Mainnet' }).click();
   const card = page.getByTestId('wallet-card');
   await expect(card).toHaveAttribute('data-network', 'cronos-mainnet');
-  await expect(page.getByTestId('usdc-balance')).toHaveText('1000');
+  await expect(page.getByTestId('asset-balance')).toHaveText('1000');
   await expect(card).toHaveAttribute('aria-label', /Cronos Mainnet: 1000 USDC/);
-  await expect(page.getByRole('note')).toContainText('real USDC');
+  await expect(page.getByRole('note')).toContainText('real funds');
   const call = rpc.calls.findLast(c => c.method === 'eth_call');
   expect(call.url).toMatch(/^https:\/\/evm\.cronos\.org/);
   expect(call.params[0].to.toLowerCase()).toBe(mainnetUsdc);
@@ -172,9 +174,10 @@ test('mainnet is a separate card: USDC contract, chain 25 and a real-funds note'
   const [, , , toField, , , v] = rlpDecode(unhex(rpc.sent[0].raw));
   expect(hex(toField)).toBe(mainnetUsdc);
   expect([85n, 86n]).toContain(big(v)); // 25 × 2 + 35
-  // The choice of network is remembered; the next visit opens on mainnet.
+  // The choice of network is kept by the backend, not this browser; the next visit opens on mainnet.
+  expect(await page.evaluate(() => Object.keys(localStorage))).not.toContain('invisible-ai.wallet.network');
   await page.reload();
-  await openWallet(page);
+  await openWallet(page, { reset: false });
   await expect(page.getByTestId('wallet-card')).toHaveAttribute('data-network', 'cronos-mainnet');
   await context.close();
 });
@@ -319,16 +322,146 @@ test('the wallet card renders in three.js with motion: screenshots', async ({ br
   await signIn(page);
   await openWallet(page);
   const card = page.getByTestId('wallet-card');
-  await expect(card).toHaveAttribute('data-shown-usdc', '1,284.56', { timeout: 10000 });
+  await expect(card).toHaveAttribute('data-shown-balance', '1,284.56', { timeout: 10000 });
   await page.mouse.move(420, 380);
   await page.waitForTimeout(900);
   await page.screenshot({ path: 'test-results/wallet-testnet.png' });
   await page.getByRole('tab', { name: 'Mainnet' }).click();
-  await expect(card).toHaveAttribute('data-shown-usdc', '52.00', { timeout: 10000 });
+  await expect(card).toHaveAttribute('data-shown-balance', '52.00', { timeout: 10000 });
   await page.waitForTimeout(1400);
   await page.screenshot({ path: 'test-results/wallet-mainnet.png' });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.waitForTimeout(600);
   await page.screenshot({ path: 'test-results/wallet-phone.png', fullPage: true });
+  await context.close();
+});
+
+test('CRONOS and USDC are the main choices, any ERC-20 can be added, and the choice survives signing out', async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 1360, height: 900 } });
+  const wcro = '0x5c7f8a570d578ed84e63fdfa7b1ee72deae1ae23';
+  const fake = '0x00000000000000000000000000000000000fa4e1';
+  const rpc = {
+    native: 5n * 10n ** 18n, usdc: 25_500_000n,
+    tokens: {
+      [wcro]: { symbol: 'WCRO', name: 'Wrapped CRO', decimals: 18, balance: 2_500_000_000_000_000_000n },
+      [fake]: { symbol: 'USDC', name: null, decimals: 6, balance: 0n, bytes32: true },
+    },
+  };
+  await fakeCronos(context, rpc);
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+  page.on('dialog', d => d.accept());
+  const bodies = watch(page);
+  await signIn(page);
+  await openWallet(page);
+  const symbol = page.getByTestId('asset-symbol'), fee = page.getByTestId('fee-balance');
+
+  // Exactly two main choices; USDC first shows its symbol, name and contract, large.
+  const choices = page.getByRole('radiogroup', { name: 'Asset' }).getByRole('radio');
+  await expect(choices).toHaveCount(2);
+  await expect(choices.nth(0)).toContainText('CRONOS');
+  await expect(choices.nth(1)).toContainText('USDC');
+  await expect(page.getByTestId('asset-usdc')).toHaveAttribute('aria-checked', 'true');
+  await expect(symbol).toHaveText('devUSDC.e');
+  expect((await page.getByTestId('asset-contract').textContent()).toLowerCase()).toBe(USDC.testnet);
+  // Fees are paid in CRO: its balance is on screen next to any token.
+  await expect(fee).toContainText('Network fees are paid in TCRO');
+  await expect(fee).toContainText('5 TCRO');
+  await expect(page.getByTestId('asset-balance')).toHaveText('25.5');
+
+  // CRONOS: the network's own coin, no contract, fees from the same balance.
+  await page.getByTestId('asset-native').click();
+  await expect(symbol).toHaveText('TCRO');
+  await expect(page.getByTestId('asset-identity')).toContainText('Native coin · Cronos Testnet');
+  await expect(page.getByTestId('asset-contract')).toHaveCount(0);
+  await expect(page.getByTestId('asset-balance')).toHaveText('5');
+  await expect(page.getByTestId('native-balance')).toHaveCount(0);
+  await expect(fee).toContainText('paid from this balance');
+  await expect(page.getByTestId('send-symbol')).toHaveText('TCRO');
+  await expect(page.getByTestId('wallet-card')).toHaveAttribute('data-kind', 'native');
+  await page.screenshot({ path: 'test-results/wallet-asset-cro.png' });
+  // Max keeps back a 21,000-gas fee: 5 − 0.105.
+  const amount = page.getByLabel('Amount', { exact: true });
+  await page.getByRole('button', { name: 'Max' }).click();
+  await expect(amount).toHaveValue('4.895');
+  await page.getByLabel('Recipient address').fill(recipient);
+  await amount.fill('1');
+  await page.getByRole('button', { name: 'Review transfer' }).click();
+  const review = page.getByTestId('wallet-review');
+  await expect(page.getByTestId('review-symbol')).toHaveText('TCRO');
+  await expect(review).toContainText('0.105 TCRO');
+  await expect(review).toContainText('Total, at most');
+  await expect(review).toContainText('1.105 TCRO');
+  await page.getByTestId('wallet-confirm').click();
+  await expect(page.getByTestId('wallet-activity').first()).toContainText('1 TCRO');
+  let [, , gasLimit, toField, value, data] = rlpDecode(unhex(rpc.sent[0].raw));
+  expect(hex(toField)).toBe(recipient.toLowerCase());
+  expect(big(value)).toBe(10n ** 18n);
+  expect(data.length).toBe(0);
+  expect(big(gasLimit)).toBe(21_000n);
+
+  // Other ERC-20: a non-contract is refused, a look-alike is flagged, a real token is added.
+  await page.getByTestId('asset-other').click();
+  const field = page.getByLabel('Token contract address'), lookUp = page.getByRole('button', { name: 'Look up token' });
+  await field.fill('0x0000000000000000000000000000000000000bad');
+  await lookUp.click();
+  await expect(page.getByTestId('wallet-others').getByRole('alert')).toContainText('no contract');
+  await field.fill(fake);
+  await lookUp.click();
+  const preview = page.getByTestId('token-preview');
+  await expect(preview).toContainText('USDC');
+  await expect(preview.getByRole('alert')).toContainText('different contract');
+  await field.fill(wcro);
+  await lookUp.click();
+  await expect(preview).toContainText('WCRO');
+  await expect(preview).toContainText('Wrapped CRO');
+  await expect(preview).toContainText('18');
+  await page.getByTestId('add-token').click();
+  await expect(symbol).toHaveText('WCRO');
+  await expect(page.getByTestId('asset-identity')).toContainText('Custom ERC-20 token · Cronos Testnet');
+  expect((await page.getByTestId('asset-contract').textContent()).toLowerCase()).toBe(wcro);
+  await expect(page.getByTestId('asset-balance')).toHaveText('2.5');
+  await expect(fee).toContainText('Network fees are paid in TCRO');
+  await expect(page.getByTestId('lookalike-warning')).toHaveCount(0);
+  await page.screenshot({ path: 'test-results/wallet-asset-erc20.png' });
+
+  // A token transfer goes to the token's contract, with the token's decimals.
+  await page.getByLabel('Recipient address').fill(recipient);
+  await amount.fill('0.5');
+  await page.getByRole('button', { name: 'Review transfer' }).click();
+  await expect(page.getByTestId('review-symbol')).toHaveText('WCRO');
+  await expect(review).toContainText(/Token contract/);
+  await page.getByTestId('wallet-confirm').click();
+  await expect(page.getByTestId('wallet-activity').first()).toContainText('0.5 WCRO');
+  [, , , toField, value, data] = rlpDecode(unhex(rpc.sent[1].raw));
+  expect(hex(toField)).toBe(wcro);
+  expect(value.length).toBe(0);
+  expect(hex(data).slice(-64)).toBe((5n * 10n ** 17n).toString(16).padStart(64, '0'));
+
+  // The backend keeps the choice; sign out, wipe this browser, sign in by key: still WCRO.
+  const kept = await (await page.request.get(base + '/api/wallet')).json();
+  expect(kept.selected['cronos-testnet']).toBe(wcro);
+  expect(kept.tokens['cronos-testnet'].map(t => t.symbol)).toEqual(['WCRO']);
+  await page.getByText('Settings', { exact: true }).click();
+  await page.getByRole('button', { name: 'Sign out' }).click();
+  await expect(page.getByLabel('Recovery phrase', { exact: true })).toBeVisible();
+  await page.evaluate(() => localStorage.clear());
+  await signIn(page, { method: 'key', secret: privateKey });
+  await openWallet(page, { reset: false });
+  await expect(symbol).toHaveText('WCRO');
+  // Each network keeps its own choice: mainnet is still USDC.
+  await page.getByRole('tab', { name: 'Mainnet' }).click();
+  await expect(symbol).toHaveText('USDC');
+  await page.getByRole('tab', { name: 'Testnet' }).click();
+  await expect(symbol).toHaveText('WCRO');
+  // A chosen custom token opens with its list in view; removing it falls back to USDC.
+  await expect(page.getByTestId('wallet-others')).toBeVisible();
+  await page.getByRole('button', { name: 'Remove WCRO' }).click();
+  await expect(symbol).toHaveText('devUSDC.e');
+
+  expectNoSecretSent(bodies, phrase, privateKey);
+  for (const { url, body } of bodies.filter(b => b.url.includes('/api/wallet'))) expect(body, url).not.toMatch(/key|mnemonic|phrase/i);
+  expect(errors).toEqual([]);
   await context.close();
 });

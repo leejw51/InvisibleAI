@@ -56,6 +56,14 @@ export function rlpDecode(bytes) {
 export const big = bytes => bytes.length ? BigInt(hex(bytes)) : 0n;
 const word = n => '0x' + BigInt(n).toString(16).padStart(64, '0');
 export const RPC = /^https:\/\/evm(-t3)?\.cronos\.org\/?$/;
+export const USDC = { mainnet: '0xc21223249ca28397b4b6541dffaecc539bff0c59', testnet: '0xc01efaaf7c5c61bebfaeb358e1161b537b8bc0e0' };
+/** ABI-encode a `string` return: offset, length, padded bytes. */
+export function abiString(text) {
+  const bytes = Buffer.from(text, 'utf8');
+  const padded = Buffer.alloc(Math.ceil(bytes.length / 32) * 32 || 32);
+  bytes.copy(padded);
+  return word(32) + word(bytes.length).slice(2) + padded.toString('hex');
+}
 /**
  * Route both Cronos RPC endpoints to a fake node. `state` is mutable so a test
  * can change balances; every call is recorded in `state.calls`.
@@ -73,10 +81,27 @@ export async function fakeCronos(context, state) {
     switch (method) {
       case 'eth_chainId': return answer(mainnet ? '0x19' : '0x152');
       case 'eth_getBalance': return answer('0x' + state.native.toString(16));
-      case 'eth_call': return answer(word(mainnet ? state.mainnetUsdc ?? 0n : state.usdc));
+      case 'eth_getCode': {
+        const to = params[0].toLowerCase();
+        return answer(to === (mainnet ? USDC.mainnet : USDC.testnet) || state.tokens?.[to] ? '0x6080604052' : '0x');
+      }
+      case 'eth_call': {
+        // Answer by contract and selector, like a node: USDC, any token in
+        // `state.tokens` (keyed by lowercase address), or nothing at all.
+        const to = params[0].to.toLowerCase(), selector = params[0].data.slice(0, 10);
+        const usdc = to === (mainnet ? USDC.mainnet : USDC.testnet);
+        const token = usdc ? { symbol: mainnet ? 'USDC' : 'devUSDC.e', name: 'USD Coin', decimals: 6, balance: mainnet ? state.mainnetUsdc ?? 0n : state.usdc } : state.tokens?.[to];
+        if (!token) return answer('0x');
+        if (selector === '0x70a08231') return answer(word(token.balance ?? 0n));
+        if (selector === '0x313ce567') return answer(word(token.decimals));
+        if (selector === '0x95d89b41') return answer(token.bytes32 ? '0x' + Buffer.from(token.symbol).toString('hex').padEnd(64, '0') : abiString(token.symbol));
+        if (selector === '0x06fdde03') return token.name == null ? answer('0x') : answer(abiString(token.name));
+        return answer('0x');
+      }
       case 'eth_getTransactionCount': return answer('0x' + (state.nonce ?? 7).toString(16));
       case 'eth_gasPrice': return answer('0x' + (state.gasPrice ?? 5_000_000_000_000n).toString(16));
-      case 'eth_estimateGas': return answer('0xc350');
+      // A plain CRO payment costs exactly 21,000; a token call is estimated at 50,000.
+      case 'eth_estimateGas': return answer(!params[0].data || params[0].data === '0x' ? '0x5208' : '0xc350');
       case 'eth_sendRawTransaction': {
         const raw = params[0];
         state.sent.push({ url, raw });

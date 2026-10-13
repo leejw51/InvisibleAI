@@ -101,6 +101,12 @@ pub fn api_routes() -> Router<Arc<AppState>> {
         .route("/wiki/related/{id}", get(wiki::related))
         .route("/wiki/memo/{id}", get(wiki::memo))
         .route("/wiki/tag/{tag}", axum::routing::delete(wiki::remove_tag))
+        .route("/wallet", get(wallet::get).patch(wallet::update))
+        .route("/wallet/tokens", post(wallet::add_token))
+        .route(
+            "/wallet/tokens/{network}/{address}",
+            axum::routing::delete(wallet::remove_token),
+        )
         .route("/code", get(code::list))
         .route("/code/{id}", axum::routing::patch(code::update))
         .route("/coding", get(coding::overview))

@@ -44,11 +44,11 @@ function webgl() {
 }
 
 class WalletCard extends HTMLElement {
-  static observedAttributes = ['data-network', 'data-usdc', 'data-native', 'data-address', 'data-holder', 'data-symbol', 'data-native-symbol', 'data-state'];
+  static observedAttributes = ['data-network', 'data-balance', 'data-kind', 'data-native', 'data-address', 'data-holder', 'data-symbol', 'data-native-symbol', 'data-state'];
   constructor() {
     super();
-    this.shown = { usdc: 0, native: 0, flip: 0, glow: 0 };
-    this.target = { usdc: 0, native: 0 };
+    this.shown = { balance: 0, native: 0, flip: 0, glow: 0 };
+    this.target = { balance: 0, native: 0 };
     this.tilt = { x: 0, y: 0 };
     this.controls = new Map();
   }
@@ -103,7 +103,7 @@ class WalletCard extends HTMLElement {
     const network = this.dataset.network || 'cronos-testnet';
     const changed = network !== this.network;
     this.network = network;
-    this.target = { usdc: digits(this.dataset.usdc), native: digits(this.dataset.native) };
+    this.target = { balance: digits(this.dataset.balance), native: digits(this.dataset.native) };
     const art = await image(ART[network] || ART['cronos-testnet']);
     if (this.network !== network) return;
     const swap = () => { this.art = art; this.tint = TINT[network] || TINT['cronos-testnet']; this.applyTint(); this.draw(); };
@@ -118,15 +118,17 @@ class WalletCard extends HTMLElement {
       });
     } else swap();
     // Balances count to their new value — exponential in, exponential out.
-    this.run('usdc', this.shown, { usdc: this.target.usdc, native: this.target.native }, {
+    this.run('balance', this.shown, { balance: this.target.balance, native: this.target.native }, {
       duration: first ? 1.6 : 1.1, ease: easeInOutExpo,
       onUpdate: () => this.draw(),
-      onComplete: () => { this.draw(); this.dataset.shownUsdc = money(this.target.usdc); },
+      onComplete: () => { this.draw(); this.dataset.shownBalance = money(this.target.balance, this.places()); },
     });
     // A soft glow pulses while the wallet is talking to the network.
     const busy = this.dataset.state === 'loading' || this.dataset.state === 'sending';
     this.run('glow', this.shown, { glow: busy ? 1 : 0 }, { duration: 0.8, ease: easeInOutExpo, onUpdate: () => this.draw() });
   }
+  /** Dollars read best with cents; CRO and other tokens get four places. */
+  places() { return this.dataset.kind === 'usdc' ? 2 : 4; }
   applyTint() {
     if (!this.material) return;
     this.material.metalness = this.tint.metal;
@@ -188,11 +190,16 @@ class WalletCard extends HTMLElement {
     // Balance
     ctx.fillStyle = '#fff';
     ctx.font = font(500, 36); ctx.globalAlpha = 0.78;
-    ctx.fillText(`${this.dataset.symbol || 'USDC'} BALANCE`, 96, 560);
-    ctx.globalAlpha = 1; ctx.font = font(700, 132);
-    ctx.fillText(`$${money(this.shown.usdc)}`, 90, 700);
+    const symbol = (this.dataset.symbol || 'USDC').slice(0, 16);
+    ctx.fillText(`${symbol} BALANCE`, 96, 560);
+    const amount = money(this.shown.balance, this.places());
+    const usd = this.dataset.kind === 'usdc';
+    // Shrink long balances so they never run off the card.
+    ctx.globalAlpha = 1; ctx.font = font(700, amount.length > 12 ? 96 : 132);
+    ctx.fillText(usd ? `$${amount}` : amount, 90, 700);
     ctx.font = font(500, 40); ctx.globalAlpha = 0.8;
-    ctx.fillText(`${money(this.shown.native, 4)} ${this.dataset.nativeSymbol || 'CRO'} for fees`, 96, 770);
+    const fee = this.dataset.nativeSymbol || 'CRO';
+    ctx.fillText(this.dataset.kind === 'native' ? `${fee} also pays network fees` : `${money(this.shown.native, 4)} ${fee} for fees`, 96, 770);
     // Address and holder
     ctx.globalAlpha = 0.95; ctx.font = font(500, 50);
     ctx.fillText(masked(this.dataset.address), 96, 920);

@@ -80,6 +80,7 @@ fn phrase_to_signed_usdc_transfer_recovers_to_the_sender_on_both_networks() {
     for network in NETWORKS {
         let request = evm::check_transfer(
             &network,
+            &evm::Asset::Usdc,
             &from,
             RECIPIENT,
             "12.34",
@@ -173,11 +174,27 @@ fn a_refused_transfer_never_reaches_signing() {
         ("0xF39Fd6e51aad88F6F4ce6aB8827279cffFb92266", "0.5"),
     ] {
         assert!(
-            evm::check_transfer(&CRONOS_TESTNET, &from, to, amount, balance).is_err(),
+            evm::check_transfer(
+                &CRONOS_TESTNET,
+                &evm::Asset::Usdc,
+                &from,
+                to,
+                amount,
+                balance
+            )
+            .is_err(),
             "{to} {amount}"
         );
     }
-    let request = evm::check_transfer(&CRONOS_TESTNET, &from, RECIPIENT, "0.5", balance).unwrap();
+    let request = evm::check_transfer(
+        &CRONOS_TESTNET,
+        &evm::Asset::Usdc,
+        &from,
+        RECIPIENT,
+        "0.5",
+        balance,
+    )
+    .unwrap();
     let greedy = Quote {
         nonce: U256::ZERO,
         gas_price: evm::parse_units("1", 18).unwrap(),
@@ -192,4 +209,53 @@ fn a_refused_transfer_never_reaches_signing() {
         )
         .is_err()
     );
+}
+
+#[test]
+fn a_cro_transfer_carries_the_amount_as_value_with_no_calldata() {
+    let identity = Identity::from_mnemonic(PHRASE).unwrap();
+    let from = identity.address();
+    let request = evm::check_transfer(
+        &CRONOS_MAINNET,
+        &evm::Asset::Native,
+        &from,
+        RECIPIENT,
+        "1.5",
+        evm::parse_units("3", 18).unwrap(),
+    )
+    .unwrap();
+    let quote = Quote {
+        nonce: U256::from(3u64),
+        gas_price: evm::parse_units("5000", 9).unwrap(),
+        estimate: Some(U256::from(21_000u64)),
+    };
+    let tx = evm::build_transfer(
+        &CRONOS_MAINNET,
+        &request,
+        quote,
+        evm::parse_units("3", 18).unwrap(),
+    )
+    .unwrap();
+    let signed = tx.sign(identity.signing_key()).unwrap();
+    let Item::List(fields) = decode(&signed.raw).0 else {
+        panic!("a transaction is a list")
+    };
+    assert_eq!(uint(&fields[2]), 21_000);
+    assert_eq!(bytes(&fields[3]), &evm::parse_address(RECIPIENT).unwrap());
+    assert_eq!(uint(&fields[4]), 1_500_000_000_000_000_000);
+    assert!(
+        bytes(&fields[5]).is_empty(),
+        "plain CRO carries no calldata"
+    );
+    let recovery = uint(&fields[6]) as u64 - (CRONOS_MAINNET.chain_id * 2 + 35);
+    let mut rs = [0u8; 64];
+    rs[32 - bytes(&fields[7]).len()..32].copy_from_slice(bytes(&fields[7]));
+    rs[64 - bytes(&fields[8]).len()..].copy_from_slice(bytes(&fields[8]));
+    let key = VerifyingKey::recover_from_prehash(
+        &tx.signing_hash(),
+        &Signature::from_slice(&rs).unwrap(),
+        RecoveryId::from_byte(recovery as u8).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(address_of(&key), from);
 }

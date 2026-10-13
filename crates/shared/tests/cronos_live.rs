@@ -128,6 +128,7 @@ fn a_signed_transfer_is_accepted_as_well_formed_and_refused_only_for_funds() {
         // Plan as if the balances were there, so the transaction is the real shape.
         let request = evm::check_transfer(
             &network,
+            &evm::Asset::Usdc,
             &from,
             "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
             "0.01",

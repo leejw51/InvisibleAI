@@ -36,7 +36,7 @@ test('real Cronos testnet and mainnet: balances load and a transfer is quoted, n
     await page.getByRole('tab', { name: tab }).click();
     await expect(page.getByTestId('wallet-card')).toHaveAttribute('data-network', chain);
     // A real number from the real node, and no "different chain" refusal.
-    await expect(page.getByTestId('usdc-balance')).toHaveText(/^\d+(\.\d+)?$/, { timeout: 30000 });
+    await expect(page.getByTestId('asset-balance')).toHaveText(/^\d+(\.\d+)?$/, { timeout: 30000 });
     await expect(page.getByTestId('native-balance')).toHaveText(/^\d+(\.\d+)?$/);
     await expect(wallet.getByRole('alert')).toHaveCount(0);
   }
@@ -44,7 +44,7 @@ test('real Cronos testnet and mainnet: balances load and a transfer is quoted, n
   // On testnet, ask for a quote: either the balance covers it and the node
   // quotes a fee, or the wallet refuses for the balance — both are real paths.
   await page.getByRole('tab', { name: 'Testnet' }).click();
-  await expect(page.getByTestId('usdc-balance')).toHaveText(/^\d/, { timeout: 30000 });
+  await expect(page.getByTestId('asset-balance')).toHaveText(/^\d/, { timeout: 30000 });
   await page.getByLabel('Recipient address').fill('0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266');
   await page.getByLabel('Amount', { exact: true }).fill('0.01');
   await page.getByRole('button', { name: 'Review transfer' }).click();

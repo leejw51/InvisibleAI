@@ -120,6 +120,10 @@ The backend loads its working-directory `.env`, then its configuration-directory
 
 When the same wallet signs in on another device, **New thought** resumes the shared current thought. Starting a new thought on either device updates other New thought screens through SSE and clears their previous drafts and staged captures. Chatroom creation, renaming, clearing, deletion and messages also sync through SSE. A device viewing a selected saved chatroom stays in that conversation. Reconnecting reconciles the latest state, including changes made while that device was disconnected.
 
+## Wallet
+
+**Wallet** holds and sends **CRONOS** (CRO, the network's own coin) or **USDC** on Cronos Testnet or Mainnet. **Other ERC-20 token** adds any token by contract address. Its symbol, name and decimals are read from the chain and shown for approval before saving. The selected asset is shown large with its contract address; check it before sending. Network fees are always paid in CRO, so the CRO balance is shown for every asset. The network, the asset picked on each network and the saved tokens are kept on the backend for your account, so signing in again opens the wallet as you left it. Keys are never sent to the backend.
+
 ## Wallet login and approval
 
 Set `CWBBOT_ADMIN=0x...` in the backend environment or `.env`. This wallet is the permanent owner. The login page accepts a BIP-39 recovery phrase and **Wallet index** (default `0`, range `0–2147483647`), deriving `m/44'/60'/0'/0/{index}` and signing a one-use, host-bound EIP-191 challenge. A different index selects a different wallet, with its own approval and private workspace. No blockchain transaction is needed. **Create new recovery phrase** generates 12 words (or 24, selectable) locally using browser cryptographic randomness. The words stay hidden until the user presses **Show recovery phrase**, which lists them numbered for writing on paper; **Copy recovery phrase** copies them instead. The user must acknowledge saving both the ordered words and wallet index before signing in. The phrase is never transmitted or persisted; only the derived private key is kept, in this browser's local storage.
