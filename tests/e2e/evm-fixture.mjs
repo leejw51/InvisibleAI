@@ -110,7 +110,10 @@ export async function fakeCronos(context, state) {
       case 'eth_getTransactionCount': return answer('0x' + (state.nonce ?? 7).toString(16));
       case 'eth_gasPrice': return answer('0x' + (state.gasPriceOf?.[network] ?? state.gasPrice ?? 5_000_000_000_000n).toString(16));
       // A plain CRO payment costs exactly 21,000; a token call is estimated at 50,000.
-      case 'eth_estimateGas': return answer(!params[0].data || params[0].data === '0x' ? '0x5208' : '0xc350');
+      // `estimateError` answers as a node that simulated the call and refused it.
+      case 'eth_estimateGas':
+        if (state.estimateError) return route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ jsonrpc: '2.0', id, error: state.estimateError }) });
+        return answer(!params[0].data || params[0].data === '0x' ? '0x5208' : '0xc350');
       case 'eth_sendRawTransaction': {
         const raw = params[0];
         state.sent.push({ url, raw });
@@ -119,7 +122,7 @@ export async function fakeCronos(context, state) {
       case 'eth_getTransactionReceipt': {
         // `receiptAfter` polls answer null (still pending) before the receipt.
         const seen = (state.polls[params[0]] = (state.polls[params[0]] ?? 0) + 1);
-        if (seen <= (state.receiptAfter ?? 0)) return answer(null);
+        if (seen <= (state.receiptAfter ?? 0) || state.holdReceipt?.(params[0])) return answer(null);
         state.onReceipt?.(params[0]);
         return answer({ status: state.receiptStatus ?? '0x1', transactionHash: params[0] });
       }

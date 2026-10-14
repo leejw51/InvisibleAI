@@ -22,7 +22,8 @@ const FADE_MS: u32 = 420;
 /// Search rows shown at once; a narrower query finds the rest.
 const MAX_RESULTS: usize = 40;
 
-async fn rpc(network: &Network, method: &str, params: Value) -> Result<Value, String> {
+/// The node's whole JSON-RPC reply, its `error` member included.
+async fn rpc_reply(network: &Network, method: &str, params: Value) -> Result<Value, String> {
     let body = json!({"jsonrpc":"2.0","id":1,"method":method,"params":params});
     let response = gloo_net::http::Request::post(network.rpc)
         .header("content-type", "application/json")
@@ -31,10 +32,13 @@ async fn rpc(network: &Network, method: &str, params: Value) -> Result<Value, St
         .send()
         .await
         .map_err(|_| format!("Could not reach {}. Check your connection.", network.name))?;
-    let value: Value = response
+    response
         .json()
         .await
-        .map_err(|_| "The network answered with something unexpected.".to_string())?;
+        .map_err(|_| "The network answered with something unexpected.".to_string())
+}
+async fn rpc(network: &Network, method: &str, params: Value) -> Result<Value, String> {
+    let value = rpc_reply(network, method, params).await?;
     if let Some(error) = value.get("error") {
         return Err(error["message"]
             .as_str()
@@ -258,10 +262,28 @@ async fn prepare(
             hex::encode(request.value.to_be_bytes()).trim_start_matches('0')
         ));
     }
-    let estimate = rpc(&network, "eth_estimateGas", json!([probe]))
+    // A node that simulated the transfer and saw it revert is believed: the
+    // fixed fallback is only for a node that could not estimate at all.
+    let reply = rpc_reply(&network, "eth_estimateGas", json!([probe]))
         .await
-        .and_then(|v| quantity(&v))
         .ok();
+    if let Some(error) = reply.as_ref().and_then(|r| r.get("error")) {
+        let message = error["message"].as_str().unwrap_or_default();
+        if error["code"] == 3 || message.to_ascii_lowercase().contains("revert") {
+            return Err(format!(
+                "{} says this transfer would fail: {}. Nothing was sent.",
+                network.name,
+                if message.is_empty() {
+                    "execution reverted"
+                } else {
+                    message
+                }
+            ));
+        }
+    }
+    let estimate = reply
+        .filter(|r| r.get("error").is_none())
+        .and_then(|r| quantity(&r["result"]).ok());
     let tx = evm::build_transfer(
         &network,
         &request,
@@ -305,6 +327,8 @@ struct Stage {
     to_before: String,
     from_after: Option<String>,
     to_after: Option<String>,
+    /// Set once broadcast; only this transaction's receipt moves the stage.
+    hash: Option<String>,
 }
 #[derive(Clone, PartialEq)]
 struct Activity {
@@ -391,7 +415,7 @@ pub enum Msg {
     Poll(String, u32),
     Receipt(String, u32, Result<Value, String>),
     ConfirmText(String),
-    Arrived(Result<(String, String), String>),
+    Arrived(String, Result<(String, String), String>),
     NewTransfer,
 }
 fn short(address: &str) -> String {
@@ -736,7 +760,19 @@ impl Component for Wallet {
                 self.loading = false;
                 match result {
                     Ok(b) => self.balances = Some(b),
-                    Err(e) => self.error = e,
+                    Err(e) => {
+                        // Nothing is signed on numbers the chain no longer
+                        // confirms (a token's decimals changed, say).
+                        self.error = e;
+                        self.balances = None;
+                        if !self.sending {
+                            self.review = None;
+                            self.review_leaving = false;
+                            if self.stage.as_ref().is_some_and(|s| s.phase == "ready") {
+                                self.stage = None;
+                            }
+                        }
+                    }
                 }
             }
             Msg::To(v) => {
@@ -791,7 +827,8 @@ impl Component for Wallet {
             }
             Msg::Prepared(generation, result) => {
                 self.preparing = false;
-                if generation != self.generation {
+                // A newer refresh, or one that failed, voids this preparation.
+                if generation != self.generation || self.balances.is_none() {
                     return true;
                 }
                 match result {
@@ -807,6 +844,7 @@ impl Component for Wallet {
                             to_before: p.to_before.clone(),
                             from_after: None,
                             to_after: None,
+                            hash: None,
                         });
                         self.review = Some(p);
                         self.review_leaving = false;
@@ -819,8 +857,12 @@ impl Component for Wallet {
                 self.close_review(ctx);
             }
             Msg::ConfirmText(v) => self.confirm_text = v,
-            Msg::Arrived(result) => {
-                let Some(stage) = &mut self.stage else {
+            Msg::Arrived(hash, result) => {
+                let Some(stage) = self
+                    .stage
+                    .as_mut()
+                    .filter(|s| s.hash.as_deref() == Some(hash.as_str()))
+                else {
                     return false;
                 };
                 // Without fresh numbers the expected ones stand in.
@@ -844,6 +886,11 @@ impl Component for Wallet {
                 };
                 if self.sending || self.review_leaving {
                     return false;
+                }
+                if self.balances.is_none() {
+                    self.error =
+                        "Balances could not be confirmed. Refresh, then review again.".into();
+                    return true;
                 }
                 if prepared.double
                     && !registry::confirms(&self.confirm_text, prepared.units, &self.coin)
@@ -889,6 +936,11 @@ impl Component for Wallet {
                 self.sending = false;
                 match result {
                     Ok((hash, prepared)) => {
+                        if let Some(stage) = &mut self.stage
+                            && stage.phase == "flying"
+                        {
+                            stage.hash = Some(hash.clone());
+                        }
                         self.sent += 1;
                         self.last_sent =
                             format!("{}|{}|{}", self.sent, prepared.amount, prepared.symbol);
@@ -965,12 +1017,14 @@ impl Component for Wallet {
                         // The stage ends on the chain's own numbers.
                         if let Some(stage) = &mut self.stage
                             && matches!(stage.phase, "flying" | "pending")
+                            && stage.hash.as_deref() == Some(hash.as_str())
                         {
                             match status {
                                 "Confirmed" => {
                                     let stage = stage.clone();
                                     ctx.link().send_future(async move {
                                         Msg::Arrived(
+                                            hash,
                                             async {
                                                 let (network, asset) = stage
                                                     .coin
