@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fakeCronos, rlpDecode, unhex, hex, big, RPC, USDC } from './evm-fixture.mjs';
+import { fakeCronos, rlpDecode, unhex, hex, big, RPC, USDC, confirmSend } from './evm-fixture.mjs';
 
 const base = 'http://127.0.0.1:3124';
 // Public BIP-39 / Hardhat test vectors; never use these wallets for assets.
@@ -124,7 +124,7 @@ test('phrase login keeps the key and phrase in this browser only; the wallet sen
   await expect(amount).toHaveValue('25.5');
   await amount.fill('1.25');
   await review.click();
-  await page.getByTestId('wallet-confirm').click();
+  await confirmSend(page);
   await expect(page.getByTestId('wallet-activity')).toContainText('Confirmed');
   await expect(page.getByTestId('wallet-activity').getByRole('link', { name: /Explorer/ })).toHaveAttribute('href', /^https:\/\/explorer\.cronos\.org\/testnet\/tx\/0x[0-9a-f]{64}$/);
 
@@ -167,7 +167,7 @@ test('mainnet is a separate card: USDC contract, chain 25 and a real-funds note'
   await page.getByLabel('Recipient address').fill(recipient);
   await page.getByLabel('Amount', { exact: true }).fill('2');
   await page.getByRole('button', { name: 'Review transfer' }).click();
-  await page.getByTestId('wallet-confirm').click();
+  await confirmSend(page);
   await expect(page.getByTestId('wallet-activity')).toContainText('Confirmed');
   const [, , , toField, , , v] = rlpDecode(unhex(rpc.sent[0].raw));
   expect(hex(toField)).toBe(mainnetUsdc);
@@ -371,7 +371,7 @@ test('any ERC-20 can be added by pasting its contract into the search box, sent,
   await amount.fill('1');
   await page.getByRole('button', { name: 'Review transfer' }).click();
   await expect(page.getByTestId('wallet-review')).toContainText('1.105 TCRO');
-  await page.getByTestId('wallet-confirm').click();
+  await confirmSend(page);
   await expect(page.getByTestId('wallet-activity').first()).toContainText('1 TCRO');
   let [, , gasLimit, toField, value, data] = rlpDecode(unhex(rpc.sent[0].raw));
   expect(hex(toField)).toBe(recipient.toLowerCase());
@@ -407,7 +407,7 @@ test('any ERC-20 can be added by pasting its contract into the search box, sent,
   await amount.fill('0.5');
   await page.getByRole('button', { name: 'Review transfer' }).click();
   await expect(page.getByTestId('review-symbol')).toHaveText('WCRO');
-  await page.getByTestId('wallet-confirm').click();
+  await confirmSend(page);
   await expect(page.getByTestId('wallet-activity').first()).toContainText('0.5 WCRO');
   [, , , toField, value, data] = rlpDecode(unhex(rpc.sent[1].raw));
   expect(hex(toField)).toBe(wcro);
@@ -418,7 +418,7 @@ test('any ERC-20 can be added by pasting its contract into the search box, sent,
   const kept = await (await page.request.get(base + '/api/wallet')).json();
   expect(kept.tokens['cronos-testnet'].map(t => t.symbol)).toEqual(['WCRO']);
   await page.getByRole('button', { name: 'Remove from my list' }).click();
-  await expect(symbol).toHaveText('USDC');
+  await expect(symbol).toHaveText('TCRO');
   expectNoSecretSent(bodies, phrase, privateKey);
   for (const { url, body } of bodies.filter(b => b.url.includes('/api/wallet'))) expect(body, url).not.toMatch(/private|mnemonic|phrase/i);
   expect(errors).toEqual([]);

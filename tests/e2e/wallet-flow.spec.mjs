@@ -6,7 +6,7 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fakeCronos, rlpDecode, unhex, hex, big, RPC } from './evm-fixture.mjs';
+import { fakeCronos, rlpDecode, unhex, hex, big, RPC, confirmSend } from './evm-fixture.mjs';
 
 const base = 'http://127.0.0.1:3125';
 // Public BIP-39 vector for the admin; never use it for assets.
@@ -85,8 +85,8 @@ test('new wallet → approval → receive → send → network switch → sign o
   await test.step('open the wallet on testnet: empty card, receive address copies', async () => {
     await page.getByRole('button', { name: 'Wallet', exact: true }).click();
     const card = page.getByTestId('wallet-card');
-    // A new wallet opens on USDC on Cronos Mainnet; search finds the testnet token.
-    await expect(card).toHaveAttribute('data-network', 'cronos-mainnet');
+    // A new wallet opens on Cronos testnet; search finds the testnet token.
+    await expect(card).toHaveAttribute('data-network', 'cronos-testnet');
     await page.getByRole('combobox', { name: 'Search coins and networks' }).fill('devusdc');
     await page.getByRole('combobox', { name: 'Search coins and networks' }).press('Enter');
     await expect(card).toHaveAttribute('data-network', 'cronos-testnet');
@@ -124,7 +124,7 @@ test('new wallet → approval → receive → send → network switch → sign o
     await page.screenshot({ path: 'test-results/flow-3-review.png' });
     rpc.receiptAfter = 2;
     rpc.onReceipt = () => { rpc.usdc = 87_660_000n; };
-    await page.getByTestId('wallet-confirm').click();
+    await confirmSend(page);
     const row = page.getByTestId('wallet-activity');
     await expect(row).toContainText('Pending');
     await expect(row).toContainText('Confirmed', { timeout: 15000 });

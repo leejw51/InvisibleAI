@@ -2,6 +2,27 @@
 
 > Naming note (2026-10-08): entries below record the UI as tested at the time. Since then the Cloud page became **Autonomous AI** at `/autonomous` (`/cloud` still opens it), Dashboard moved to `/dashboard` (`/status` still works), Devices moved to `/devices`, the Coding agent page and Pinned menu entry were folded into chat and the library, and the product name is Invisible AI.
 
+## Wallet: ranked coins, typed confirmation, and the send stage — 2026-10-14
+
+- **Default and ranking.** A new account opens on Cronos testnet (TCRO). The backend counts every choice and every send per coin (`wallet_usage`); the coin list and search results are ranked by use, then recency, then registry order.
+- **Sign out** moved from the folded Settings group into the main navigation.
+- **Amounts with a denomination.** The amount field accepts "25 TCRO". An amount in another denomination is refused, never converted.
+- **Review reminder.** The review restates the amount, the recipient (first and last characters highlighted) and the network.
+- **Typed confirmation.** Above 20 CRO, above 1 USD, or for any coin the wallet cannot price, the transfer is enabled only after the user types the amount and coin (`25 TCRO`; case and spacing forgiven).
+- **The send stage.** A three.js scene beside the form, with bloom, two planets with Grok textures on a Grok nebula, a shader trail, a stream of Grok coin sprites, sparks and a shockwave. It shows:
+  - before: both wallets with their balances, the recipient's read from the chain;
+  - in flight: the amount ticking over as the sender's balance counts down and the recipient's counts up;
+  - after: both balances re-read from the chain once the receipt confirms.
+  Every tween is motion.dev with exponential in/out easing.
+- **Bug found and fixed.** The stage's entrance tween ended on `transform: none`, which motion cannot interpolate, so the stage collapsed to zero size for anyone with motion enabled.
+
+Verified:
+- **Rust:** 50 shared unit tests (ranking, denominations, double-confirm thresholds, the typed confirmation) and 3 server wallet tests (usage counts and erasure).
+- **JS:** 29 script tests.
+- **Playwright with faked nodes:** 13 wallet tests. A new journey checks the default, the ranking, the refused denomination, a 5 TCRO send through all three stage phases against chain-reported final balances, and a 21 TCRO send that stays disabled until "21 tcro" is typed.
+- **Other suites:** the responsive sign-out test passes from the main navigation.
+- **Live, read-only:** real balances on 10 networks.
+
 ## Wallet: every Causewaybay Wallet chain, plus Arbitrum — 2026-10-13
 
 The Wallet page now covers all 12 networks of the Causewaybay Wallet plus Arbitrum One and Sepolia (14 networks): 14 native coins and 13 registry tokens, 27 coins in all, with the two Arbitrum USDC rows read off their chains (`symbol()` "USDC", 6 decimals; chain ids 42161 and 421614). It has two main buttons (CRONOS MAINNET, USDC on Cronos Mainnet) and one search box that follows SPEC §2.1: empty matches all, every term must match, and case and `-`/`_`/space are ignored. EVM coins send. Arbitrum always uses the node's gas estimate, because its L1 data fee makes a plain transfer cost more than 21,000 gas, and it caps fees at 0.005 ETH. Other chains are view and receive.

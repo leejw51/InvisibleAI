@@ -16,7 +16,8 @@ pub fn init(conn: &Connection) -> Result<()> {
         conn,
         "CREATE TABLE IF NOT EXISTS wallet_state(owner TEXT PRIMARY KEY,active TEXT NOT NULL,recent TEXT NOT NULL DEFAULT '[]',updated_at TEXT NOT NULL);
          CREATE TABLE IF NOT EXISTS wallet_tokens(owner TEXT NOT NULL,network TEXT NOT NULL,address TEXT NOT NULL,symbol TEXT NOT NULL,name TEXT NOT NULL,decimals INTEGER NOT NULL,added_at TEXT NOT NULL,PRIMARY KEY(owner,network,address));
-         CREATE TABLE IF NOT EXISTS wallet_addresses(owner TEXT NOT NULL,network TEXT NOT NULL,address TEXT NOT NULL,PRIMARY KEY(owner,network));",
+         CREATE TABLE IF NOT EXISTS wallet_addresses(owner TEXT NOT NULL,network TEXT NOT NULL,address TEXT NOT NULL,PRIMARY KEY(owner,network));
+         CREATE TABLE IF NOT EXISTS wallet_usage(owner TEXT NOT NULL,coin TEXT NOT NULL,uses INTEGER NOT NULL DEFAULT 0,last_used TEXT NOT NULL,PRIMARY KEY(owner,coin));",
     )
 }
 
@@ -27,6 +28,7 @@ pub fn forget_owner(conn: &Connection, owner: &str) -> Result<()> {
         "wallet_state",
         "wallet_tokens",
         "wallet_addresses",
+        "wallet_usage",
         "wallet_settings",
         "wallet_selections",
     ] {
@@ -85,6 +87,15 @@ pub fn read(conn: &Connection, owner: &str) -> Result<WalletSettings> {
         settings.tokens.entry(network).or_default().push(token);
     }
     for row in conn
+        .prepare("SELECT coin,uses FROM wallet_usage WHERE owner=?1")?
+        .query_map([owner], |r| {
+            Ok((r.get::<_, String>(0)?, r.get::<_, u32>(1)?))
+        })?
+    {
+        let (coin, uses) = row?;
+        settings.uses.insert(coin, uses);
+    }
+    for row in conn
         .prepare("SELECT network,address FROM wallet_addresses WHERE owner=?1")?
         .query_map([owner], |r| {
             Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
@@ -98,8 +109,17 @@ pub fn read(conn: &Connection, owner: &str) -> Result<WalletSettings> {
     Ok(settings)
 }
 
-/// Make `key` the active coin and the newest recent pick.
+/// Count one more use of `key`: choosing it, or sending it.
+fn count_use(conn: &Connection, owner: &str, key: &str) -> Result<()> {
+    conn.execute(
+        "INSERT INTO wallet_usage(owner,coin,uses,last_used) VALUES(?1,?2,1,?3) ON CONFLICT(owner,coin) DO UPDATE SET uses=min(uses+1,1000000),last_used=excluded.last_used",
+        params![owner, key, db::now()],
+    )?;
+    Ok(())
+}
+/// Make `key` the active coin and the newest recent pick, and count the use.
 fn activate(conn: &Connection, owner: &str, key: &str) -> Result<()> {
+    count_use(conn, owner, key)?;
     let mut recent = read(conn, owner)?.recent;
     recent.retain(|k| k != key);
     recent.insert(0, key.to_string());
@@ -150,6 +170,9 @@ pub struct Update {
     active: Option<String>,
     #[serde(default)]
     addresses: Option<BTreeMap<String, String>>,
+    /// A coin just sent: counted, without changing what is shown.
+    #[serde(default)]
+    used: Option<String>,
 }
 /// Choose the active coin and/or record receive addresses derived in the browser.
 pub async fn update(
@@ -172,6 +195,12 @@ pub async fn update(
                 params![owner, network.key, address],
             )?;
         }
+    }
+    if let Some(key) = v.used {
+        if !read(&tx, &owner)?.all_coins().iter().any(|c| c.key == key) {
+            return Err(bad("Unknown coin."));
+        }
+        count_use(&tx, &owner, &key)?;
     }
     if let Some(key) = v.active {
         let offered = read(&tx, &owner)?.all_coins().iter().any(|c| c.key == key);
@@ -388,7 +417,7 @@ mod tests {
         let bob = root.for_owner("0x3c44cdddb6a900fa2b585dd299e03d12fa4293bc");
         let Json(fresh) = get(PrivateState(alice.clone())).await.unwrap();
         assert_eq!(fresh, WalletSettings::default());
-        assert_eq!(fresh.active, "usdc-cronos-mainnet");
+        assert_eq!(fresh.active, "tcro-cronos-testnet");
 
         // Any registry coin on any chain can be active; recent keeps the order.
         for key in [
@@ -403,6 +432,30 @@ mod tests {
         let Json(s) = get(PrivateState(alice.clone())).await.unwrap();
         assert_eq!(s.active, "sol-solana-devnet");
         assert_eq!(s.recent, ["sol-solana-devnet", "cro-cronos-mainnet"]);
+        // Every choice counts; a send counts without changing what is shown.
+        assert_eq!(s.uses["sol-solana-devnet"], 2);
+        assert_eq!(s.uses["cro-cronos-mainnet"], 1);
+        let Json(s) = update(
+            PrivateState(alice.clone()),
+            change(json!({"used":"cro-cronos-mainnet"})),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            (s.uses["cro-cronos-mainnet"], s.active.as_str()),
+            (2, "sol-solana-devnet")
+        );
+        assert_eq!(s.ranked(registry::coins())[0].key, "sol-solana-devnet");
+        assert_eq!(
+            error(
+                update(
+                    PrivateState(alice.clone()),
+                    change(json!({"used":"btc-bitcoin"}))
+                )
+                .await
+            ),
+            "Unknown coin."
+        );
 
         // Public receive addresses, in each chain's own form.
         let Json(s) = update(
@@ -457,14 +510,19 @@ mod tests {
         )
         .await
         .unwrap();
-        assert_eq!(s.active, "usdc-cronos-mainnet");
+        assert_eq!(s.active, "tcro-cronos-testnet");
         assert!(!s.recent.contains(&key));
 
         let _ = crate::chat::delete_all(PrivateState(alice.clone()))
             .await
             .unwrap();
         let conn = root.db.0.lock().unwrap();
-        for table in ["wallet_state", "wallet_tokens", "wallet_addresses"] {
+        for table in [
+            "wallet_state",
+            "wallet_tokens",
+            "wallet_addresses",
+            "wallet_usage",
+        ] {
             let n: i64 = conn.query_row(
                 &format!("SELECT count(*) FROM {table} WHERE owner=?1"),
                 [ALICE],

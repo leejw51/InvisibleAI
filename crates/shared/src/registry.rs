@@ -558,7 +558,8 @@ pub fn coin(key: &str) -> Option<Coin> {
 
 /// The two main buttons: Cronos Mainnet's own coin, and USDC on Cronos Mainnet.
 pub const MAIN_COINS: [&str; 2] = ["cro-cronos-mainnet", "usdc-cronos-mainnet"];
-pub const DEFAULT_COIN: &str = "usdc-cronos-mainnet";
+/// A new account starts where nothing real is at stake: Cronos testnet.
+pub const DEFAULT_COIN: &str = "tcro-cronos-testnet";
 
 /// Case, `-`, `_` and spaces are one difference (SPEC §2.1).
 fn fold(text: &str) -> String {
@@ -595,6 +596,60 @@ pub fn search<'a>(query: &str, coins: &'a [Coin]) -> Vec<&'a Coin> {
         .collect()
 }
 
+/// An amount as typed, with or without its denomination: "25", "25 TCRO",
+/// "25tcro". A different denomination is refused, never converted: typing
+/// "25 USDC" while sending CRO is a mistake to stop, not a request to honour.
+pub fn amount_in(input: &str, symbol: &str) -> Result<String, String> {
+    let text = input.trim();
+    let split = text
+        .find(|c: char| !(c.is_ascii_digit() || c == '.' || c == '+'))
+        .unwrap_or(text.len());
+    let (number, denom) = (text[..split].trim(), text[split..].trim());
+    if !denom.is_empty() && !denom.eq_ignore_ascii_case(symbol) {
+        return Err(format!(
+            "That amount is in {denom}, but this sends {symbol}."
+        ));
+    }
+    Ok(number.to_string())
+}
+/// Above 20 CRO, above 1 US dollar, or any amount of a coin whose dollar value
+/// the wallet does not know: the transfer is confirmed twice, the second time
+/// by typing it.
+pub fn needs_double_confirm(coin: &Coin, amount: evm::U256) -> bool {
+    let whole =
+        |n: u64| evm::U256::from(n).saturating_mul_u64(10u64.pow(coin.decimals.min(19) as u32));
+    let cronos_coin =
+        coin.standard == Standard::Native && matches!(coin.symbol.as_str(), "CRO" | "TCRO");
+    let usd = coin.tags.iter().any(|t| t == "usd");
+    if coin.decimals > 19 {
+        return true;
+    }
+    if cronos_coin {
+        amount > whole(20)
+    } else if usd {
+        amount > whole(1)
+    } else {
+        true
+    }
+}
+/// What the user types to confirm: the amount and the denomination.
+pub fn confirmation_text(amount: &str, symbol: &str) -> String {
+    format!("{amount} {symbol}")
+}
+/// Whether `typed` names exactly this amount of this coin. Case and spacing
+/// are forgiven; the number and the denomination are not.
+pub fn confirms(typed: &str, amount: evm::U256, coin: &Coin) -> bool {
+    let words: Vec<&str> = typed.split_whitespace().collect();
+    let joined = words.join(" ");
+    let Some(denom_at) = joined.find(|c: char| !(c.is_ascii_digit() || c == '.' || c == ' '))
+    else {
+        return false; // the denomination is required
+    };
+    let (number, denom) = (joined[..denom_at].trim(), joined[denom_at..].trim());
+    denom.eq_ignore_ascii_case(&coin.symbol)
+        && evm::parse_units(number, coin.decimals).is_ok_and(|v| v == amount)
+}
+
 /// Most recently chosen coins kept for the search box's empty state.
 pub const MAX_RECENT: usize = 8;
 
@@ -606,6 +661,9 @@ pub const MAX_RECENT: usize = 8;
 pub struct WalletSettings {
     pub active: String,
     pub recent: Vec<String>,
+    /// Coin key → how often it was chosen or sent: the list's order.
+    #[serde(default)]
+    pub uses: std::collections::BTreeMap<String, u32>,
     /// Network key → ERC-20s added there, oldest first.
     pub tokens: std::collections::BTreeMap<String, Vec<CustomToken>>,
     /// Network key → this account's receive address there.
@@ -616,6 +674,7 @@ impl Default for WalletSettings {
         Self {
             active: DEFAULT_COIN.into(),
             recent: Vec::new(),
+            uses: Default::default(),
             tokens: Default::default(),
             addresses: Default::default(),
         }
@@ -633,6 +692,26 @@ impl WalletSettings {
         all
     }
     /// The active coin, or the default if it is gone (a removed token).
+    /// Coins in the order the list shows them: most used first, then the
+    /// most recently picked, then registry order. Sorting is stable, so ties
+    /// keep the order a user has learned.
+    pub fn ranked(&self, mut coins: Vec<Coin>) -> Vec<Coin> {
+        let recent = |key: &str| {
+            self.recent
+                .iter()
+                .position(|k| k == key)
+                .unwrap_or(usize::MAX)
+        };
+        coins.sort_by(|a, b| {
+            let (ua, ub) = (
+                self.uses.get(&a.key).copied().unwrap_or(0),
+                self.uses.get(&b.key).copied().unwrap_or(0),
+            );
+            ub.cmp(&ua)
+                .then_with(|| recent(&a.key).cmp(&recent(&b.key)))
+        });
+        coins
+    }
     pub fn active_coin(&self) -> Coin {
         self.all_coins()
             .into_iter()
@@ -800,7 +879,7 @@ mod tests {
     #[test]
     fn settings_fall_back_to_the_default_coin() {
         let mut s = WalletSettings::default();
-        assert_eq!(s.active_coin().key, "usdc-cronos-mainnet");
+        assert_eq!(s.active_coin().key, "tcro-cronos-testnet");
         s.active = "sol-solana-devnet".into();
         assert_eq!(s.active_coin().symbol, "SOL");
         s.active = custom_key(
@@ -831,5 +910,95 @@ mod tests {
         assert!(!s.all_coins().iter().any(|c| c.symbol == "X"));
         let json = serde_json::to_value(&s).unwrap();
         assert_eq!(serde_json::from_value::<WalletSettings>(json).unwrap(), s);
+    }
+    #[test]
+    fn the_list_is_ranked_by_use_then_recency_then_registry_order() {
+        let mut s = WalletSettings::default();
+        assert_eq!(s.active_coin().key, "tcro-cronos-testnet");
+        let order = |s: &WalletSettings| {
+            s.ranked(coins())
+                .into_iter()
+                .map(|c| c.key)
+                .take(4)
+                .collect::<Vec<_>>()
+        };
+        // Nothing used yet: registry order.
+        assert_eq!(
+            order(&s),
+            [
+                "cro-cronos-mainnet",
+                "tcro-cronos-testnet",
+                "eth-arbitrum-one",
+                "eth-arbitrum-sepolia"
+            ]
+        );
+        s.uses.insert("sol-solana-devnet".into(), 5);
+        s.uses.insert("usdc-cronos-mainnet".into(), 9);
+        s.uses.insert("xec-ecash-mainnet".into(), 5);
+        // Ties on use are broken by recency.
+        s.recent = vec!["xec-ecash-mainnet".into(), "sol-solana-devnet".into()];
+        assert_eq!(
+            order(&s),
+            [
+                "usdc-cronos-mainnet",
+                "xec-ecash-mainnet",
+                "sol-solana-devnet",
+                "cro-cronos-mainnet"
+            ]
+        );
+        // Older settings without counts still read.
+        let old: WalletSettings = serde_json::from_value(serde_json::json!({"active":"usdc-cronos-mainnet","recent":[],"tokens":{},"addresses":{}})).unwrap();
+        assert!(old.uses.is_empty());
+    }
+    #[test]
+    fn amounts_take_their_denomination_and_refuse_another() {
+        assert_eq!(amount_in(" 25 TCRO ", "TCRO").unwrap(), "25");
+        assert_eq!(amount_in("25tcro", "TCRO").unwrap(), "25");
+        assert_eq!(amount_in("0.5", "USDC").unwrap(), "0.5");
+        assert_eq!(amount_in("1.5 devUSDC.e", "devUSDC.e").unwrap(), "1.5");
+        assert_eq!(
+            amount_in("25 USDC", "TCRO").unwrap_err(),
+            "That amount is in USDC, but this sends TCRO."
+        );
+    }
+    #[test]
+    fn large_or_unknown_value_transfers_are_confirmed_twice() {
+        let units = |c: &Coin, a: &str| evm::parse_units(a, c.decimals).unwrap();
+        let tcro = coin("tcro-cronos-testnet").unwrap();
+        let usdc = coin("usdc-cronos-mainnet").unwrap();
+        let eth = coin("eth-arbitrum-one").unwrap();
+        assert!(!needs_double_confirm(&tcro, units(&tcro, "20")));
+        assert!(needs_double_confirm(
+            &tcro,
+            units(&tcro, "20.000000000000000001")
+        ));
+        assert!(!needs_double_confirm(&usdc, units(&usdc, "1")));
+        assert!(needs_double_confirm(&usdc, units(&usdc, "1.000001")));
+        // The wallet knows no dollar value for ETH or SOL: always twice.
+        assert!(needs_double_confirm(&eth, units(&eth, "0.000001")));
+        let wcro = custom_coin(
+            "cronos-mainnet",
+            &CustomToken {
+                address: "0x5C7F8A570d578ED84E63fdFA7b1eE72dEae1AE23".into(),
+                symbol: "WCRO".into(),
+                name: "Wrapped CRO".into(),
+                decimals: 18,
+            },
+        );
+        assert!(needs_double_confirm(&wcro, units(&wcro, "1")));
+    }
+    #[test]
+    fn the_typed_confirmation_must_name_the_amount_and_the_coin() {
+        let tcro = coin("tcro-cronos-testnet").unwrap();
+        let amount = evm::parse_units("25", 18).unwrap();
+        assert_eq!(confirmation_text("25", "TCRO"), "25 TCRO");
+        for ok in ["25 TCRO", "25 tcro", "  25   TCRO ", "25TCRO", "25.0 TCRO"] {
+            assert!(confirms(ok, amount, &tcro), "{ok}");
+        }
+        for wrong in [
+            "25", "TCRO", "2.5 TCRO", "250 TCRO", "25 CRO", "25 USDC", "",
+        ] {
+            assert!(!confirms(wrong, amount, &tcro), "{wrong}");
+        }
     }
 }

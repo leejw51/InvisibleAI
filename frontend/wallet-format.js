@@ -16,6 +16,17 @@ export function money(value, places = 2) {
   return digits(value).toLocaleString('en-US', { minimumFractionDigits: places, maximumFractionDigits: places });
 }
 
+/**
+ * A balance for reading: grouped, at least two decimals, at most `places`,
+ * trailing zeros dropped (5 → "5.00", 24.895 → "24.895").
+ */
+export function amount(value, places = 6) {
+  const text = money(value, places);
+  const [whole, frac = ''] = text.split('.');
+  const kept = frac.replace(/0+$/, '').padEnd(Math.min(2, places), '0');
+  return kept ? `${whole}.${kept}` : whole;
+}
+
 // What a receive address looks like on each chain. Anything else — above all a
 // 64-hex private key or a phrase — is never echoed, not even in part.
 const ADDRESS = [

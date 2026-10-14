@@ -7,7 +7,7 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fakeCronos, fakeKoios, rlpDecode, unhex, hex, big } from './evm-fixture.mjs';
+import { fakeCronos, fakeKoios, rlpDecode, unhex, hex, big, confirmSend } from './evm-fixture.mjs';
 
 const base = 'http://127.0.0.1:3126';
 // Public BIP-39 vector; never use it for assets.
@@ -61,7 +61,10 @@ test('two main buttons, one search box for every chain, EVM sends, choices kept 
   await page.getByRole('button', { name: 'Wallet', exact: true }).click();
   const symbol = page.getByTestId('asset-symbol'), network = page.getByTestId('asset-network'), held = page.getByTestId('asset-balance');
 
-  await test.step('opens on USDC on Cronos Mainnet, with CRO for fees', async () => {
+  await test.step('opens on Cronos testnet; USDC is one click away, with CRO for fees', async () => {
+    await expect(symbol).toHaveText('TCRO');
+    await expect(network).toHaveText('Cronos Testnet');
+    await page.getByTestId('main-usdc-cronos-mainnet').click();
     await expect(symbol).toHaveText('USDC');
     await expect(network).toHaveText('Cronos Mainnet');
     await expect(page.getByTestId('main-usdc-cronos-mainnet')).toHaveAttribute('aria-pressed', 'true');
@@ -130,7 +133,7 @@ test('two main buttons, one search box for every chain, EVM sends, choices kept 
     await page.getByLabel('Recipient address').fill(recipient);
     await page.getByRole('button', { name: 'Review transfer' }).click();
     await expect(page.getByTestId('review-symbol')).toHaveText('USDC');
-    await page.getByTestId('wallet-confirm').click();
+    await confirmSend(page);
     await expect(page.locator('.wallet-flight')).toHaveCount(1);
     // The card is back in view and the amount is mid-flight.
     await expect(page.getByTestId('wallet-card')).toBeInViewport();

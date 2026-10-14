@@ -200,9 +200,34 @@ pub struct Prepared {
     tx: LegacyTransaction,
     to: String,
     amount: String,
+    /// The amount in base units, for the typed confirmation.
+    units: U256,
     symbol: String,
     fee: String,
     total: Option<String>,
+    /// Both wallets' balances of this coin before the transfer.
+    from_before: String,
+    to_before: String,
+    /// Large, or of unknown dollar value: confirmed a second time by typing.
+    double: bool,
+}
+/// What `holder` holds of `asset`: its coin balance, or its token balance.
+async fn holder_balance(network: &Network, asset: &Asset, holder: &str) -> Result<U256, String> {
+    match asset.contract(network) {
+        None => quantity(&rpc(network, "eth_getBalance", json!([holder, "latest"])).await?),
+        Some(contract) => {
+            let word = call(
+                network,
+                &contract,
+                &evm::erc20_balance_of(&evm::parse_address(holder)?),
+            )
+            .await?;
+            if word.len() != 32 {
+                return Err("The contract did not answer like an ERC-20 token.".into());
+            }
+            Ok(U256::from_be_slice(&word))
+        }
+    }
 }
 async fn prepare(
     coin: Coin,
@@ -248,9 +273,16 @@ async fn prepare(
         have.native,
     )?;
     let native = matches!(asset, Asset::Native);
+    let recipient = evm::checksum(&request.recipient);
+    let to_before = holder_balance(&network, &asset, &recipient).await?;
+    let decimals = asset.decimals(&network);
     Ok(Prepared {
-        to: evm::checksum(&request.recipient),
-        amount: evm::format_units(request.amount, asset.decimals(&network)),
+        to: recipient,
+        amount: evm::format_units(request.amount, decimals),
+        units: request.amount,
+        from_before: evm::format_units(have.asset, decimals),
+        to_before: evm::format_units(to_before, decimals),
+        double: registry::needs_double_confirm(&coin, request.amount),
         symbol: coin.symbol.clone(),
         fee: evm::format_units(tx.fee(), 18),
         total: native.then(|| {
@@ -260,6 +292,20 @@ async fn prepare(
     })
 }
 
+/// The send stage beside the form: one transfer, from review to arrival.
+#[derive(Clone, PartialEq)]
+struct Stage {
+    /// `ready`, `flying`, `pending`, `done` or `failed`.
+    phase: &'static str,
+    coin: Coin,
+    from: String,
+    to: String,
+    amount: String,
+    from_before: String,
+    to_before: String,
+    from_after: Option<String>,
+    to_after: Option<String>,
+}
 #[derive(Clone, PartialEq)]
 struct Activity {
     network: Network,
@@ -308,6 +354,9 @@ pub struct Wallet {
     sending: bool,
     /// Bumped on every confirmed send; the card plays its send animation.
     sent: u32,
+    stage: Option<Stage>,
+    /// What the user typed to confirm a large transfer.
+    confirm_text: String,
     last_sent: String,
     activity: Vec<Activity>,
     generation: u32,
@@ -341,6 +390,9 @@ pub enum Msg {
     Sent(Result<(String, Prepared), String>),
     Poll(String, u32),
     Receipt(String, u32, Result<Value, String>),
+    ConfirmText(String),
+    Arrived(Result<(String, String), String>),
+    NewTransfer,
 }
 fn short(address: &str) -> String {
     let chars: Vec<char> = address.chars().collect();
@@ -438,27 +490,16 @@ impl Wallet {
         let Some(settings) = &self.settings else {
             return vec![];
         };
+        // Most used first, then most recent, then registry order: for the
+        // full list and for whatever a search keeps.
         let all = settings.all_coins();
-        if self.query.trim().is_empty() {
-            // Recent picks first, then everything in registry order.
-            let mut rows: Vec<Coin> = settings
-                .recent
-                .iter()
-                .filter_map(|k| all.iter().find(|c| &c.key == k).cloned())
-                .collect();
-            rows.extend(
-                all.iter()
-                    .filter(|c| !settings.recent.contains(&c.key))
-                    .cloned(),
-            );
-            rows.truncate(MAX_RESULTS);
-            return rows;
-        }
-        registry::search(&self.query, &all)
+        let found = registry::search(&self.query, &all)
             .into_iter()
-            .take(MAX_RESULTS)
             .cloned()
-            .collect()
+            .collect();
+        let mut rows = settings.ranked(found);
+        rows.truncate(MAX_RESULTS);
+        rows
     }
 }
 impl Component for Wallet {
@@ -490,6 +531,8 @@ impl Component for Wallet {
             preparing: false,
             sending: false,
             sent: 0,
+            stage: None,
+            confirm_text: String::new(),
             last_sent: String::new(),
             activity: Vec::new(),
             generation: 0,
@@ -555,6 +598,7 @@ impl Component for Wallet {
                     s.active = key.clone();
                     s.recent.retain(|k| *k != key);
                     s.recent.insert(0, key.clone());
+                    *s.uses.entry(key.clone()).or_default() += 1;
                 }
                 self.show(ctx, coin);
                 self.save(
@@ -720,11 +764,19 @@ impl Component for Wallet {
                 if self.preparing || self.sending || !self.coin.can_send() {
                     return false;
                 }
+                // "25 TCRO" and "25" mean the same; "25 USDC" here is refused.
+                let amount = match registry::amount_in(&self.amount, &self.coin.symbol) {
+                    Ok(amount) => amount,
+                    Err(e) => {
+                        self.error = e;
+                        return true;
+                    }
+                };
                 self.preparing = true;
                 self.error.clear();
                 let (generation, coin, from) =
                     (self.generation, self.coin.clone(), Self::address(ctx));
-                let (to, amount) = (self.to.clone(), self.amount.clone());
+                let to = self.to.clone();
                 ctx.link().send_future(async move {
                     Msg::Prepared(generation, prepare(coin, from, to, amount, have).await)
                 });
@@ -736,13 +788,41 @@ impl Component for Wallet {
                 }
                 match result {
                     Ok(p) => {
+                        self.confirm_text.clear();
+                        self.stage = Some(Stage {
+                            phase: "ready",
+                            coin: self.coin.clone(),
+                            from: Self::address(ctx),
+                            to: p.to.clone(),
+                            amount: p.amount.clone(),
+                            from_before: p.from_before.clone(),
+                            to_before: p.to_before.clone(),
+                            from_after: None,
+                            to_after: None,
+                        });
                         self.review = Some(p);
                         self.review_leaving = false;
                     }
                     Err(e) => self.error = e,
                 }
             }
-            Msg::Cancel => self.close_review(ctx),
+            Msg::Cancel => {
+                self.stage = None;
+                self.close_review(ctx);
+            }
+            Msg::ConfirmText(v) => self.confirm_text = v,
+            Msg::Arrived(result) => {
+                let Some(stage) = &mut self.stage else {
+                    return false;
+                };
+                // Without fresh numbers the expected ones stand in.
+                if let Ok((from, to)) = result {
+                    stage.from_after = Some(from);
+                    stage.to_after = Some(to);
+                }
+                stage.phase = "done";
+            }
+            Msg::NewTransfer => self.stage = None,
             Msg::Removed => {
                 self.review = None;
                 self.review_leaving = false;
@@ -756,6 +836,15 @@ impl Component for Wallet {
                 };
                 if self.sending || self.review_leaving {
                     return false;
+                }
+                if prepared.double
+                    && !registry::confirms(&self.confirm_text, prepared.units, &self.coin)
+                {
+                    self.error = format!(
+                        "Type {} to confirm this transfer.",
+                        registry::confirmation_text(&prepared.amount, &prepared.symbol)
+                    );
+                    return true;
                 }
                 // The key is read from local storage for this one signature
                 // and dropped (zeroized) when the identity goes out of scope.
@@ -774,6 +863,9 @@ impl Component for Wallet {
                 };
                 drop(identity);
                 self.sending = true;
+                if let Some(stage) = &mut self.stage {
+                    stage.phase = "flying";
+                }
                 ctx.link().send_future(async move {
                     Msg::Sent(async {
                         let hash = rpc(&network, "eth_sendRawTransaction", json!([signed.raw_hex()])).await?;
@@ -810,10 +902,24 @@ impl Component for Wallet {
                         );
                         self.to.clear();
                         self.amount.clear();
+                        self.confirm_text.clear();
                         self.close_review(ctx);
+                        // A send counts toward the coin's place in the list.
+                        let key = self.coin.key.clone();
+                        self.save(
+                            ctx,
+                            "PATCH",
+                            "/api/wallet".into(),
+                            Some(json!({"used": key})),
+                        );
                         ctx.link().send_message(Msg::Poll(hash, 0));
                     }
-                    Err(e) => self.error = e,
+                    Err(e) => {
+                        self.error = e;
+                        if let Some(stage) = &mut self.stage {
+                            stage.phase = "failed";
+                        }
+                    }
                 }
             }
             Msg::Poll(hash, attempt) => {
@@ -848,6 +954,40 @@ impl Component for Wallet {
                             row.status = status;
                         }
                         ctx.link().send_message(Msg::Refresh);
+                        // The stage ends on the chain's own numbers.
+                        if let Some(stage) = &mut self.stage
+                            && matches!(stage.phase, "flying" | "pending")
+                        {
+                            match status {
+                                "Confirmed" => {
+                                    let stage = stage.clone();
+                                    ctx.link().send_future(async move {
+                                        Msg::Arrived(
+                                            async {
+                                                let (network, asset) = stage
+                                                    .coin
+                                                    .evm_asset()
+                                                    .ok_or("Not an EVM coin")?;
+                                                let decimals = asset.decimals(&network);
+                                                let from =
+                                                    holder_balance(&network, &asset, &stage.from)
+                                                        .await?;
+                                                let to =
+                                                    holder_balance(&network, &asset, &stage.to)
+                                                        .await?;
+                                                Ok((
+                                                    evm::format_units(from, decimals),
+                                                    evm::format_units(to, decimals),
+                                                ))
+                                            }
+                                            .await,
+                                        )
+                                    });
+                                }
+                                "Failed" => stage.phase = "failed",
+                                _ => stage.phase = "pending",
+                            }
+                        }
                     }
                     None => {
                         let link = ctx.link().clone();
@@ -1044,6 +1184,20 @@ impl Component for Wallet {
             html! {<div class={classes!("wallet-review", self.review_leaving.then_some("is-leaving"))} data-motion="" data-testid="wallet-review" role="dialog" aria-label={t("Review transfer")}>
                 <div class="eyebrow">{t("REVIEW")}</div>
                 <p class="wallet-review-amount"><strong>{&p.amount}</strong>{" "}<span data-testid="review-symbol">{&p.symbol}</span></p>
+                // Say it back in full: what goes, to whom, on which network.
+                <div class="wallet-reminder" data-testid="send-reminder">
+                    <span>{t("You are sending")}</span>
+                    <strong class="reminder-amount">{&p.amount}{" "}{&p.symbol}</strong>
+                    <span>{t("to")}</span>
+                    <code class="reminder-address" title={p.to.clone()}><b>{p.to.chars().take(6).collect::<String>()}</b>{p.to.chars().skip(6).take(p.to.chars().count().saturating_sub(10)).collect::<String>()}<b>{p.to.chars().skip(p.to.chars().count().saturating_sub(4)).collect::<String>()}</b></code>
+                    <span>{t("on")}{" "}{net.name}{". "}{t("Check the first and last characters of the address.")}</span>
+                </div>
+                if p.double {
+                    <label class="form-label wallet-double" data-testid="double-confirm">
+                        <span>{icon("info")}{t("This is a large transfer, or one whose value the wallet cannot price. To confirm, type the amount and coin:")}{" "}<strong>{registry::confirmation_text(&p.amount, &p.symbol)}</strong></span>
+                        <input type="text" aria-label={t("Type the amount and coin to confirm")} autocomplete="off" spellcheck="false" placeholder={registry::confirmation_text(&p.amount, &p.symbol)} value={self.confirm_text.clone()} oninput={link.callback(|e: InputEvent| Msg::ConfirmText(e.target_unchecked_into::<HtmlInputElement>().value()))}/>
+                    </label>
+                }
                 <dl>
                     <dt>{t("To")}</dt><dd><code>{&p.to}</code></dd>
                     <dt>{t("Network")}</dt><dd>{net.name}</dd>
@@ -1053,13 +1207,13 @@ impl Component for Wallet {
                 </dl>
                 <div class="modal-footer">
                     <button class="text-button" disabled={self.sending} onclick={link.callback(|_| Msg::Cancel)}>{t("Cancel")}</button>
-                    <button class="primary-button" data-testid="wallet-confirm" data-flight-origin="" disabled={self.sending || self.review_leaving} onclick={link.callback(|_| Msg::Send)}>{if self.sending { t("Sending…") } else { t("Confirm and send") }}{icon("send")}</button>
+                    <button class="primary-button" data-testid="wallet-confirm" data-flight-origin="" disabled={self.sending || self.review_leaving || (p.double && !registry::confirms(&self.confirm_text, p.units, coin))} onclick={link.callback(|_| Msg::Send)}>{if self.sending { t("Sending…") } else { t("Confirm and send") }}{icon("send")}</button>
                 </div>
             </div>}
         } else {
             html! {<form class="wallet-send" data-motion="" onsubmit={link.callback(|e: SubmitEvent| { e.prevent_default(); Msg::Review })}>
-                <div class="wallet-amount-hero" aria-hidden="true"><span class="wallet-amount-roll" data-roll="" data-testid="amount-roll" data-value={self.amount.trim().to_string()}></span><em>{&coin.symbol}</em></div>
-                <label class="form-label">{t("Amount")}<span class="wallet-amount-field"><input type="text" inputmode="decimal" aria-label={t("Amount")} placeholder="0.00" autocomplete="off" value={self.amount.clone()} oninput={link.callback(|e: InputEvent| Msg::Amount(e.target_unchecked_into::<HtmlInputElement>().value()))}/><span class="wallet-amount-symbol" data-testid="send-symbol">{&coin.symbol}</span><button type="button" class="chip-button" onclick={link.callback(|_| Msg::Max)}>{t("Max")}</button></span></label>
+                <div class="wallet-amount-hero" aria-hidden="true"><span class="wallet-amount-roll" data-roll="" data-testid="amount-roll" data-value={registry::amount_in(&self.amount, &coin.symbol).unwrap_or_default()}></span><em>{&coin.symbol}</em></div>
+                <label class="form-label">{t("Amount")}<span class="wallet-amount-field"><input type="text" inputmode="decimal" aria-label={t("Amount")} placeholder={format!("0.00 {}", coin.symbol)} autocomplete="off" value={self.amount.clone()} oninput={link.callback(|e: InputEvent| Msg::Amount(e.target_unchecked_into::<HtmlInputElement>().value()))}/><span class="wallet-amount-symbol" data-testid="send-symbol">{&coin.symbol}</span><button type="button" class="chip-button" onclick={link.callback(|_| Msg::Max)}>{t("Max")}</button></span></label>
                 <label class="form-label">{t("Recipient address")}<input type="text" aria-label={t("Recipient address")} placeholder="0x…" autocomplete="off" spellcheck="false" value={self.to.clone()} oninput={link.callback(|e: InputEvent| Msg::To(e.target_unchecked_into::<HtmlInputElement>().value()))}/></label>
                 <button class="primary-button" type="submit" disabled={self.preparing || self.balances.is_none() || self.to.trim().is_empty() || self.amount.trim().is_empty()}>{if self.preparing { t("Checking…") } else { t("Review transfer") }}{icon("arrow")}</button>
             </form>}
@@ -1086,7 +1240,19 @@ impl Component for Wallet {
             {identity}
             {balances}
             <div class="wallet-tabs filter-tabs" role="tablist" aria-label={t("Wallet actions")} data-glider=""><span class="glider" aria-hidden="true"></span>{tab(Tab::Send, "Send", coin.can_send())}{tab(Tab::Receive, "Receive", true)}</div>
-            <div class="wallet-panel">{if self.tab == Tab::Send && coin.can_send() { send_panel } else { receive_panel }}</div>
+            <div class={classes!("wallet-panel", self.stage.is_some().then_some("has-stage"))}>
+                {if self.tab == Tab::Send && coin.can_send() { send_panel } else { receive_panel }}
+                {for self.stage.as_ref().map(|st| {
+                    let places = if st.coin.tags.iter().any(|t| t == "usd") { 2 } else { st.coin.decimals.min(6) };
+                    html! {<div class="wallet-stage-column">
+                        <cwb-send-stage data-testid="send-stage" data-phase={st.phase} data-from={st.from.clone()} data-to={st.to.clone()} data-amount={st.amount.clone()} data-symbol={st.coin.symbol.clone()} data-places={places.to_string()}
+                            data-from-before={st.from_before.clone()} data-to-before={st.to_before.clone()} data-from-after={st.from_after.clone()} data-to-after={st.to_after.clone()}
+                            data-label-from={t("FROM")} data-label-to={t("TO")} data-label-ready={t("Ready to send")} data-label-flying={t("Sending…")} data-label-pending={t("Waiting for the network…")} data-label-done={t("Arrived!")} data-label-failed={t("Not sent")}
+                            role="img" aria-label={format!("{} {} {} → {}", st.amount, st.coin.symbol, short(&st.from), short(&st.to))}></cwb-send-stage>
+                        if matches!(st.phase, "done" | "failed") {<button class="secondary-button" data-testid="new-transfer" onclick={link.callback(|_| Msg::NewTransfer)}>{t("New transfer")}</button>}
+                    </div>}
+                })}
+            </div>
             if !self.error.is_empty() {<p class="login-error" role="alert" data-motion="">{t(&self.error)}</p>}
             if !self.activity.is_empty() {
                 <div class="wallet-activity" data-motion=""><h3>{t("This session")}</h3><ul data-stagger="">{for self.activity.iter().map(|a| html! {

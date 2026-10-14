@@ -1874,6 +1874,8 @@ impl App {
                 {self.nav(ctx,"save","Save anything","plus",None)}
                 {self.nav(ctx,"chat","Ask anything","message",None)}
                 {self.nav(ctx,"wallet","Wallet","wallet",None)}
+                // Signing out is an everyday action, not a setting.
+                if self.session["required"]==true { <button class="nav-item" data-nav="sign-out" onclick={ctx.link().callback(|_|Msg::Logout)}>{icon("logout")}<span>{t("Sign out")}</span></button> }
             </nav>
             <details class="more-tools" open={library}><summary>{icon("book")}{t("More tools")}</summary><nav aria-label={t("Additional tools")}>
                 {self.nav(ctx,"notes","Notes","file",None)}
@@ -1897,7 +1899,6 @@ impl App {
                 if self.is_admin(){ {self.nav(ctx,"admin","Admin","shield",None)} }
                 if self.session["address"].is_string() { <button class="settings-nav" onclick={ctx.link().callback(|_|Msg::Modal("account".into()))}>{icon("user")}<span>{t("Account details")}</span></button> }
                 <button class="settings-nav danger-nav" data-nav="delete-all" onclick={ctx.link().callback(|_|Msg::Modal("delete-all".into()))}>{icon("trash")}<span>{t("Delete all")}</span></button>
-                if self.session["required"]==true { <button class="settings-nav" onclick={ctx.link().callback(|_|Msg::Logout)}>{icon("arrow")}<span>{t("Sign out")}</span></button> }
                 </details><div class="profile"><span class="avatar">{"Y"}</span><span><strong>{self.session["name"].as_str().map(str::to_owned).unwrap_or_else(||t("Your workspace"))}</strong><small>{t("Personal · Invisible AI")}</small></span><span class="profile-dot"/></div>
             </div>
         </aside>}

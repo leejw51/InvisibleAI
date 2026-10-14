@@ -1,0 +1,9 @@
+Asset type: background backdrop for a game-like money-transfer scene in the Invisible AI wallet.
+Aspect ratio: 1:1
+Composition: wide, full-bleed deep space filling the entire frame edge to edge, with no borders, bars or panels. The left third and right third are calm and dark, where two glowing planets will be placed; a soft luminous river of nebula gas flows gently from left to right through the middle, like a path for coins to travel along.
+Subject: deep indigo-black space with delicate violet, magenta and teal nebula wisps, a sparse field of fine stars, subtle film grain.
+Style/medium: polished cinematic 3D render, premium mobile-game title screen quality, smooth gradients, no hard edges.
+Lighting/mood: magical, exciting yet calm, high contrast so glowing effects drawn on top will pop.
+Constraints: no planets, no spaceships, no letters, numbers, words, logos, people, watermarks or UI. Background is opaque.
+
+Generated with xAI grok-imagine-image-quality on 2026-10-14 by scripts/generate-wallet-art.mjs.

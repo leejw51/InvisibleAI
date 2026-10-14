@@ -12022,5 +12022,101 @@
     "以前にリカバリーフレーズでサインインしたときに記録されたアドレスです。このブラウザでは再導出して確認できません。大きな金額を受け取る前に、ここでフレーズでサインインして確認してください。",
     "Registrada en un inicio de sesión anterior con tu frase de recuperación; este navegador no puede volver a derivarla. Inicia sesión con la frase aquí para confirmarla antes de compartirla para importes grandes.",
     "Zaznamenáno při dřívějším přihlášení obnovovací frází; tento prohlížeč ji nemůže znovu odvodit. Před sdílením pro velké částky se zde přihlaste frází a ověřte ji."
+  ],
+  "You are sending": [
+    "보내는 금액:",
+    "你準備傳送",
+    "你正在发送",
+    "送金内容：",
+    "Vas a enviar",
+    "Posíláte"
+  ],
+  "on": [
+    "네트워크:",
+    "網絡：",
+    "网络：",
+    "ネットワーク：",
+    "en",
+    "na"
+  ],
+  "Check the first and last characters of the address.": [
+    "주소의 처음과 마지막 글자를 확인하세요.",
+    "請檢查地址嘅頭尾幾個字。",
+    "请核对地址的开头和结尾字符。",
+    "アドレスの最初と最後の文字を確認してください。",
+    "Comprueba los primeros y últimos caracteres de la dirección.",
+    "Zkontrolujte první a poslední znaky adresy."
+  ],
+  "This is a large transfer, or one whose value the wallet cannot price. To confirm, type the amount and coin:": [
+    "큰 금액이거나 지갑이 가치를 알 수 없는 코인입니다. 확인하려면 금액과 코인을 입력하세요:",
+    "呢筆轉賬金額較大，或者錢包無法估價。確認請輸入金額同幣種：",
+    "这是一笔大额转账，或钱包无法估价的币。请输入金额和币种确认：",
+    "高額の送金、またはウォレットが価値を判断できないコインです。確認のため金額とコインを入力してください：",
+    "Es una transferencia grande, o de una moneda cuyo valor la cartera no conoce. Para confirmar, escribe la cantidad y la moneda:",
+    "Jde o velký převod nebo o minci, jejíž hodnotu peněženka nezná. Pro potvrzení napište částku a minci:"
+  ],
+  "Type the amount and coin to confirm": [
+    "확인을 위해 금액과 코인 입력",
+    "輸入金額同幣種確認",
+    "输入金额和币种以确认",
+    "確認のため金額とコインを入力",
+    "Escribe la cantidad y la moneda para confirmar",
+    "Pro potvrzení napište částku a minci"
+  ],
+  "FROM": [
+    "보내는 곳",
+    "由",
+    "从",
+    "送金元",
+    "DE",
+    "OD"
+  ],
+  "TO": [
+    "받는 곳",
+    "到",
+    "到",
+    "送金先",
+    "PARA",
+    "KOMU"
+  ],
+  "Ready to send": [
+    "보낼 준비 완료",
+    "準備好傳送",
+    "准备发送",
+    "送金準備完了",
+    "Listo para enviar",
+    "Připraveno k odeslání"
+  ],
+  "Waiting for the network…": [
+    "네트워크 확인 대기 중…",
+    "等緊網絡確認…",
+    "等待网络确认…",
+    "ネットワークの確認待ち…",
+    "Esperando a la red…",
+    "Čekání na síť…"
+  ],
+  "Arrived!": [
+    "도착!",
+    "到咗！",
+    "已到账！",
+    "到着！",
+    "¡Llegó!",
+    "Dorazilo!"
+  ],
+  "Not sent": [
+    "전송되지 않음",
+    "未傳送",
+    "未发送",
+    "送金されませんでした",
+    "No enviado",
+    "Neodesláno"
+  ],
+  "New transfer": [
+    "새 송금",
+    "新轉賬",
+    "新转账",
+    "新しい送金",
+    "Nueva transferencia",
+    "Nový převod"
   ]
 }

@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import {easeInOutExpo, digits, money, masked, networkLabel, chainOf, flight} from '../../frontend/wallet-format.js';
+import {easeInOutExpo, digits, money, amount, masked, networkLabel, chainOf, flight} from '../../frontend/wallet-format.js';
 
 test('easeInOutExpo is the exponential in/out curve shared with tween.rs', () => {
   assert.equal(easeInOutExpo(-1), 0);
@@ -94,4 +94,13 @@ test('the send burst leaves the card and lands on target, eased exponentially', 
     // Out-of-range progress clamps instead of overshooting.
     assert.deepEqual(flight(2, from, to, 0.9, seed), end);
   }
+});
+
+test('amount drops trailing zeros but keeps two decimals', () => {
+  assert.equal(amount(5), '5.00');
+  assert.equal(amount('24.895'), '24.895');
+  assert.equal(amount(0.033288), '0.033288');
+  assert.equal(amount(1284.5, 2), '1,284.50');
+  assert.equal(amount(0.0000001), '0.00');
+  assert.equal(amount(7, 0), '7');
 });

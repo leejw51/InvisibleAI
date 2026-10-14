@@ -84,7 +84,8 @@ export async function fakeCronos(context, state) {
     const answer = result => route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ jsonrpc: '2.0', id, result }) });
     switch (method) {
       case 'eth_chainId': return answer(CHAIN_ID[network]);
-      case 'eth_getBalance': return answer('0x' + (state.nativeOf?.[network] ?? state.native).toString(16));
+      // Per-address balances when a test sets them (the recipient's, say); else the wallet's.
+      case 'eth_getBalance': return answer('0x' + (state.nativeOfAddress?.[params[0].toLowerCase()] ?? state.nativeOf?.[network] ?? state.native).toString(16));
       case 'eth_getCode': {
         const to = params[0].toLowerCase();
         return answer(to === USDC_OF[network] || state.tokens?.[to] ? '0x6080604052' : '0x');
@@ -97,7 +98,10 @@ export async function fakeCronos(context, state) {
         const held = { 'cronos-testnet': state.usdc, 'cronos-mainnet': state.mainnetUsdc ?? 0n }[network] ?? state.arbUsdc?.[network] ?? 0n;
         const token = usdc ? { symbol: mainnet ? 'USDC' : 'devUSDC.e', name: 'USD Coin', decimals: 6, balance: held } : state.tokens?.[to];
         if (!token) return answer('0x');
-        if (selector === '0x70a08231') return answer(word(token.balance ?? 0n));
+        if (selector === '0x70a08231') {
+          const holder = '0x' + params[0].data.slice(-40).toLowerCase();
+          return answer(word(state.tokenOfAddress?.[to]?.[holder] ?? token.balance ?? 0n));
+        }
         if (selector === '0x313ce567') return answer(word(token.decimals));
         if (selector === '0x95d89b41') return answer(token.bytes32 ? '0x' + Buffer.from(token.symbol).toString('hex').padEnd(64, '0') : abiString(token.symbol));
         if (selector === '0x06fdde03') return token.name == null ? answer('0x') : answer(abiString(token.name));
@@ -187,4 +191,16 @@ export async function fakeKoios(state = {}) {
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   return { url: `http://127.0.0.1:${server.address().port}`, close: () => server.close(), state };
+}
+
+/**
+ * Press Confirm on the review, first typing the amount and coin when the
+ * transfer asks for a second confirmation (over 20 CRO, over 1 USD, or a coin
+ * the wallet cannot price). The phrase is the one the review itself shows.
+ */
+export async function confirmSend(page) {
+  await page.getByTestId('wallet-review').waitFor();
+  const typed = page.getByLabel('Type the amount and coin to confirm');
+  if (await typed.count()) await typed.fill(await typed.getAttribute('placeholder'));
+  await page.getByTestId('wallet-confirm').click();
 }

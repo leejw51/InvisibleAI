@@ -14,6 +14,7 @@ import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { easeInOutExpo, digits, money, masked, networkLabel, chainOf, flight } from './wallet-format.js';
 import { balance } from './wallet-chains.js';
+import './wallet-send.js';
 
 // The Yew page reads non-EVM balances through this.
 window.cwbChains = { balance: (net, coin, address) => balance(net, coin, address) };

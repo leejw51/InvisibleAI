@@ -28,6 +28,7 @@ for (const [name, options] of [['phone', { viewport: { width: 1360, height: 1000
     await page.getByLabel('Recovery phrase', { exact: true }).fill(phrase);
     await page.getByRole('button', { name: 'Sign in', exact: true }).click();
     await page.getByRole('button', { name: 'Wallet', exact: true }).click();
+    await page.getByTestId('main-usdc-cronos-mainnet').click();
     await expect(page.getByTestId('asset-balance')).toHaveText('1284.56');
     if (name === 'phone') await page.setViewportSize({ width: 390, height: 844 });
     await page.waitForTimeout(1600);
