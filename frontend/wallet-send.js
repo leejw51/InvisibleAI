@@ -15,6 +15,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { easeInOutExpo, digits, amount as fmt } from './wallet-format.js';
+import { roll } from './wallet-odometer.js';
 
 const ease = easeInOutExpo;
 const reduced = matchMedia('(prefers-reduced-motion: reduce)');
@@ -67,7 +68,8 @@ class SendStage extends HTMLElement {
   constructor() {
     super();
     // Everything that moves, as numbers motion.dev can tween.
-    this.v = { from: 0, to: 0, amount: 0, launch: 0, impact: 0, flash: 0, fail: 0, shake: 0, zoom: 0 };
+    this.rolling = 0;
+    this.v = { launch: 0, impact: 0, flash: 0, fail: 0, shake: 0, zoom: 0 };
     this.controls = new Map();
     this.sparks = [];
   }
@@ -110,9 +112,9 @@ class SendStage extends HTMLElement {
     const hud = document.createElement('div');
     hud.className = 'send-hud';
     hud.innerHTML = `
-      <div class="send-side from"><span class="send-tag"></span><code class="send-address"></code><strong class="send-balance" data-testid="stage-from-balance"></strong><em class="send-symbol"></em></div>
-      <div class="send-center"><span class="send-amount" data-testid="stage-amount"></span><em class="send-symbol"></em><span class="send-status" data-testid="stage-status"></span></div>
-      <div class="send-side to"><span class="send-tag"></span><code class="send-address"></code><strong class="send-balance" data-testid="stage-to-balance"></strong><em class="send-symbol"></em></div>`;
+      <div class="send-side from"><span class="send-tag"></span><code class="send-address"></code><strong class="send-balance"><span class="odometer" aria-hidden="true"></span><span class="sr-only" data-testid="stage-from-balance"></span></strong><em class="send-symbol"></em></div>
+      <div class="send-center"><span class="send-amount"><span class="odometer" aria-hidden="true"></span><span class="sr-only" data-testid="stage-amount"></span></span><em class="send-symbol"></em><span class="send-status" data-testid="stage-status"></span></div>
+      <div class="send-side to"><span class="send-tag"></span><code class="send-address"></code><strong class="send-balance"><span class="odometer" aria-hidden="true"></span><span class="sr-only" data-testid="stage-to-balance"></span></strong><em class="send-symbol"></em></div>`;
     this.append(hud);
     this.hud = hud;
     const q = s => hud.querySelector(s);
@@ -120,15 +122,28 @@ class SendStage extends HTMLElement {
       fromTag: q('.from .send-tag'), toTag: q('.to .send-tag'),
       fromAddress: q('.from .send-address'), toAddress: q('.to .send-address'),
       fromBalance: q('.from .send-balance'), toBalance: q('.to .send-balance'),
-      amount: q('.send-amount'), status: q('.send-status'), symbols: hud.querySelectorAll('.send-symbol'),
+      status: q('.send-status'), symbols: hud.querySelectorAll('.send-symbol'),
+      // Each number: a rolling odometer for the eye, plain text for readers.
+      odo: { from: q('.from .odometer'), to: q('.to .odometer'), amount: q('.send-amount .odometer') },
+      text: { from: q('[data-testid="stage-from-balance"]'), to: q('[data-testid="stage-to-balance"]'), amount: q('[data-testid="stage-amount"]') },
     };
   }
-  /** Write the numbers as they are now; called on every tween frame. */
-  paint() {
-    const p = this.places();
-    this.el.fromBalance.textContent = fmt(this.v.from, p);
-    this.el.toBalance.textContent = fmt(this.v.to, p);
-    this.el.amount.textContent = fmt(this.v.amount, p);
+  /** Roll one number (from, to or amount) to `value`, casino-style. */
+  show(key, value, options) {
+    const text = fmt(value, this.places());
+    this.el.text[key].textContent = text;
+    return roll(this.el.odo[key], text, options);
+  }
+  /** Once these rolls stop, the numbers are at rest (for this phase only). */
+  settle(rolls) {
+    const token = ++this.rolling;
+    this.numbersSettled = false;
+    Promise.all(rolls).then(() => {
+      if (token !== this.rolling) return;
+      this.numbersSettled = true;
+      this.dataset.shownFrom = this.el.text.from.textContent;
+      this.dataset.shownTo = this.el.text.to.textContent;
+    });
   }
   sync() {
     const d = this.dataset;
@@ -144,9 +159,7 @@ class SendStage extends HTMLElement {
       // Yew can set the balances after the element is attached: a ready stage
       // follows them; a running one keeps its course.
       if (phase === 'ready') {
-        Object.assign(this.v, { from: digits(d.fromBefore), to: digits(d.toBefore) });
-        this.run('amount', this.v, { amount: digits(d.amount) }, { duration: 0.8, onUpdate: () => this.paint(), onComplete: () => this.paint() });
-        this.paint();
+        this.settle([this.show('from', digits(d.fromBefore)), this.show('to', digits(d.toBefore)), this.show('amount', digits(d.amount))]);
       }
       return;
     }
@@ -155,22 +168,22 @@ class SendStage extends HTMLElement {
     this.classList.remove('is-ready', 'is-flying', 'is-done', 'is-failed');
     this.classList.add(`is-${phase === 'pending' ? 'flying' : phase}`);
     const amount = digits(d.amount), fromBefore = digits(d.fromBefore), toBefore = digits(d.toBefore);
-    const done = () => { this.dataset.shownFrom = fmt(this.v.from, this.places()); this.dataset.shownTo = fmt(this.v.to, this.places()); this.paint(); };
     if (phase === 'ready') {
       this.el.status.textContent = this.label('Ready', 'Ready to send');
-      Object.assign(this.v, { from: fromBefore, to: toBefore, amount: 0, launch: 0, impact: 0, fail: 0 });
-      this.paint();
-      // The amount to send counts up into view.
-      this.run('amount', this.v, { amount }, { duration: 1.1, onUpdate: () => this.paint(), onComplete: done });
+      Object.assign(this.v, { launch: 0, impact: 0, fail: 0 });
+      // The amount to send rolls up from zero; the balances appear.
+      this.el.odo.amount.dataset.odometer = fmt(0, this.places());
+      this.settle([this.show('from', fromBefore), this.show('to', toBefore), this.show('amount', amount, { duration: 1.6 })]);
     } else if (phase === 'flying' || phase === 'pending') {
       this.el.status.textContent = this.label(phase === 'pending' ? 'Pending' : 'Flying', 'Sending…');
       if (previous === 'flying' || previous === 'pending') return;
       // The value leaves one wallet and arrives at the other as the coins fly.
-      this.v.amount = amount; this.v.launch = 0;
+      this.v.launch = 0;
       this.run('launch', this.v, { launch: [0, 1] }, { duration: 2.6 });
-      this.run('from', this.v, { from: [fromBefore, fromBefore - amount] }, { duration: 2.6, onUpdate: () => this.paint() });
-      this.run('to', this.v, { to: [toBefore, toBefore + amount] }, { duration: 2.6, delay: 0.35, onUpdate: () => this.paint() });
-      this.run('amount', this.v, { amount: [amount, 0] }, { duration: 2.6, onUpdate: () => this.paint() });
+      // The reels spin as the coins fly: the sender's down, the amount to
+      // zero, and a beat later the recipient's up.
+      const toRoll = new Promise(resolve => setTimeout(() => this.show('to', toBefore + amount, { duration: 2.3 }).then(resolve), 350));
+      this.settle([this.show('from', fromBefore - amount, { duration: 2.6 }), this.show('amount', 0, { duration: 2.6 }), toRoll]);
       this.run('zoom', this.v, { zoom: [0, 1, 0.6] }, { duration: 2.6, times: [0, 0.5, 1] });
       this.launchStream();
     } else if (phase === 'done') {
@@ -178,9 +191,7 @@ class SendStage extends HTMLElement {
       // The chain's own numbers have the last word.
       const fromAfter = d.fromAfter !== undefined ? digits(d.fromAfter) : fromBefore - amount;
       const toAfter = d.toAfter !== undefined ? digits(d.toAfter) : toBefore + amount;
-      this.v.amount = 0;
-      this.run('from', this.v, { from: fromAfter }, { duration: 1.2, onUpdate: () => this.paint() });
-      this.run('to', this.v, { to: toAfter }, { duration: 1.2, onUpdate: () => this.paint(), onComplete: done });
+      this.settle([this.show('from', fromAfter, { duration: 1.6 }), this.show('to', toAfter, { duration: 1.6 })]);
       this.run('impact', this.v, { impact: [0, 1] }, { duration: 1.6 });
       this.run('flash', this.v, { flash: [0, 1, 0] }, { duration: 1.2, times: [0, 0.2, 1] });
       this.run('shake', this.v, { shake: [0, 1, 0] }, { duration: 0.7, times: [0, 0.15, 1] });
@@ -190,8 +201,7 @@ class SendStage extends HTMLElement {
     } else if (phase === 'failed') {
       this.el.status.textContent = this.label('Failed', 'Not sent');
       // Nothing left the wallet: the numbers return.
-      this.run('from', this.v, { from: fromBefore }, { duration: 1, onUpdate: () => this.paint() });
-      this.run('to', this.v, { to: toBefore }, { duration: 1, onUpdate: () => this.paint(), onComplete: done });
+      this.settle([this.show('from', fromBefore, { duration: 1.4 }), this.show('to', toBefore, { duration: 1.4 }), this.show('amount', amount, { duration: 1.4 })]);
       this.run('fail', this.v, { fail: [0, 1] }, { duration: 0.8 });
       this.run('shake', this.v, { shake: [0, 1, 0] }, { duration: 0.6, times: [0, 0.2, 1] });
       this.finish(false);
@@ -204,11 +214,31 @@ class SendStage extends HTMLElement {
    */
   finish(ok) {
     clearTimeout(this.finishing);
-    const played = reduced.matches ? 0 : 1800; // the longest arrival effect
-    this.finishing = setTimeout(() => {
-      this.dataset.finished = ok ? 'done' : 'failed';
-      this.dispatchEvent(new CustomEvent('stage-finished', { bubbles: true, detail: { ok } }));
-    }, played + SendStage.PAUSE);
+    // The scene decides when it has settled (every coin landed, the last
+    // spark gone, the numbers at rest); without one, the tweens' length does.
+    this.pendingFinish = { ok, quietSince: null };
+    if (!this.coins || reduced.matches) {
+      this.finishing = setTimeout(() => this.announce(), (reduced.matches ? 0 : 1800) + SendStage.PAUSE);
+    }
+  }
+  /** Called every frame once the transfer has ended: hold, then announce. */
+  checkSettled(now) {
+    const pending = this.pendingFinish;
+    if (!pending) return;
+    const flyingNow = this.coins.filter(c => c.t > 0 && c.t < 1).length;
+    if (this.dataset.airborne !== String(flyingNow)) this.dataset.airborne = String(flyingNow);
+    const airborne = flyingNow > 0;
+    const settled = this.numbersSettled && !airborne && this.sparks.length === 0 && !(this.v.impact > 0 && this.v.impact < 1);
+    if (!settled) { pending.quietSince = null; return; }
+    pending.quietSince ??= now;
+    if (now - pending.quietSince >= SendStage.PAUSE) this.announce();
+  }
+  announce() {
+    const pending = this.pendingFinish;
+    if (!pending) return;
+    this.pendingFinish = null;
+    this.dataset.finished = pending.ok ? 'done' : 'failed';
+    this.dispatchEvent(new CustomEvent('stage-finished', { bubbles: true, detail: { ok: pending.ok } }));
   }
 
   mount() {
@@ -398,9 +428,17 @@ class SendStage extends HTMLElement {
     for (const name of ['position', 'size', 'alpha', 'tint']) this.trail.geometry.attributes[name].needsUpdate = true;
     // Coins stream along their own arcs; after the launch a slower trickle
     // keeps going while the network confirms.
+    const failed = this.phase === 'failed';
     for (const c of this.coins) {
-      if (!flying && c.t < 0) { c.sprite.material.opacity = 0; continue; }
-      if (flying) c.t += dt * c.speed * (L >= 1 ? 0.6 : 1);
+      if (!flying && c.t <= 0) { c.t = Math.min(c.t, -9); c.sprite.material.opacity = 0; continue; }
+      // A failed transfer: coins in the air vanish in a puff.
+      if (failed) {
+        this.burst(c.sprite.position, 6);
+        c.t = -9; c.sprite.material.opacity = 0; continue;
+      }
+      // While sending they stream; once it has arrived the ones in the air
+      // hurry home and nothing new leaves.
+      c.t += dt * c.speed * (flying ? (L >= 1 ? 0.6 : 1) : 1.8);
       if (c.t >= 1) {
         this.burst({ x: this.toPos.x - 0.9, y: this.toPos.y + (c.seed - 0.5) * 0.6, z: 0 }, 10);
         c.t = flying && L >= 1 ? -Math.random() * 0.8 : -9;
@@ -433,6 +471,7 @@ class SendStage extends HTMLElement {
       sc[i * 3] = s.color[0]; sc[i * 3 + 1] = s.color[1]; sc[i * 3 + 2] = s.color[2];
     }
     for (const name of ['position', 'size', 'alpha', 'tint']) this.sparkCloud.geometry.attributes[name].needsUpdate = true;
+    this.checkSettled(performance.now());
   }
 }
 if (!customElements.get('cwb-send-stage')) customElements.define('cwb-send-stage', SendStage);

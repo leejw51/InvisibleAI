@@ -1166,7 +1166,8 @@ impl Component for Wallet {
 
         let balances = html! {<div class="wallet-balance-strip" aria-live="polite">
             <div class="wallet-balance-main"><span class="small-muted">{t("Balance")}</span>
-                <strong><span data-testid="asset-balance">{held.clone().unwrap_or_else(|| "—".into())}</span><em>{&coin.symbol}</em></strong></div>
+                // The balance rolls like a casino counter; the plain text is for readers.
+                <strong><span class="odometer" aria-hidden="true" data-odometer-value={held.clone().unwrap_or_else(|| "—".into())}></span><span class="wallet-sr" data-testid="asset-balance">{held.clone().unwrap_or_else(|| "—".into())}</span><em>{&coin.symbol}</em></strong></div>
             <div class={classes!("wallet-fee", no_fee.then_some("is-empty"), native.then_some("is-native"))} data-testid="fee-balance">
                 {icon("info")}
                 <span>{if native { format!("{} {}", t("Network fees are paid from this balance, in"), net.symbol) } else { format!("{} {}", t("Network fees are paid in"), net.symbol) }}</span>

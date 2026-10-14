@@ -14,6 +14,8 @@
   - in flight: the amount ticking over as the sender's balance counts down and the recipient's counts up;
   - after: both balances re-read from the chain once the receipt confirms.
   Every tween is motion.dev with exponential in/out easing.
+- **Landing and timing.** When a transfer arrives, coins still in the air hurry home and land; none launch afterwards. On failure they vanish in a puff. The stage counts as finished only once every coin has landed, the last spark has faded and the numbers are at rest. It then holds for 2 s before the page glides up to the card (motion.dev, exponential in/out, 1.6 s).
+- **Casino-style numbers.** The stage's FROM, TO and amount figures and the balance strip roll like an odometer. Each digit is a reel spun with motion's `animate` on an exponential in/out ease, with a slight motion blur, and the reels stop left to right via motion's `stagger`. Digits line up by place value, and only those below the first change spin, upward for a rise and downward for a fall. Plain text stays available to screen readers and tests. (motion.dev's `AnimateNumber` is a React Motion+ component, so the reels are built from `animate` and `stagger`.)
 - **Bug found and fixed.** The stage's entrance tween ended on `transform: none`, which motion cannot interpolate, so the stage collapsed to zero size for anyone with motion enabled.
 
 Verified:

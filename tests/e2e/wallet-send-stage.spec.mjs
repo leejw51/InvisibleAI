@@ -103,7 +103,9 @@ test('Cronos testnet by default, coins ranked by use, a typed second confirmatio
     // The page stays with the stage while the money moves: it does not scroll.
     await expect(stage).toBeInViewport();
     expect(await scrolled()).toBe(before);
-    await page.waitForTimeout(1300);
+    await page.waitForTimeout(700);
+    await stage.screenshot({ path: 'test-results/stage-2a-rolling.png' });
+    await page.waitForTimeout(600);
     await stage.screenshot({ path: 'test-results/stage-2-flying.png' });
     // After: the balances the chain reports, not the ones expected.
     await expect(stage).toHaveAttribute('data-phase', 'done', { timeout: 15000 });
@@ -118,7 +120,9 @@ test('Cronos testnet by default, coins ranked by use, a typed second confirmatio
     expect(await scrolled()).toBe(before);
     expect(await card.getAttribute('data-sent')).toBeNull();
     // …then the stage says it is over, and the page glides up to the card.
-    await expect(stage).toHaveAttribute('data-finished', 'done', { timeout: 10000 });
+    await expect(stage).toHaveAttribute('data-finished', 'done', { timeout: 15000 });
+    // Finished means settled: every coin has landed; nothing hangs in mid-air.
+    await expect(stage).toHaveAttribute('data-airborne', '0');
     await expect(card).toHaveAttribute('data-arrived', '1', { timeout: 10000 });
     await expect(card).toBeInViewport();
     expect(await scrolled()).toBeLessThan(before);

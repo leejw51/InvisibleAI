@@ -15,6 +15,7 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 import { easeInOutExpo, digits, money, masked, networkLabel, chainOf, flight } from './wallet-format.js';
 import { balance } from './wallet-chains.js';
 import './wallet-send.js';
+import { roll } from './wallet-odometer.js';
 
 // The Yew page reads non-EVM balances through this.
 window.cwbChains = { balance: (net, coin, address) => balance(net, coin, address) };
@@ -522,7 +523,7 @@ const glide = (group, instant) => {
 };
 
 // The amount being typed rolls digit by digit: each changed character slides in.
-const roll = el => {
+const rollDigits = el => {
   const value = el.dataset.value || '';
   const previous = el.dataset.rendered ?? '';
   if (value === previous) return;
@@ -541,26 +542,36 @@ const roll = el => {
   if (!value) el.firstChild?.classList.add('is-placeholder');
 };
 
+// Odometers Yew renders with `data-odometer-value` roll to each new value.
+const odometer = el => {
+  const value = el.dataset.odometerValue ?? '';
+  if (el.dataset.odometer === value) return;
+  // A coin change starts fresh (no spin from another coin's number).
+  if (!/\d/.test(el.dataset.odometer ?? '') || !/\d/.test(value)) delete el.dataset.odometer;
+  roll(el, value, { duration: 1.5 });
+};
 const scan = root => {
   if (!(root instanceof Element)) return;
   const all = sel => [...(root.matches(sel) ? [root] : []), ...root.querySelectorAll(sel)];
   for (const el of all('[data-motion]')) enter(el);
   for (const el of all('[data-stagger]')) stagger(el);
   for (const el of all('[data-glider]')) glide(el, true);
-  for (const el of all('[data-roll]')) roll(el);
+  for (const el of all('[data-roll]')) rollDigits(el);
+  for (const el of all('[data-odometer-value]')) odometer(el);
 };
 new MutationObserver(records => {
   for (const record of records) {
     const el = record.target;
     if (record.type === 'attributes') {
       if (record.attributeName === 'class' && el.classList.contains('is-leaving') && !el.dataset.left) { el.dataset.left = '1'; leave(el); }
-      else if (record.attributeName === 'data-value' && el.matches('[data-roll]')) roll(el);
+      else if (record.attributeName === 'data-value' && el.matches('[data-roll]')) rollDigits(el);
+      else if (record.attributeName === 'data-odometer-value') odometer(el);
       else if (el.parentElement?.matches('[data-glider]')) glide(el.parentElement, false);
     } else {
       if (el instanceof Element && el.matches('[data-stagger]')) stagger(el);
       for (const node of record.addedNodes) scan(node);
     }
   }
-}).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'aria-pressed', 'aria-selected', 'aria-checked', 'data-value'] });
+}).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'aria-pressed', 'aria-selected', 'aria-checked', 'data-value', 'data-odometer-value'] });
 addEventListener('resize', () => document.querySelectorAll('[data-glider]').forEach(g => glide(g, true)));
 scan(document.body);
