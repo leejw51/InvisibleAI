@@ -617,6 +617,14 @@ impl Component for Wallet {
             }
             Msg::Searching(open) => {
                 self._blur = None;
+                // Opening lands on the coin in use.
+                if open && !self.searching && self.query.is_empty() {
+                    self.highlight = self
+                        .results()
+                        .iter()
+                        .position(|c| c.key == self.coin.key)
+                        .unwrap_or(0);
+                }
                 self.searching = open;
             }
             Msg::Blurred => {
@@ -1064,7 +1072,15 @@ impl Component for Wallet {
         let rows = self.results();
         let query_address = evm::parse_address(self.query.trim()).is_ok();
         let search = html! {<div class={classes!("wallet-search", self.searching.then_some("is-open"))}>
-            <label class="wallet-search-box">{icon("search")}
+            <label class={classes!("wallet-search-box", (!self.searching && self.query.is_empty()).then_some("has-current"))}>{icon("search")}
+                // At rest the box shows the coin in use: the most recent pick,
+                // or Cronos testnet for a new account. Focus it to search.
+                if !self.searching && self.query.is_empty() {
+                    <span class="wallet-search-current" data-testid="search-current" aria-hidden="true">
+                        <span class={classes!("coin-badge", coin.net().chain.key())}>{coin.symbol.chars().take(4).collect::<String>()}</span>
+                        <strong>{&coin.symbol}</strong><span>{coin.net().name}</span>
+                    </span>
+                }
                 <input type="search" role="combobox" aria-expanded={self.searching.to_string()} aria-controls="wallet-search-results" aria-label={t("Search coins and networks")} placeholder={t("Search coins, networks or a contract address")} autocomplete="off" spellcheck="false" value={self.query.clone()}
                     oninput={link.callback(|e: InputEvent| Msg::Query(e.target_unchecked_into::<HtmlInputElement>().value()))}
                     onfocus={link.callback(|_| Msg::Searching(true))} onblur={link.callback(|_| Msg::Blurred)} onkeydown={link.callback(Msg::Key)}/>
@@ -1245,7 +1261,7 @@ impl Component for Wallet {
                 {for self.stage.as_ref().map(|st| {
                     let places = if st.coin.tags.iter().any(|t| t == "usd") { 2 } else { st.coin.decimals.min(6) };
                     html! {<div class="wallet-stage-column">
-                        <cwb-send-stage data-testid="send-stage" data-phase={st.phase} data-from={st.from.clone()} data-to={st.to.clone()} data-amount={st.amount.clone()} data-symbol={st.coin.symbol.clone()} data-places={places.to_string()}
+                        <cwb-send-stage data-testid="send-stage" data-flight-origin="" data-phase={st.phase} data-from={st.from.clone()} data-to={st.to.clone()} data-amount={st.amount.clone()} data-symbol={st.coin.symbol.clone()} data-places={places.to_string()}
                             data-from-before={st.from_before.clone()} data-to-before={st.to_before.clone()} data-from-after={st.from_after.clone()} data-to-after={st.to_after.clone()}
                             data-label-from={t("FROM")} data-label-to={t("TO")} data-label-ready={t("Ready to send")} data-label-flying={t("Sending…")} data-label-pending={t("Waiting for the network…")} data-label-done={t("Arrived!")} data-label-failed={t("Not sent")}
                             role="img" aria-label={format!("{} {} {} → {}", st.amount, st.coin.symbol, short(&st.from), short(&st.to))}></cwb-send-stage>

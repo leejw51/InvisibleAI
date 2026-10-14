@@ -134,12 +134,14 @@ test('two main buttons, one search box for every chain, EVM sends, choices kept 
     await page.getByRole('button', { name: 'Review transfer' }).click();
     await expect(page.getByTestId('review-symbol')).toHaveText('USDC');
     await confirmSend(page);
-    await expect(page.locator('.wallet-flight')).toHaveCount(1);
-    // The card is back in view and the amount is mid-flight.
-    await expect(page.getByTestId('wallet-card')).toBeInViewport();
-    await page.waitForTimeout(600);
-    await page.screenshot({ path: 'test-results/multichain-5-sending.png' });
     await expect(page.getByTestId('wallet-activity').first()).toContainText('Confirmed', { timeout: 15000 });
+    // Once the stage has finished and paused, the page glides up to the card
+    // and the amount flies into it.
+    await expect(page.getByTestId('wallet-card')).toHaveAttribute('data-arrived', '1', { timeout: 15000 });
+    await expect(page.getByTestId('wallet-card')).toBeInViewport();
+    await expect(page.locator('.wallet-flight')).toHaveCount(1);
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: 'test-results/multichain-5-sending.png' });
     await expect(page.getByTestId('wallet-card')).toHaveAttribute('data-sent', '1');
     const sent = rpc.sent.at(-1);
     expect(sent.url).toContain('sepolia-rollup.arbitrum.io');

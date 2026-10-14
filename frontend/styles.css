@@ -1766,6 +1766,13 @@ cwb-wallet-card[data-renderer="2d"]>canvas{inset:8% 6%;width:88%!important;heigh
 .wallet-search.is-open .wallet-search-box,.wallet-search-box:focus-within{border-color:#b9a2dc;box-shadow:0 0 0 4px #b9a2dc33,0 20px 40px -28px #5b3d8a80}
 .wallet-search-box svg{width:18px;height:18px;color:#a08cb2;flex:none}
 .wallet-search-box input{flex:1;border:0;outline:0;background:transparent;font-size:15px;padding:0;margin:0;box-shadow:none;color:#4f3a69}
+.wallet-search-box{position:relative}
+.wallet-search-current{position:absolute;left:44px;right:56px;top:50%;transform:translateY(-50%);display:flex;align-items:center;gap:10px;pointer-events:none;min-width:0}
+.wallet-search-current .coin-badge{width:30px;height:30px;border-radius:9px;font-size:9px;flex:none}
+.wallet-search-current strong{font-size:16px;color:#3f2d57}
+.wallet-search-current>span:last-child{font-size:13px;color:#8a76a0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wallet-search-box.has-current input::placeholder{color:transparent}
+:root[data-theme="dark"] .wallet-search-current strong{color:#eadff7}
 .wallet-search-box kbd{font:600 11px/1 ui-monospace,SFMono-Regular,Menlo,monospace;color:#a08cb2;padding:5px 8px;border-radius:8px;background:#f3eef8}
 .wallet-search-panel{position:absolute;left:0;right:0;top:calc(100% + 8px);max-height:min(60vh,520px);overflow:auto;padding:8px;border-radius:20px;background:rgba(255,253,252,.92);backdrop-filter:blur(18px) saturate(1.4);border:1px solid #e8def0;box-shadow:0 40px 80px -30px #3b225f66}
 .wallet-search-panel ul{display:flex;flex-direction:column;gap:2px}

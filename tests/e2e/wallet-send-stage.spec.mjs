@@ -41,8 +41,10 @@ test('Cronos testnet by default, coins ranked by use, a typed second confirmatio
   await page.getByRole('button', { name: 'Wallet', exact: true }).click();
   const symbol = page.getByTestId('asset-symbol');
 
-  await test.step('a new account opens on Cronos testnet', async () => {
+  await test.step('a new account opens on Cronos testnet, already chosen in the coin box', async () => {
     await expect(symbol).toHaveText('TCRO');
+    await expect(page.getByTestId('search-current')).toContainText('TCRO');
+    await expect(page.getByTestId('search-current')).toContainText('Cronos Testnet');
     await expect(page.getByTestId('asset-network')).toHaveText('Cronos Testnet');
     await expect(page.getByTestId('asset-balance')).toHaveText('30');
   });
@@ -57,6 +59,8 @@ test('Cronos testnet by default, coins ranked by use, a typed second confirmatio
     await expect(options.nth(0)).toHaveAttribute('data-key', 'sol-solana-devnet');
     await box.press('Escape');
     await expect(symbol).toHaveText('TCRO');
+    // The box shows the most recent pick; opening it lands on that coin.
+    await expect(page.getByTestId('search-current')).toContainText('TCRO');
   });
 
   const amount = page.getByLabel('Amount', { exact: true });
@@ -91,8 +95,14 @@ test('Cronos testnet by default, coins ranked by use, a typed second confirmatio
     // The chain moves the money when the receipt comes back.
     rpc.receiptAfter = 2;
     rpc.onReceipt = () => { rpc.native = 24_895_000_000_000_000_000n; rpc.nativeOfAddress[recipient.toLowerCase()] = 7n * CRO; };
+    const card = page.getByTestId('wallet-card');
+    const scrolled = () => page.evaluate(() => Math.round(scrollY));
+    const before = await scrolled();
     await page.getByTestId('wallet-confirm').click();
     await expect(stage).toHaveAttribute('data-phase', /flying|pending/);
+    // The page stays with the stage while the money moves: it does not scroll.
+    await expect(stage).toBeInViewport();
+    expect(await scrolled()).toBe(before);
     await page.waitForTimeout(1300);
     await stage.screenshot({ path: 'test-results/stage-2-flying.png' });
     // After: the balances the chain reports, not the ones expected.
@@ -103,9 +113,19 @@ test('Cronos testnet by default, coins ranked by use, a typed second confirmatio
     await expect(page.getByTestId('stage-status')).toHaveText('Arrived!');
     await page.waitForTimeout(400);
     await stage.screenshot({ path: 'test-results/stage-3-done.png' });
+    // Arrived, but the page holds on the stage while the effects play and pause…
+    await expect(stage).toBeInViewport();
+    expect(await scrolled()).toBe(before);
+    expect(await card.getAttribute('data-sent')).toBeNull();
+    // …then the stage says it is over, and the page glides up to the card.
+    await expect(stage).toHaveAttribute('data-finished', 'done', { timeout: 10000 });
+    await expect(card).toHaveAttribute('data-arrived', '1', { timeout: 10000 });
+    await expect(card).toBeInViewport();
+    expect(await scrolled()).toBeLessThan(before);
     const [, , , , value] = rlpDecode(unhex(rpc.sent[0].raw));
     expect(big(value)).toBe(5n * CRO);
     await page.screenshot({ path: 'test-results/stage-4-page.png' });
+    await page.getByTestId('new-transfer').scrollIntoViewIfNeeded();
     await page.getByTestId('new-transfer').click();
     await expect(stage).toHaveCount(0);
   });

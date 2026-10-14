@@ -195,18 +195,25 @@ class WalletCard extends HTMLElement {
    */
   async send() {
     const [, amount = '', symbol = ''] = (this.dataset.send || '').split('|');
+    // The send stage beside the form tells its story first; the page stays
+    // with it until the transfer is over and has been seen.
+    const stage = document.querySelector('cwb-send-stage');
+    const ok = stage ? await this.stageFinished(stage) : true;
     this.dataset.sent = (Number(this.dataset.sent || 0) + 1).toString();
-    if (reduced.matches) return;
-    // Where the amount leaves from, in page coordinates: the button is about
-    // to fade away and the page may scroll.
-    const button = (document.querySelector('[data-flight-origin]') || this).getBoundingClientRect();
-    const origin = { x: button.left + button.width / 2 + scrollX, y: button.top + button.height / 2 + scrollY };
-    // Bring the card into view first; the send plays where it can be seen.
+    if (reduced.matches || ok === null) return;
+    // Where the amount leaves from, in page coordinates: the stage (or the
+    // Confirm button), measured before the page moves.
+    const from = (stage || document.querySelector('[data-flight-origin]') || this).getBoundingClientRect();
+    const origin = { x: from.left + from.width / 2 + scrollX, y: from.top + from.height / 2 + scrollY };
+    // Then glide up to the card, slow out, fast through, soft landing.
     const card = this.getBoundingClientRect();
     if (card.top < 0 || card.bottom > innerHeight) {
       const target = Math.max(0, scrollY + card.top - Math.max(16, (innerHeight - card.height) / 2));
-      await animate(scrollY, target, { duration: 0.7, ease, onUpdate: y => scrollTo(0, y) });
+      await animate(scrollY, target, { duration: 1.6, ease, onUpdate: y => scrollTo(0, y) });
     }
+    this.dataset.arrived = this.dataset.sent;
+    // A failed transfer comes back up quietly: nothing to celebrate.
+    if (!ok) return;
     // The card gathers itself, then kicks back as the value leaves it.
     this.run('kick', this.shown, { kick: [0, -0.35, 1, 0] }, { duration: 1.6, ease, times: [0, 0.25, 0.55, 1] });
     this.shown.burst = 0; this.shown.wave = 0;
@@ -214,7 +221,23 @@ class WalletCard extends HTMLElement {
     this.run('wave', this.shown, { wave: [0, 1] }, { duration: 1.4, ease, delay: 0.4 });
     this.fly(`−${amount} ${symbol}`.trim(), { x: origin.x - scrollX, y: origin.y - scrollY });
   }
-  /** The amount as a glowing label, from the Confirm button into the card and away. */
+  /**
+   * Resolves with whether the money arrived once the stage has finished (or
+   * null if it went away first, or never finished within two minutes).
+   */
+  stageFinished(stage) {
+    if (stage.dataset.finished) return Promise.resolve(stage.dataset.finished === 'done');
+    return new Promise(resolve => {
+      const done = value => { clearTimeout(timer); observer.disconnect(); stage.removeEventListener('stage-finished', onFinish); resolve(value); };
+      const onFinish = event => done(!!event.detail?.ok);
+      const timer = setTimeout(() => done(null), 120000);
+      // "New transfer" removes the stage: the page stays where the user is.
+      const observer = new MutationObserver(() => { if (!stage.isConnected) done(null); });
+      observer.observe(document.body, { childList: true, subtree: true });
+      stage.addEventListener('stage-finished', onFinish);
+    });
+  }
+  /** The amount as a glowing label, from the stage into the card and away. */
   fly(text, start) {
     const to = this.getBoundingClientRect();
     const label = document.createElement('div');

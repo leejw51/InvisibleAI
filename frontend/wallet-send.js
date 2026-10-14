@@ -61,6 +61,8 @@ function pointCloud(count, map) {
 }
 
 class SendStage extends HTMLElement {
+  /** How long the finished stage holds before the page moves on (ms). */
+  static PAUSE = 1500;
   static observedAttributes = ['data-phase', 'data-amount', 'data-from-before', 'data-to-before', 'data-from-after', 'data-to-after', 'data-from', 'data-to', 'data-symbol'];
   constructor() {
     super();
@@ -78,6 +80,7 @@ class SendStage extends HTMLElement {
     this.run('enter', this, { opacity: [0, 1], transform: ['translateY(20px) scale(.97)', 'translateY(0px) scale(1)'] }, { duration: 0.9, ease });
   }
   disconnectedCallback() {
+    clearTimeout(this.finishing);
     for (const c of this.controls.values()) c.stop?.();
     cancelAnimationFrame(this.frame);
     this.resizeObserver?.disconnect();
@@ -183,6 +186,7 @@ class SendStage extends HTMLElement {
       this.run('shake', this.v, { shake: [0, 1, 0] }, { duration: 0.7, times: [0, 0.15, 1] });
       this.burst(this.toPos, 260, true);
       this.run('pop', this.el.toBalance, { transform: ['scale(1)', 'scale(1.25)', 'scale(1)'] }, { duration: 0.9, times: [0, 0.3, 1] });
+      this.finish(true);
     } else if (phase === 'failed') {
       this.el.status.textContent = this.label('Failed', 'Not sent');
       // Nothing left the wallet: the numbers return.
@@ -190,7 +194,21 @@ class SendStage extends HTMLElement {
       this.run('to', this.v, { to: toBefore }, { duration: 1, onUpdate: () => this.paint(), onComplete: done });
       this.run('fail', this.v, { fail: [0, 1] }, { duration: 0.8 });
       this.run('shake', this.v, { shake: [0, 1, 0] }, { duration: 0.6, times: [0, 0.2, 1] });
+      this.finish(false);
     }
+  }
+  /**
+   * Once the arrival (or failure) has fully played, and after a moment to
+   * take it in, tell the page the transfer is over: the card takes it from
+   * there. `stage-finished` carries whether the money arrived.
+   */
+  finish(ok) {
+    clearTimeout(this.finishing);
+    const played = reduced.matches ? 0 : 1800; // the longest arrival effect
+    this.finishing = setTimeout(() => {
+      this.dataset.finished = ok ? 'done' : 'failed';
+      this.dispatchEvent(new CustomEvent('stage-finished', { bubbles: true, detail: { ok } }));
+    }, played + SendStage.PAUSE);
   }
 
   mount() {
