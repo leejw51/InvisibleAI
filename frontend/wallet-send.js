@@ -165,6 +165,14 @@ class SendStage extends HTMLElement {
     }
     const previous = this.phase;
     this.phase = phase;
+    // Yew keeps this element for the next transfer: a new run forgets the
+    // last one's ending, so nobody mistakes it for this one's.
+    if (phase === 'ready' || ((phase === 'flying' || phase === 'pending') && previous !== 'flying' && previous !== 'pending')) {
+      clearTimeout(this.finishing);
+      this.pendingFinish = null;
+      delete this.dataset.finished;
+      this.dataset.run = String(Number(this.dataset.run || 0) + (phase === 'ready' ? 1 : 0));
+    }
     this.classList.remove('is-ready', 'is-flying', 'is-done', 'is-failed');
     this.classList.add(`is-${phase === 'pending' ? 'flying' : phase}`);
     const amount = digits(d.amount), fromBefore = digits(d.fromBefore), toBefore = digits(d.toBefore);

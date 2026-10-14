@@ -199,7 +199,10 @@ class WalletCard extends HTMLElement {
     // The send stage beside the form tells its story first; the page stays
     // with it until the transfer is over and has been seen.
     const stage = document.querySelector('cwb-send-stage');
+    // Each send has its own turn: a newer one cancels an older one's wait.
+    const turn = (this.turn = (this.turn || 0) + 1);
     const ok = stage ? await this.stageFinished(stage) : true;
+    if (turn !== this.turn) return;
     this.dataset.sent = (Number(this.dataset.sent || 0) + 1).toString();
     if (reduced.matches || ok === null) return;
     // Where the amount leaves from, in page coordinates: the stage (or the
@@ -227,9 +230,14 @@ class WalletCard extends HTMLElement {
    * null if it went away first, or never finished within two minutes).
    */
   stageFinished(stage) {
-    if (stage.dataset.finished) return Promise.resolve(stage.dataset.finished === 'done');
+    // Only an ending of this run counts: the stage must be done or failed now.
+    const ended = () => stage.dataset.finished && /^(done|failed)$/.test(stage.dataset.phase || '');
+    if (ended()) return Promise.resolve(stage.dataset.finished === 'done');
+    const turn = this.turn;
     return new Promise(resolve => {
-      const done = value => { clearTimeout(timer); observer.disconnect(); stage.removeEventListener('stage-finished', onFinish); resolve(value); };
+      const done = value => { clearTimeout(timer); clearInterval(superseded); observer.disconnect(); stage.removeEventListener('stage-finished', onFinish); resolve(value); };
+      // A newer send takes over: this wait ends quietly.
+      const superseded = setInterval(() => { if (turn !== this.turn) done(null); }, 250);
       const onFinish = event => done(!!event.detail?.ok);
       const timer = setTimeout(() => done(null), 120000);
       // "New transfer" removes the stage: the page stays where the user is.

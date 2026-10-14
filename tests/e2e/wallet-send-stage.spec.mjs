@@ -7,7 +7,7 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fakeCronos, rlpDecode, unhex, big } from './evm-fixture.mjs';
+import { fakeCronos, rlpDecode, unhex, big, confirmSend } from './evm-fixture.mjs';
 
 const base = 'http://127.0.0.1:3128';
 // Public BIP-39 vector; never use it for assets.
@@ -154,6 +154,33 @@ test('Cronos testnet by default, coins ranked by use, a typed second confirmatio
     await expect(stage).toHaveAttribute('data-phase', 'done', { timeout: 15000 });
     expect(rpc.sent).toHaveLength(2);
     expect(big(rlpDecode(unhex(rpc.sent[1].raw))[4])).toBe(21n * CRO);
+  });
+
+  await test.step('two sends in a row: the second waits for its own stage to finish before moving', async () => {
+    // No "New transfer" press: the same stage element is reused.
+    const card = page.getByTestId('wallet-card');
+    // Let the previous send finish its own glide and finale first.
+    await expect(card).toHaveAttribute('data-arrived', '2', { timeout: 15000 });
+    const arrived = 2;
+    await expect(card).toBeInViewport();
+    await page.getByLabel('Recipient address').scrollIntoViewIfNeeded();
+    await page.getByLabel('Recipient address').fill(recipient);
+    await amount.fill('1 TCRO');
+    await review.click();
+    await expect(stage).toHaveAttribute('data-phase', 'ready');
+    await expect(stage).not.toHaveAttribute('data-finished', /.+/);
+    const scrolled = () => page.evaluate(() => Math.round(scrollY));
+    const before = await scrolled();
+    rpc.receiptAfter = 3;
+    await confirmSend(page);
+    await expect(stage).toHaveAttribute('data-phase', 'done', { timeout: 15000 });
+    // Still on the stage at arrival: the previous run's ending is not reused.
+    expect(await scrolled()).toBe(before);
+    expect(Number(await card.getAttribute('data-arrived'))).toBe(arrived);
+    await expect(stage).toHaveAttribute('data-finished', 'done', { timeout: 15000 });
+    await expect(stage).toHaveAttribute('data-airborne', '0');
+    await expect(card).toHaveAttribute('data-arrived', String(arrived + 1), { timeout: 10000 });
+    expect(await scrolled()).toBeLessThan(before);
   });
 
   await test.step('sends count toward the ranking', async () => {
