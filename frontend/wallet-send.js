@@ -62,7 +62,7 @@ function pointCloud(count, map) {
 
 class SendStage extends HTMLElement {
   /** How long the finished stage holds before the page moves on (ms). */
-  static PAUSE = 1500;
+  static PAUSE = 2000;
   static observedAttributes = ['data-phase', 'data-amount', 'data-from-before', 'data-to-before', 'data-from-after', 'data-to-after', 'data-from', 'data-to', 'data-symbol'];
   constructor() {
     super();
