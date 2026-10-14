@@ -1229,9 +1229,10 @@ impl Component for Wallet {
             </div>}
         } else {
             html! {<form class="wallet-send" data-motion="" onsubmit={link.callback(|e: SubmitEvent| { e.prevent_default(); Msg::Review })}>
+                // Who first, then how much.
+                <label class="form-label">{t("Recipient address")}<input type="text" aria-label={t("Recipient address")} placeholder="0x…" autocomplete="off" spellcheck="false" value={self.to.clone()} oninput={link.callback(|e: InputEvent| Msg::To(e.target_unchecked_into::<HtmlInputElement>().value()))}/></label>
                 <div class="wallet-amount-hero" aria-hidden="true"><span class="wallet-amount-roll" data-roll="" data-testid="amount-roll" data-value={registry::amount_in(&self.amount, &coin.symbol).unwrap_or_default()}></span><em>{&coin.symbol}</em></div>
                 <label class="form-label">{t("Amount")}<span class="wallet-amount-field"><input type="text" inputmode="decimal" aria-label={t("Amount")} placeholder={format!("0.00 {}", coin.symbol)} autocomplete="off" value={self.amount.clone()} oninput={link.callback(|e: InputEvent| Msg::Amount(e.target_unchecked_into::<HtmlInputElement>().value()))}/><span class="wallet-amount-symbol" data-testid="send-symbol">{&coin.symbol}</span><button type="button" class="chip-button" onclick={link.callback(|_| Msg::Max)}>{t("Max")}</button></span></label>
-                <label class="form-label">{t("Recipient address")}<input type="text" aria-label={t("Recipient address")} placeholder="0x…" autocomplete="off" spellcheck="false" value={self.to.clone()} oninput={link.callback(|e: InputEvent| Msg::To(e.target_unchecked_into::<HtmlInputElement>().value()))}/></label>
                 <button class="primary-button" type="submit" disabled={self.preparing || self.balances.is_none() || self.to.trim().is_empty() || self.amount.trim().is_empty()}>{if self.preparing { t("Checking…") } else { t("Review transfer") }}{icon("arrow")}</button>
             </form>}
         };

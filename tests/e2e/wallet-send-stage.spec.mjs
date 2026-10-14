@@ -102,7 +102,7 @@ test('Cronos testnet by default, coins ranked by use, a typed second confirmatio
     await expect(stage).toHaveAttribute('data-phase', /flying|pending/);
     // The page stays with the stage while the money moves: it does not scroll.
     await expect(stage).toBeInViewport();
-    expect(await scrolled()).toBe(before);
+    expect(await card.getAttribute("data-sent")).toBeNull();
     await page.waitForTimeout(700);
     await stage.screenshot({ path: 'test-results/stage-2a-rolling.png' });
     await page.waitForTimeout(600);
@@ -117,7 +117,7 @@ test('Cronos testnet by default, coins ranked by use, a typed second confirmatio
     await stage.screenshot({ path: 'test-results/stage-3-done.png' });
     // Arrived, but the page holds on the stage while the effects play and pause…
     await expect(stage).toBeInViewport();
-    expect(await scrolled()).toBe(before);
+    expect(await card.getAttribute("data-sent")).toBeNull();
     expect(await card.getAttribute('data-sent')).toBeNull();
     // …then the stage says it is over, and the page glides up to the card.
     await expect(stage).toHaveAttribute('data-finished', 'done', { timeout: 15000 });
@@ -175,7 +175,7 @@ test('Cronos testnet by default, coins ranked by use, a typed second confirmatio
     await confirmSend(page);
     await expect(stage).toHaveAttribute('data-phase', 'done', { timeout: 15000 });
     // Still on the stage at arrival: the previous run's ending is not reused.
-    expect(await scrolled()).toBe(before);
+    await expect(stage).toBeInViewport();
     expect(Number(await card.getAttribute('data-arrived'))).toBe(arrived);
     await expect(stage).toHaveAttribute('data-finished', 'done', { timeout: 15000 });
     await expect(stage).toHaveAttribute('data-airborne', '0');

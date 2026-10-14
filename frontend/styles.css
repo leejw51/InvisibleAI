@@ -1818,7 +1818,7 @@ cwb-wallet-card[data-renderer="2d"]>canvas{inset:8% 6%;width:88%!important;heigh
 .wallet-receive-actions{display:flex;flex-wrap:wrap;align-items:center;gap:12px}
 .wallet-receive-actions a{display:inline-flex;align-items:center;gap:4px}
 .wallet-receive-actions svg{width:13px;height:13px}
-.wallet-amount-hero{display:flex;align-items:baseline;gap:10px;min-height:76px;overflow:hidden}
+.wallet-amount-hero{display:flex;align-items:baseline;gap:10px;min-height:76px;overflow:hidden;margin:22px 0 -6px;padding-top:16px;border-top:1px solid #efe6f5}
 .wallet-amount-roll{display:inline-flex;font-size:60px;font-weight:800;letter-spacing:-2px;color:#3f2d57;font-variant-numeric:tabular-nums;line-height:1.1}
 .wallet-amount-roll .roll-digit{display:inline-block}
 .wallet-amount-roll .is-placeholder{color:#cdbfdc}

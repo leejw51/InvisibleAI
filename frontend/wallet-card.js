@@ -533,8 +533,9 @@ const glide = (group, instant) => {
 // The amount being typed rolls digit by digit: each changed character slides in.
 const rollDigits = el => {
   const value = el.dataset.value || '';
-  const previous = el.dataset.rendered ?? '';
-  if (value === previous) return;
+  // The first render always draws (a faint 0 when nothing is typed yet).
+  const previous = el.dataset.rendered;
+  if (previous !== undefined && value === previous) return;
   el.dataset.rendered = value;
   el.textContent = '';
   [...(value || '0')].forEach((ch, i) => {
@@ -542,8 +543,8 @@ const rollDigits = el => {
     span.className = 'roll-digit';
     span.textContent = ch;
     el.append(span);
-    if (!reduced.matches && ch !== previous[i]) {
-      const up = previous.length <= value.length;
+    if (!reduced.matches && ch !== (previous ?? '')[i]) {
+      const up = (previous ?? '').length <= value.length;
       animate(span, { transform: [`translateY(${up ? 60 : -60}%)`, 'translateY(0)'], opacity: [0, 1] }, { duration: 0.5, ease });
     }
   });
