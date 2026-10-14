@@ -11246,5 +11246,877 @@
     "チャット返信なしで保存します。選択したAIがノートを整理し、タグを付ける場合があります",
     "Guardar sin respuesta de chat; la IA elegida puede organizar la nota y añadir etiquetas",
     "Uložit bez odpovědi v chatu; vybraná AI může poznámku upravit a označit štítky"
+  ],
+  "Wallet": [
+    "지갑",
+    "錢包",
+    "钱包",
+    "ウォレット",
+    "Cartera",
+    "Peněženka"
+  ],
+  "Testnet": [
+    "테스트넷",
+    "測試網",
+    "测试网",
+    "テストネット",
+    "Testnet",
+    "Testnet"
+  ],
+  "Mainnet": [
+    "메인넷",
+    "主網",
+    "主网",
+    "メインネット",
+    "Mainnet",
+    "Mainnet"
+  ],
+  "Confirmed": [
+    "확인됨",
+    "已確認",
+    "已确认",
+    "確認済み",
+    "Confirmada",
+    "Potvrzeno"
+  ],
+  "Unconfirmed": [
+    "미확인",
+    "未確認",
+    "未确认",
+    "未確認",
+    "Sin confirmar",
+    "Nepotvrzeno"
+  ],
+  "Enter a valid private key: 64 hex characters, optionally starting with 0x.": [
+    "올바른 개인 키를 입력하세요: 16진수 64자이며 0x로 시작할 수 있습니다.",
+    "請輸入有效嘅私鑰：64 個十六進位字元，可以用 0x 開頭。",
+    "请输入有效的私钥：64 个十六进制字符，可以以 0x 开头。",
+    "有効な秘密鍵を入力してください：16 進数 64 文字（0x で始めても構いません）。",
+    "Introduce una clave privada válida: 64 caracteres hexadecimales, opcionalmente con el prefijo 0x.",
+    "Zadejte platný soukromý klíč: 64 šestnáctkových znaků, volitelně s předponou 0x."
+  ],
+  "Sign in with your wallet recovery phrase or private key.": [
+    "지갑 복구 구문 또는 개인 키로 로그인하세요.",
+    "用你嘅錢包助記詞或者私鑰登入。",
+    "使用钱包助记词或私钥登录。",
+    "ウォレットのリカバリーフレーズまたは秘密鍵でログインします。",
+    "Inicia sesión con la frase de recuperación o la clave privada de tu cartera.",
+    "Přihlaste se obnovovací frází nebo soukromým klíčem peněženky."
+  ],
+  "Saved in this browser": [
+    "이 브라우저에 저장됨",
+    "已儲存喺呢個瀏覽器",
+    "已保存在此浏览器",
+    "このブラウザに保存済み",
+    "Guardada en este navegador",
+    "Uloženo v tomto prohlížeči"
+  ],
+  "Saved wallet address": [
+    "저장된 지갑 주소",
+    "已儲存嘅錢包地址",
+    "已保存的钱包地址",
+    "保存済みのウォレットアドレス",
+    "Dirección de la cartera guardada",
+    "Adresa uložené peněženky"
+  ],
+  "Continue with saved wallet": [
+    "저장된 지갑으로 계속",
+    "用已儲存嘅錢包繼續",
+    "使用已保存的钱包继续",
+    "保存済みのウォレットで続ける",
+    "Continuar con la cartera guardada",
+    "Pokračovat s uloženou peněženkou"
+  ],
+  "Sign-in method": [
+    "로그인 방법",
+    "登入方式",
+    "登录方式",
+    "ログイン方法",
+    "Método de inicio de sesión",
+    "Způsob přihlášení"
+  ],
+  "Private key": [
+    "개인 키",
+    "私鑰",
+    "私钥",
+    "秘密鍵",
+    "Clave privada",
+    "Soukromý klíč"
+  ],
+  "Save your new recovery phrase": [
+    "새 복구 구문을 저장하세요",
+    "儲存你嘅新錢包助記詞",
+    "保存新的钱包助记词",
+    "新しいリカバリーフレーズを保存してください",
+    "Guarda tu nueva frase de recuperación",
+    "Uložte si novou obnovovací frázi"
+  ],
+  "Copy recovery phrase": [
+    "복구 구문 복사",
+    "複製錢包助記詞",
+    "复制钱包助记词",
+    "リカバリーフレーズをコピー",
+    "Copiar frase de recuperación",
+    "Kopírovat obnovovací frázi"
+  ],
+  "Recovery phrase copied": [
+    "복구 구문을 복사했습니다",
+    "已複製錢包助記詞",
+    "已复制钱包助记词",
+    "リカバリーフレーズをコピーしました",
+    "Frase de recuperación copiada",
+    "Obnovovací fráze zkopírována"
+  ],
+  "Could not copy. Your browser blocked clipboard access.": [
+    "복사하지 못했습니다. 브라우저가 클립보드 접근을 차단했습니다.",
+    "複製唔到。瀏覽器封鎖咗剪貼簿存取。",
+    "无法复制。浏览器阻止了剪贴板访问。",
+    "コピーできませんでした。ブラウザがクリップボードへのアクセスをブロックしました。",
+    "No se pudo copiar. El navegador bloqueó el acceso al portapapeles.",
+    "Kopírování se nezdařilo. Prohlížeč zablokoval přístup ke schránce."
+  ],
+  "I saved my recovery phrase and wallet index.": [
+    "복구 구문과 지갑 인덱스를 저장했습니다.",
+    "我已經儲存咗錢包助記詞同錢包索引。",
+    "我已保存钱包助记词和钱包索引。",
+    "リカバリーフレーズとウォレットインデックスを保存しました。",
+    "He guardado mi frase de recuperación y el índice de la cartera.",
+    "Uložil(a) jsem si obnovovací frázi a index peněženky."
+  ],
+  "This browser has no saved key for this wallet.": [
+    "이 브라우저에는 이 지갑의 저장된 키가 없습니다.",
+    "呢個瀏覽器冇儲存呢個錢包嘅私鑰。",
+    "此浏览器没有保存该钱包的私钥。",
+    "このブラウザにはこのウォレットの鍵が保存されていません。",
+    "Este navegador no tiene guardada la clave de esta cartera.",
+    "Tento prohlížeč nemá uložený klíč této peněženky."
+  ],
+  "Copy private key": [
+    "개인 키 복사",
+    "複製私鑰",
+    "复制私钥",
+    "秘密鍵をコピー",
+    "Copiar clave privada",
+    "Kopírovat soukromý klíč"
+  ],
+  "Private key copied": [
+    "개인 키를 복사했습니다",
+    "已複製私鑰",
+    "已复制私钥",
+    "秘密鍵をコピーしました",
+    "Clave privada copiada",
+    "Soukromý klíč zkopírován"
+  ],
+  "Wallet card": [
+    "지갑 카드",
+    "錢包卡",
+    "钱包卡",
+    "ウォレットカード",
+    "Tarjeta de la cartera",
+    "Karta peněženky"
+  ],
+  "Network": [
+    "네트워크",
+    "網絡",
+    "网络",
+    "ネットワーク",
+    "Red",
+    "Síť"
+  ],
+  "for fees": [
+    "수수료용",
+    "用嚟付手續費",
+    "用于手续费",
+    "手数料用",
+    "para comisiones",
+    "na poplatky"
+  ],
+  "Refresh balances": [
+    "잔액 새로 고침",
+    "重新整理結餘",
+    "刷新余额",
+    "残高を更新",
+    "Actualizar saldos",
+    "Obnovit zůstatky"
+  ],
+  "Copy address": [
+    "주소 복사",
+    "複製地址",
+    "复制地址",
+    "アドレスをコピー",
+    "Copiar dirección",
+    "Kopírovat adresu"
+  ],
+  "Wallet locked on this browser": [
+    "이 브라우저에서 지갑이 잠겨 있습니다",
+    "呢個瀏覽器上嘅錢包已鎖定",
+    "此浏览器上的钱包已锁定",
+    "このブラウザではウォレットがロックされています",
+    "Cartera bloqueada en este navegador",
+    "Peněženka je v tomto prohlížeči zamčená"
+  ],
+  "Sign out and sign in again with your recovery phrase or private key to save this wallet's key in this browser.": [
+    "로그아웃한 뒤 복구 구문이나 개인 키로 다시 로그인하면 이 지갑의 키가 이 브라우저에 저장됩니다.",
+    "請登出，再用錢包助記詞或者私鑰重新登入，咁就會將呢個錢包嘅私鑰儲存喺呢個瀏覽器。",
+    "请退出登录，再用钱包助记词或私钥重新登录，即可将此钱包的私钥保存在此浏览器中。",
+    "ログアウトしてから、リカバリーフレーズまたは秘密鍵で再ログインすると、このウォレットの鍵がこのブラウザに保存されます。",
+    "Cierra sesión y vuelve a iniciarla con tu frase de recuperación o clave privada para guardar la clave de esta cartera en este navegador.",
+    "Odhlaste se a znovu se přihlaste obnovovací frází nebo soukromým klíčem, aby se klíč této peněženky uložil v tomto prohlížeči."
+  ],
+  "Review transfer": [
+    "송금 검토",
+    "檢查轉賬",
+    "检查转账",
+    "送金を確認",
+    "Revisar transferencia",
+    "Zkontrolovat převod"
+  ],
+  "REVIEW": [
+    "검토",
+    "檢查",
+    "检查",
+    "確認",
+    "REVISIÓN",
+    "KONTROLA"
+  ],
+  "To": [
+    "받는 사람",
+    "收款人",
+    "收款人",
+    "送金先",
+    "Para",
+    "Komu"
+  ],
+  "Network fee, at most": [
+    "네트워크 수수료(최대)",
+    "網絡手續費（最多）",
+    "网络手续费（最多）",
+    "ネットワーク手数料（最大）",
+    "Comisión de red, como máximo",
+    "Síťový poplatek, nejvýše"
+  ],
+  "Confirm and send": [
+    "확인 후 보내기",
+    "確認並傳送",
+    "确认并发送",
+    "確認して送金",
+    "Confirmar y enviar",
+    "Potvrdit a odeslat"
+  ],
+  "Send": [
+    "보내기",
+    "傳送",
+    "发送",
+    "送金",
+    "Enviar",
+    "Odeslat"
+  ],
+  "Recipient address": [
+    "받는 주소",
+    "收款地址",
+    "收款地址",
+    "送金先アドレス",
+    "Dirección del destinatario",
+    "Adresa příjemce"
+  ],
+  "Amount": [
+    "금액",
+    "金額",
+    "金额",
+    "金額",
+    "Importe",
+    "Částka"
+  ],
+  "Max": [
+    "최대",
+    "最大",
+    "最大",
+    "最大",
+    "Máx.",
+    "Max."
+  ],
+  "This session": [
+    "이번 세션",
+    "今次工作階段",
+    "本次会话",
+    "このセッション",
+    "Esta sesión",
+    "Tato relace"
+  ],
+  "to": [
+    "받는 사람",
+    "去",
+    "至",
+    "宛先",
+    "a",
+    "pro"
+  ],
+  "Explorer": [
+    "익스플로러",
+    "瀏覽器",
+    "浏览器",
+    "エクスプローラー",
+    "Explorador",
+    "Průzkumník"
+  ],
+  "The saved wallet is no longer in this browser. Sign in again.": [
+    "저장된 지갑이 더 이상 이 브라우저에 없습니다. 다시 로그인하세요.",
+    "已儲存嘅錢包已經唔喺呢個瀏覽器。請重新登入。",
+    "已保存的钱包已不在此浏览器中。请重新登录。",
+    "保存済みのウォレットはこのブラウザにありません。もう一度ログインしてください。",
+    "La cartera guardada ya no está en este navegador. Vuelve a iniciar sesión.",
+    "Uložená peněženka už v tomto prohlížeči není. Přihlaste se znovu."
+  ],
+  "This browser has no saved key for this wallet. Sign in again with your recovery phrase or private key.": [
+    "이 브라우저에는 이 지갑의 저장된 키가 없습니다. 복구 구문이나 개인 키로 다시 로그인하세요.",
+    "呢個瀏覽器冇儲存呢個錢包嘅私鑰。請用錢包助記詞或者私鑰重新登入。",
+    "此浏览器没有保存该钱包的私钥。请用钱包助记词或私钥重新登录。",
+    "このブラウザにはこのウォレットの鍵が保存されていません。リカバリーフレーズまたは秘密鍵で再ログインしてください。",
+    "Este navegador no tiene guardada la clave de esta cartera. Vuelve a iniciar sesión con tu frase de recuperación o clave privada.",
+    "Tento prohlížeč nemá uložený klíč této peněženky. Přihlaste se znovu obnovovací frází nebo soukromým klíčem."
+  ],
+  "Copy your private key to the clipboard? Anyone who can paste it can spend from your wallet. Clear your clipboard after saving it somewhere safe.": [
+    "개인 키를 클립보드에 복사할까요? 이를 붙여 넣을 수 있는 사람은 누구나 지갑의 자금을 쓸 수 있습니다. 안전한 곳에 저장한 뒤 클립보드를 비우세요.",
+    "要將私鑰複製去剪貼簿嗎？任何可以貼上佢嘅人都可以用你錢包入面嘅錢。儲存去安全地方之後請清除剪貼簿。",
+    "要将私钥复制到剪贴板吗？任何能粘贴它的人都可以花费你钱包里的资金。保存到安全的地方后请清空剪贴板。",
+    "秘密鍵をクリップボードにコピーしますか？貼り付けられる人は誰でもウォレットの資金を使えます。安全な場所に保存したらクリップボードを消去してください。",
+    "¿Copiar tu clave privada al portapapeles? Cualquiera que pueda pegarla podrá gastar de tu cartera. Vacía el portapapeles después de guardarla en un lugar seguro.",
+    "Zkopírovat soukromý klíč do schránky? Kdokoli, kdo jej vloží, může utrácet z vaší peněženky. Po uložení na bezpečné místo schránku vymažte."
+  ],
+  "That is your own address. Sending to yourself moves nothing and still costs a fee.": [
+    "본인 주소입니다. 자기 자신에게 보내면 아무것도 이동하지 않고 수수료만 듭니다.",
+    "呢個係你自己嘅地址。傳俾自己乜都冇轉到，但仍然要俾手續費。",
+    "这是你自己的地址。发送给自己不会转移任何资金，却仍要支付手续费。",
+    "これはあなた自身のアドレスです。自分に送っても何も移動せず、手数料だけがかかります。",
+    "Esa es tu propia dirección. Enviarte a ti mismo no mueve nada y aun así cuesta una comisión.",
+    "To je vaše vlastní adresa. Odeslání sobě nic nepřevede, a přesto stojí poplatek."
+  ],
+  "Enter an amount greater than zero.": [
+    "0보다 큰 금액을 입력하세요.",
+    "請輸入大過零嘅金額。",
+    "请输入大于零的金额。",
+    "0 より大きい金額を入力してください。",
+    "Introduce un importe mayor que cero.",
+    "Zadejte částku větší než nula."
+  ],
+  "This browser has no saved key for this wallet. Sign out and sign in again.": [
+    "이 브라우저에는 이 지갑의 저장된 키가 없습니다. 로그아웃한 뒤 다시 로그인하세요.",
+    "呢個瀏覽器冇儲存呢個錢包嘅私鑰。請登出再重新登入。",
+    "此浏览器没有保存该钱包的私钥。请退出登录后重新登录。",
+    "このブラウザにはこのウォレットの鍵が保存されていません。ログアウトしてから再ログインしてください。",
+    "Este navegador no tiene guardada la clave de esta cartera. Cierra sesión y vuelve a iniciarla.",
+    "Tento prohlížeč nemá uložený klíč této peněženky. Odhlaste se a přihlaste znovu."
+  ],
+  "The network reported a different transaction hash. Check the explorer before retrying.": [
+    "네트워크가 다른 거래 해시를 보고했습니다. 다시 시도하기 전에 익스플로러를 확인하세요.",
+    "網絡回報咗唔同嘅交易雜湊值。重試之前請先喺瀏覽器檢查。",
+    "网络返回了不同的交易哈希。重试前请先在浏览器中核对。",
+    "ネットワークが異なるトランザクションハッシュを返しました。再試行する前にエクスプローラーで確認してください。",
+    "La red informó de un hash de transacción distinto. Revisa el explorador antes de reintentarlo.",
+    "Síť nahlásila jiný hash transakce. Před dalším pokusem to ověřte v průzkumníku."
+  ],
+  "The words stay hidden until you press Show. Write them down or copy them to a password manager, with your wallet index, and make sure no one can see your screen. You need both to sign in again.": [
+    "단어는 '보기'를 누르기 전까지 숨겨져 있습니다. 지갑 인덱스와 함께 종이에 적거나 비밀번호 관리자에 복사해 두고, 다른 사람이 화면을 보지 않는지 확인하세요. 다시 로그인하려면 둘 다 필요합니다.",
+    "撳「顯示」之前，啲字會一直隱藏。請連同錢包索引寫低或者複製去密碼管理器，並確保冇人睇到你個畫面。再登入時兩樣都要用。",
+    "点击“显示”之前，这些单词会一直隐藏。请连同钱包索引写下来或复制到密码管理器，并确保没有人能看到你的屏幕。再次登录时两者都需要。",
+    "「表示」を押すまで単語は隠れています。ウォレットインデックスと一緒に紙に書き留めるか、パスワードマネージャーにコピーしてください。画面を誰にも見られていないことを確認してください。再ログインには両方が必要です。",
+    "Las palabras permanecen ocultas hasta que pulses Mostrar. Escríbelas o cópialas en un gestor de contraseñas, junto con el índice de la cartera, y asegúrate de que nadie vea tu pantalla. Necesitarás ambos para volver a iniciar sesión.",
+    "Slova zůstanou skrytá, dokud nestisknete Zobrazit. Zapište si je nebo je zkopírujte do správce hesel spolu s indexem peněženky a ujistěte se, že vám nikdo nevidí na obrazovku. K opětovnému přihlášení budete potřebovat obojí."
+  ],
+  "Show recovery phrase": [
+    "복구 구문 보기",
+    "顯示錢包助記詞",
+    "显示钱包助记词",
+    "リカバリーフレーズを表示",
+    "Mostrar frase de recuperación",
+    "Zobrazit obnovovací frázi"
+  ],
+  "Hide recovery phrase": [
+    "복구 구문 숨기기",
+    "隱藏錢包助記詞",
+    "隐藏钱包助记词",
+    "リカバリーフレーズを隠す",
+    "Ocultar frase de recuperación",
+    "Skrýt obnovovací frázi"
+  ],
+  "Phrase length": [
+    "구문 길이",
+    "助記詞長度",
+    "助记词长度",
+    "フレーズの長さ",
+    "Longitud de la frase",
+    "Délka fráze"
+  ],
+  "12 words": [
+    "12단어",
+    "12 個字",
+    "12 个单词",
+    "12 語",
+    "12 palabras",
+    "12 slov"
+  ],
+  "24 words": [
+    "24단어",
+    "24 個字",
+    "24 个单词",
+    "24 語",
+    "24 palabras",
+    "24 slov"
+  ],
+  "Generate a new recovery phrase? It stays hidden unless you press Show. Save it somewhere safe, with your wallet index, before continuing.": [
+    "새 복구 구문을 생성할까요? '보기'를 누르기 전에는 숨겨져 있습니다. 계속하기 전에 지갑 인덱스와 함께 안전한 곳에 보관하세요.",
+    "要產生新嘅錢包助記詞嗎？除非你撳「顯示」，否則會一直隱藏。繼續之前，請連同錢包索引保存喺安全地方。",
+    "要生成新的钱包助记词吗？除非点击“显示”，否则会一直隐藏。继续之前，请连同钱包索引保存在安全的地方。",
+    "新しいリカバリーフレーズを生成しますか？「表示」を押さない限り隠れたままです。続行する前に、ウォレットインデックスと一緒に安全な場所に保管してください。",
+    "¿Generar una nueva frase de recuperación? Permanece oculta a menos que pulses Mostrar. Guárdala en un lugar seguro, junto con el índice de la cartera, antes de continuar.",
+    "Vygenerovat novou obnovovací frázi? Zůstane skrytá, dokud nestisknete Zobrazit. Než budete pokračovat, uložte ji spolu s indexem peněženky na bezpečné místo."
+  ],
+  "Add and use this token": [
+    "이 토큰 추가 후 사용",
+    "加入並使用呢個代幣",
+    "添加并使用此代币",
+    "このトークンを追加して使う",
+    "Añadir y usar este token",
+    "Přidat a použít tento token"
+  ],
+  "Asset": [
+    "자산",
+    "資產",
+    "资产",
+    "資産",
+    "Activo",
+    "Aktivum"
+  ],
+  "Contract": [
+    "컨트랙트",
+    "合約",
+    "合约",
+    "コントラクト",
+    "Contrato",
+    "Kontrakt"
+  ],
+  "Copy contract address": [
+    "컨트랙트 주소 복사",
+    "複製合約地址",
+    "复制合约地址",
+    "コントラクトアドレスをコピー",
+    "Copiar dirección del contrato",
+    "Kopírovat adresu kontraktu"
+  ],
+  "Decimals": [
+    "소수 자릿수",
+    "小數位",
+    "小数位",
+    "小数点以下の桁数",
+    "Decimales",
+    "Desetinná místa"
+  ],
+  "Loading your wallet…": [
+    "지갑을 불러오는 중…",
+    "載入緊你個錢包…",
+    "正在加载你的钱包…",
+    "ウォレットを読み込み中…",
+    "Cargando tu cartera…",
+    "Načítání peněženky…"
+  ],
+  "Mainnet moves real funds. Double-check every address.": [
+    "메인넷은 실제 자금을 옮깁니다. 모든 주소를 다시 확인하세요.",
+    "主網會轉移真實資金。請再三檢查每個地址。",
+    "主网会转移真实资金。请仔细核对每个地址。",
+    "メインネットでは実際の資金が動きます。すべてのアドレスを再確認してください。",
+    "La red principal mueve fondos reales. Comprueba bien cada dirección.",
+    "Hlavní síť přesouvá skutečné prostředky. Každou adresu si dvakrát zkontrolujte."
+  ],
+  "Network fees are paid from this balance, in": [
+    "네트워크 수수료는 이 잔액에서 지불됩니다. 단위:",
+    "網絡手續費會由呢個餘額支付，單位：",
+    "网络手续费从此余额支付，单位：",
+    "ネットワーク手数料はこの残高から支払われます。単位：",
+    "Las comisiones de red se pagan de este saldo, en",
+    "Síťové poplatky se platí z tohoto zůstatku, v"
+  ],
+  "Network fees are paid in": [
+    "네트워크 수수료 지불 수단:",
+    "網絡手續費以呢種幣支付：",
+    "网络手续费以此币支付：",
+    "ネットワーク手数料の支払い通貨：",
+    "Las comisiones de red se pagan en",
+    "Síťové poplatky se platí v"
+  ],
+  "This token's name looks like CRO or USDC, but it is a different contract. Check the address before sending.": [
+    "이 토큰 이름은 CRO나 USDC처럼 보이지만 다른 컨트랙트입니다. 보내기 전에 주소를 확인하세요.",
+    "呢個代幣個名似 CRO 或者 USDC，但係另一個合約。傳送之前請檢查地址。",
+    "此代币的名称看起来像 CRO 或 USDC，但它是另一个合约。发送前请核对地址。",
+    "このトークン名は CRO や USDC に見えますが、別のコントラクトです。送金前にアドレスを確認してください。",
+    "El nombre de este token parece CRO o USDC, pero es otro contrato. Comprueba la dirección antes de enviar.",
+    "Název tohoto tokenu vypadá jako CRO nebo USDC, ale jde o jiný kontrakt. Před odesláním zkontrolujte adresu."
+  ],
+  "Token contract": [
+    "토큰 컨트랙트",
+    "代幣合約",
+    "代币合约",
+    "トークンコントラクト",
+    "Contrato del token",
+    "Kontrakt tokenu"
+  ],
+  "Total, at most": [
+    "합계, 최대",
+    "總數，最多",
+    "合计，最多",
+    "合計（最大）",
+    "Total, como máximo",
+    "Celkem, nejvýše"
+  ],
+  "Remove this token from your list? Its balance stays on the chain, and you can add it again any time.": [
+    "이 토큰을 목록에서 지울까요? 잔액은 체인에 그대로 남고, 언제든 다시 추가할 수 있습니다.",
+    "要喺清單移除呢個代幣嗎？餘額仍然留喺鏈上，你隨時可以再加返。",
+    "要从列表中移除此代币吗？余额仍保留在链上，你可以随时重新添加。",
+    "このトークンをリストから削除しますか？残高はチェーン上に残り、いつでも再追加できます。",
+    "¿Quitar este token de tu lista? Su saldo sigue en la cadena y puedes volver a añadirlo cuando quieras.",
+    "Odebrat tento token ze seznamu? Jeho zůstatek zůstane na řetězci a můžete ho kdykoli přidat znovu."
+  ],
+  "YOUR WALLET": [
+    "나의 지갑",
+    "你嘅錢包",
+    "你的钱包",
+    "あなたのウォレット",
+    "TU CARTERA",
+    "VAŠE PENĚŽENKA"
+  ],
+  "Every coin, one calm place.": [
+    "모든 코인을 한곳에서 차분하게.",
+    "所有幣，一個安靜嘅地方。",
+    "所有币，一个安静的地方。",
+    "すべてのコインを、ひとつの静かな場所に。",
+    "Todas tus monedas, en un solo lugar tranquilo.",
+    "Všechny mince na jednom klidném místě."
+  ],
+  "CRO · pays fees": [
+    "CRO · 수수료 지불",
+    "CRO · 用嚟俾手續費",
+    "CRO · 用于支付手续费",
+    "CRO · 手数料の支払い",
+    "CRO · paga las comisiones",
+    "CRO · platí poplatky"
+  ],
+  "Stablecoin on Cronos": [
+    "Cronos의 스테이블코인",
+    "Cronos 上嘅穩定幣",
+    "Cronos 上的稳定币",
+    "Cronos のステーブルコイン",
+    "Stablecoin en Cronos",
+    "Stablecoin na Cronosu"
+  ],
+  "Search coins and networks": [
+    "코인과 네트워크 검색",
+    "搜尋幣同網絡",
+    "搜索币和网络",
+    "コインとネットワークを検索",
+    "Buscar monedas y redes",
+    "Hledat mince a sítě"
+  ],
+  "Search coins, networks or a contract address": [
+    "코인, 네트워크 또는 컨트랙트 주소 검색",
+    "搜尋幣、網絡或者合約地址",
+    "搜索币、网络或合约地址",
+    "コイン、ネットワーク、コントラクトアドレスを検索",
+    "Busca monedas, redes o una dirección de contrato",
+    "Hledejte mince, sítě nebo adresu kontraktu"
+  ],
+  "Coins": [
+    "코인",
+    "幣",
+    "币",
+    "コイン",
+    "Monedas",
+    "Mince"
+  ],
+  "test": [
+    "테스트",
+    "測試",
+    "测试",
+    "テスト",
+    "prueba",
+    "test"
+  ],
+  "View": [
+    "보기",
+    "查看",
+    "查看",
+    "表示",
+    "Ver",
+    "Zobrazit"
+  ],
+  "Nothing matches. Try a symbol, a network or a contract address.": [
+    "일치하는 항목이 없습니다. 심볼, 네트워크 또는 컨트랙트 주소로 검색해 보세요.",
+    "搵唔到。試吓用符號、網絡或者合約地址。",
+    "没有匹配项。试试符号、网络或合约地址。",
+    "一致するものがありません。シンボル、ネットワーク、コントラクトアドレスで試してください。",
+    "No hay coincidencias. Prueba con un símbolo, una red o una dirección de contrato.",
+    "Nic neodpovídá. Zkuste symbol, síť nebo adresu kontraktu."
+  ],
+  "Add this contract as a token on": [
+    "이 컨트랙트를 토큰으로 추가할 네트워크:",
+    "將呢個合約加做代幣，網絡：",
+    "将此合约添加为代币，网络：",
+    "このコントラクトをトークンとして追加するネットワーク：",
+    "Añadir este contrato como token en",
+    "Přidat tento kontrakt jako token na"
+  ],
+  "Test network": [
+    "테스트 네트워크",
+    "測試網絡",
+    "测试网络",
+    "テストネットワーク",
+    "Red de prueba",
+    "Testovací síť"
+  ],
+  "View and receive": [
+    "보기 및 받기",
+    "查看同接收",
+    "查看和接收",
+    "表示と受け取り",
+    "Ver y recibir",
+    "Zobrazit a přijmout"
+  ],
+  "The network's own coin. It pays every fee on": [
+    "네트워크 자체 코인입니다. 모든 수수료를 이것으로 냅니다:",
+    "網絡本身嘅幣，所有手續費都用佢支付：",
+    "网络自身的币，所有手续费都用它支付：",
+    "ネットワーク自身のコインで、すべての手数料を支払います：",
+    "La moneda propia de la red. Paga todas las comisiones en",
+    "Vlastní mince sítě. Platí všechny poplatky na"
+  ],
+  "Mint": [
+    "민트",
+    "Mint",
+    "Mint",
+    "ミント",
+    "Mint",
+    "Mint"
+  ],
+  "Remove from my list": [
+    "내 목록에서 제거",
+    "喺我嘅清單移除",
+    "从我的列表移除",
+    "リストから削除",
+    "Quitar de mi lista",
+    "Odebrat ze seznamu"
+  ],
+  "Balance": [
+    "잔액",
+    "餘額",
+    "余额",
+    "残高",
+    "Saldo",
+    "Zůstatek"
+  ],
+  "Add some of this network's coin to pay fees before sending:": [
+    "보내기 전에 수수료로 쓸 이 네트워크의 코인을 넣어 주세요:",
+    "傳送之前，請加啲呢個網絡嘅幣嚟俾手續費：",
+    "发送之前，请充值一些此网络的币用于支付手续费：",
+    "送金前に、手数料用のこのネットワークのコインを入れてください：",
+    "Añade algo de la moneda de esta red para pagar comisiones antes de enviar:",
+    "Před odesláním si přidejte minci této sítě na poplatky:"
+  ],
+  "Your address on": [
+    "내 주소:",
+    "你喺呢個網絡嘅地址：",
+    "你在此网络的地址：",
+    "あなたのアドレス：",
+    "Tu dirección en",
+    "Vaše adresa na"
+  ],
+  "Faucet": [
+    "포싯",
+    "水龍頭",
+    "水龙头",
+    "フォーセット",
+    "Faucet",
+    "Faucet"
+  ],
+  "Sending is not available here yet. You can receive and view on": [
+    "아직 이곳에서는 보낼 수 없습니다. 받기와 보기는 가능합니다:",
+    "呢度暫時未可以傳送。可以接收同查看：",
+    "这里暂时还不能发送。可以接收和查看：",
+    "ここではまだ送金できません。受け取りと表示は可能です：",
+    "Aquí aún no se puede enviar. Puedes recibir y ver en",
+    "Odesílání zde zatím není k dispozici. Přijímat a zobrazovat můžete na"
+  ],
+  "Recovery phrase needed": [
+    "복구 구문 필요",
+    "需要錢包助記詞",
+    "需要钱包助记词",
+    "リカバリーフレーズが必要です",
+    "Se necesita la frase de recuperación",
+    "Je potřeba obnovovací fráze"
+  ],
+  "addresses come from your recovery phrase. Sign out and sign in with it once on this browser to see them; they are then remembered for your account.": [
+    "주소는 복구 구문에서 만들어집니다. 이 브라우저에서 로그아웃 후 복구 구문으로 한 번 로그인하면 표시되며, 이후 계정에 기억됩니다.",
+    "地址由錢包助記詞產生。喺呢個瀏覽器登出，再用助記詞登入一次就會見到，之後會記住喺你嘅帳戶。",
+    "地址由钱包助记词生成。在此浏览器退出后用助记词登录一次即可看到，之后会为你的账户记住。",
+    "アドレスはリカバリーフレーズから作られます。このブラウザでサインアウトしてフレーズで一度サインインすると表示され、その後アカウントに記憶されます。",
+    "Las direcciones salen de tu frase de recuperación. Cierra sesión e inicia sesión con ella una vez en este navegador para verlas; después se recuerdan en tu cuenta.",
+    "adresy vycházejí z vaší obnovovací fráze. Odhlaste se a jednou se s ní přihlaste v tomto prohlížeči; poté si je váš účet zapamatuje."
+  ],
+  "Main coins": [
+    "주요 코인",
+    "主要幣",
+    "主要币",
+    "主なコイン",
+    "Monedas principales",
+    "Hlavní mince"
+  ],
+  "Wallet actions": [
+    "지갑 작업",
+    "錢包操作",
+    "钱包操作",
+    "ウォレットの操作",
+    "Acciones de la cartera",
+    "Akce peněženky"
+  ],
+  "Your private key and recovery phrase are saved in this browser only. They are never shown on screen or sent to the backend.": [
+    "개인 키와 복구 구문은 이 브라우저에만 저장됩니다. 화면에 표시되거나 백엔드로 전송되지 않습니다.",
+    "你嘅私鑰同錢包助記詞只會儲存喺呢個瀏覽器，永遠唔會顯示喺畫面或者傳去後端。",
+    "你的私钥和钱包助记词只保存在此浏览器中，永远不会显示在屏幕上或发送到后端。",
+    "秘密鍵とリカバリーフレーズはこのブラウザにのみ保存され、画面に表示されたりバックエンドに送信されたりすることはありません。",
+    "Tu clave privada y tu frase de recuperación se guardan solo en este navegador. Nunca se muestran en pantalla ni se envían al backend.",
+    "Váš soukromý klíč a obnovovací fráze jsou uloženy pouze v tomto prohlížeči. Nikdy se nezobrazují ani neodesílají na backend."
+  ],
+  "Your phrase and key are treated like passwords: they are never sent to the backend or to AI, and are saved only in this browser’s local storage.": [
+    "복구 구문과 키는 비밀번호처럼 취급됩니다. 백엔드나 AI로 전송되지 않으며 이 브라우저의 로컬 저장소에만 저장됩니다.",
+    "助記詞同私鑰會當密碼咁處理：永遠唔會傳去後端或者 AI，只會儲存喺呢個瀏覽器嘅本機儲存空間。",
+    "助记词和私钥被当作密码处理：永远不会发送到后端或 AI，只保存在此浏览器的本地存储中。",
+    "フレーズと鍵はパスワードとして扱われます。バックエンドや AI に送信されることはなく、このブラウザのローカルストレージにのみ保存されます。",
+    "Tu frase y tu clave se tratan como contraseñas: nunca se envían al backend ni a la IA, y solo se guardan en el almacenamiento local de este navegador.",
+    "S frází a klíčem se zachází jako s hesly: nikdy se neodesílají na backend ani AI a ukládají se pouze v místním úložišti tohoto prohlížeče."
+  ],
+  "Receive": [
+    "받기",
+    "接收",
+    "接收",
+    "受け取る",
+    "Recibir",
+    "Přijmout"
+  ],
+  "Copy your recovery phrase to the clipboard? It controls this wallet on every chain. Clear your clipboard after saving it somewhere safe.": [
+    "복구 구문을 클립보드에 복사할까요? 모든 체인에서 이 지갑을 제어합니다. 안전한 곳에 저장한 뒤 클립보드를 지우세요.",
+    "要將錢包助記詞複製到剪貼簿嗎？佢控制住呢個錢包喺所有鏈上嘅資產。儲存喺安全地方之後請清除剪貼簿。",
+    "要将钱包助记词复制到剪贴板吗？它控制此钱包在所有链上的资产。保存到安全的地方后请清除剪贴板。",
+    "リカバリーフレーズをクリップボードにコピーしますか？すべてのチェーンでこのウォレットを管理します。安全な場所に保存したらクリップボードを消去してください。",
+    "¿Copiar tu frase de recuperación al portapapeles? Controla esta cartera en todas las cadenas. Borra el portapapeles después de guardarla en un lugar seguro.",
+    "Zkopírovat obnovovací frázi do schránky? Ovládá tuto peněženku na všech řetězcích. Po uložení na bezpečné místo schránku vymažte."
+  ],
+  "This browser has no saved recovery phrase for this wallet.": [
+    "이 브라우저에는 이 지갑의 복구 구문이 저장되어 있지 않습니다.",
+    "呢個瀏覽器冇儲存呢個錢包嘅助記詞。",
+    "此浏览器没有保存此钱包的助记词。",
+    "このブラウザにはこのウォレットのリカバリーフレーズが保存されていません。",
+    "Este navegador no tiene guardada la frase de recuperación de esta cartera.",
+    "Tento prohlížeč nemá uloženou obnovovací frázi této peněženky."
+  ],
+  "Recorded from an earlier sign-in with your recovery phrase; this browser cannot re-derive it. Sign in with the phrase here to confirm it before sharing it for large amounts.": [
+    "이전에 복구 구문으로 로그인했을 때 기록된 주소입니다. 이 브라우저에서는 다시 만들어 확인할 수 없습니다. 큰 금액을 받기 전에 여기서 복구 구문으로 로그인해 확인하세요.",
+    "呢個地址係之前用助記詞登入時記錄落嚟，呢個瀏覽器無法重新產生驗證。收大額之前，請喺度用助記詞登入確認。",
+    "此地址是之前用助记词登录时记录的，此浏览器无法重新生成验证。接收大额之前，请在这里用助记词登录确认。",
+    "以前にリカバリーフレーズでサインインしたときに記録されたアドレスです。このブラウザでは再導出して確認できません。大きな金額を受け取る前に、ここでフレーズでサインインして確認してください。",
+    "Registrada en un inicio de sesión anterior con tu frase de recuperación; este navegador no puede volver a derivarla. Inicia sesión con la frase aquí para confirmarla antes de compartirla para importes grandes.",
+    "Zaznamenáno při dřívějším přihlášení obnovovací frází; tento prohlížeč ji nemůže znovu odvodit. Před sdílením pro velké částky se zde přihlaste frází a ověřte ji."
+  ],
+  "You are sending": [
+    "보내는 금액:",
+    "你準備傳送",
+    "你正在发送",
+    "送金内容：",
+    "Vas a enviar",
+    "Posíláte"
+  ],
+  "on": [
+    "네트워크:",
+    "網絡：",
+    "网络：",
+    "ネットワーク：",
+    "en",
+    "na"
+  ],
+  "Check the first and last characters of the address.": [
+    "주소의 처음과 마지막 글자를 확인하세요.",
+    "請檢查地址嘅頭尾幾個字。",
+    "请核对地址的开头和结尾字符。",
+    "アドレスの最初と最後の文字を確認してください。",
+    "Comprueba los primeros y últimos caracteres de la dirección.",
+    "Zkontrolujte první a poslední znaky adresy."
+  ],
+  "This is a large transfer, or one whose value the wallet cannot price. To confirm, type the amount and coin:": [
+    "큰 금액이거나 지갑이 가치를 알 수 없는 코인입니다. 확인하려면 금액과 코인을 입력하세요:",
+    "呢筆轉賬金額較大，或者錢包無法估價。確認請輸入金額同幣種：",
+    "这是一笔大额转账，或钱包无法估价的币。请输入金额和币种确认：",
+    "高額の送金、またはウォレットが価値を判断できないコインです。確認のため金額とコインを入力してください：",
+    "Es una transferencia grande, o de una moneda cuyo valor la cartera no conoce. Para confirmar, escribe la cantidad y la moneda:",
+    "Jde o velký převod nebo o minci, jejíž hodnotu peněženka nezná. Pro potvrzení napište částku a minci:"
+  ],
+  "Type the amount and coin to confirm": [
+    "확인을 위해 금액과 코인 입력",
+    "輸入金額同幣種確認",
+    "输入金额和币种以确认",
+    "確認のため金額とコインを入力",
+    "Escribe la cantidad y la moneda para confirmar",
+    "Pro potvrzení napište částku a minci"
+  ],
+  "FROM": [
+    "보내는 곳",
+    "由",
+    "从",
+    "送金元",
+    "DE",
+    "OD"
+  ],
+  "TO": [
+    "받는 곳",
+    "到",
+    "到",
+    "送金先",
+    "PARA",
+    "KOMU"
+  ],
+  "Ready to send": [
+    "보낼 준비 완료",
+    "準備好傳送",
+    "准备发送",
+    "送金準備完了",
+    "Listo para enviar",
+    "Připraveno k odeslání"
+  ],
+  "Waiting for the network…": [
+    "네트워크 확인 대기 중…",
+    "等緊網絡確認…",
+    "等待网络确认…",
+    "ネットワークの確認待ち…",
+    "Esperando a la red…",
+    "Čekání na síť…"
+  ],
+  "Arrived!": [
+    "도착!",
+    "到咗！",
+    "已到账！",
+    "到着！",
+    "¡Llegó!",
+    "Dorazilo!"
+  ],
+  "Not sent": [
+    "전송되지 않음",
+    "未傳送",
+    "未发送",
+    "送金されませんでした",
+    "No enviado",
+    "Neodesláno"
+  ],
+  "New transfer": [
+    "새 송금",
+    "新轉賬",
+    "新转账",
+    "新しい送金",
+    "Nueva transferencia",
+    "Nový převod"
   ]
 }

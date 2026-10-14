@@ -872,6 +872,7 @@ pub fn finish_user_purge(database: &db::Database) -> Result<i64> {
     // Nothing derived outlives the data it was derived from: the Wiki's tags,
     // documents and code notes go, and so do the unfinished uploads.
     crate::wiki::forget_owner(&tx, database.owner())?;
+    crate::wallet::forget_owner(&tx, database.owner())?;
     let parts = tx
         .prepare("SELECT temp_name FROM upload_sessions WHERE owner_wallet=?1")?
         .query_map([database.owner()], |r| r.get::<_, String>(0))?

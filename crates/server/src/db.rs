@@ -153,6 +153,7 @@ impl Database {
         crate::activity::init(&conn)?;
         crate::wiki::init(&conn)?;
         crate::code::init(&conn)?;
+        crate::wallet::init(&conn)?;
         crate::coding::init(&conn)?;
         crate::schema::run_versioned(&conn)?;
         conn.execute(

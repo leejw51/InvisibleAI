@@ -2,6 +2,71 @@
 
 > Naming note (2026-10-08): entries below record the UI as tested at the time. Since then the Cloud page became **Autonomous AI** at `/autonomous` (`/cloud` still opens it), Dashboard moved to `/dashboard` (`/status` still works), Devices moved to `/devices`, the Coding agent page and Pinned menu entry were folded into chat and the library, and the product name is Invisible AI.
 
+## Wallet: ranked coins, typed confirmation, and the send stage — 2026-10-14
+
+- **Default and ranking.** A new account opens on Cronos testnet (TCRO). The backend counts every choice and every send per coin (`wallet_usage`); the coin list and search results are ranked by use, then recency, then registry order.
+- **Sign out** moved from the folded Settings group into the main navigation.
+- **Amounts with a denomination.** The amount field accepts "25 TCRO". An amount in another denomination is refused, never converted.
+- **Review reminder.** The review restates the amount, the recipient (first and last characters highlighted) and the network.
+- **Typed confirmation.** Above 20 CRO, above 1 USD, or for any coin the wallet cannot price, the transfer is enabled only after the user types the amount and coin (`25 TCRO`; case and spacing forgiven).
+- **The send stage.** A three.js scene beside the form, with bloom, two planets with Grok textures on a Grok nebula, a shader trail, a stream of Grok coin sprites, sparks and a shockwave. It shows:
+  - before: both wallets with their balances, the recipient's read from the chain;
+  - in flight: the amount ticking over as the sender's balance counts down and the recipient's counts up;
+  - after: both balances re-read from the chain once the receipt confirms.
+  Every tween is motion.dev with exponential in/out easing.
+- **Landing and timing.** When a transfer arrives, coins still in the air hurry home and land; none launch afterwards. On failure they vanish in a puff. The stage counts as finished only once every coin has landed, the last spark has faded and the numbers are at rest. It then holds for 2 s before the page glides up to the card (motion.dev, exponential in/out, 1.6 s).
+- **Casino-style numbers.** The stage's FROM, TO and amount figures and the balance strip roll like an odometer. Each digit is a reel spun with motion's `animate` on an exponential in/out ease, with a slight motion blur, and the reels stop left to right via motion's `stagger`. Digits line up by place value, and only those below the first change spin, upward for a rise and downward for a fall. Plain text stays available to screen readers and tests. (motion.dev's `AnimateNumber` is a React Motion+ component, so the reels are built from `animate` and `stagger`.)
+- **Bug found and fixed.** The stage's entrance tween ended on `transform: none`, which motion cannot interpolate, so the stage collapsed to zero size for anyone with motion enabled.
+
+Verified:
+- **Rust:** 50 shared unit tests (ranking, denominations, double-confirm thresholds, the typed confirmation) and 3 server wallet tests (usage counts and erasure).
+- **JS:** 29 script tests.
+- **Playwright with faked nodes:** 13 wallet tests. A new journey checks the default, the ranking, the refused denomination, a 5 TCRO send through all three stage phases against chain-reported final balances, and a 21 TCRO send that stays disabled until "21 tcro" is typed.
+- **Other suites:** the responsive sign-out test passes from the main navigation.
+- **Live, read-only:** real balances on 10 networks.
+
+## Wallet: every Causewaybay Wallet chain, plus Arbitrum — 2026-10-13
+
+The Wallet page now covers all 12 networks of the Causewaybay Wallet plus Arbitrum One and Sepolia (14 networks): 14 native coins and 13 registry tokens, 27 coins in all, with the two Arbitrum USDC rows read off their chains (`symbol()` "USDC", 6 decimals; chain ids 42161 and 421614). It has two main buttons (CRONOS MAINNET, USDC on Cronos Mainnet) and one search box that follows SPEC §2.1: empty matches all, every term must match, and case and `-`/`_`/space are ignored. EVM coins send. Arbitrum always uses the node's gas estimate, because its L1 data fee makes a plain transfer cost more than 21,000 gas, and it caps fees at 0.005 ETH. Other chains are view and receive.
+
+- **Derivation.** Solana, Cardano, Midnight and eCash addresses are derived in the browser from the phrase, which is now kept in local storage beside the key (requested). The port is checked against every index in the Causewaybay Wallet's `multichain.json` and `ecash.json`, and Solana associated token accounts against its three mainnet vectors.
+- **Reads.** Balances come from each chain's own endpoint. Each was probed from a browser origin on 2026-10-13:
+  - `api.mainnet-beta.solana.com` answers 403 to any browser `Origin`, so Solana mainnet is read through PublicNode with a genesis-hash check.
+  - Koios omits CORS headers on its replies, so Cardano is read through `POST /api/wallet/cardano`, a relay of two read-only queries for a public address.
+  - Chronik and the Midnight indexer (a `graphql-transport-ws` replay) are read directly.
+- **Foreign token accounts.** A Solana token account whose owner has been reassigned counts as zero. This was seen on mainnet: the test vector's USDC account now belongs to `usdc8UkQ…`.
+- **Stored on the backend.** SQLite keeps the active coin, recent picks, added tokens and receive addresses (`wallet_state`, `wallet_tokens`, `wallet_addresses`), and nothing else. Payloads reject unknown fields. Account erasure removes the rows.
+
+Verified:
+- **Rust unit tests:** 46 in shared (registry and search, Arbitrum gas, derivation vectors, ATA vectors, settings) and 3 in the server wallet module (persistence, isolation, validation, the Cardano relay's refusals, erasure).
+- **JS unit tests:** 12 (chain readers with stubbed nodes, CashAddr and Chronik protobuf, the Midnight replay rule, masking and the send-burst arc).
+- **Playwright with faked nodes:** 12 wallet tests. These include a journey that reads all five chain families, sends USDC on Arbitrum Sepolia, signs out and clears local storage, then signs back in by private key alone and still finds every address.
+- **Live, read-only:** real balances from ten networks in a real browser.
+- **Visual review:** screenshots at desktop, phone and dark mode.
+- **Unverified addresses:** a receive address the browser could not derive itself (a key-only sign-in) is labelled as recorded from an earlier phrase sign-in.
+
+## Wallet: CRO, USDC or any ERC-20, with choices kept in SQLite — 2026-10-13
+
+The Wallet page now offers two main choices, **CRONOS** (CRO, the network coin) and **USDC**, plus **Other ERC-20 token**. Adding a token takes a contract address. The page checks that code exists there, reads `symbol()` (string or bytes32), `name()` and `decimals()` from the chain, and previews the result. Symbols that look like CRO or USDC are flagged. Whatever is selected is shown large with its full contract address. The CRO fee balance stays visible for every asset and turns red at zero. A CRO send sets the value with no calldata and uses 21,000 gas. **Max** keeps that fee back, and the review shows amount + fee = total. Before each balance read, a token's decimals are checked against the saved value, and a token whose decimals changed is refused.
+
+Choices are kept per account in the backend's SQLite (`wallet_settings`, `wallet_selections`, `wallet_tokens`): the network, the asset picked on each network, and saved tokens. Routes: `GET/PATCH /api/wallet`, `POST /api/wallet/tokens`, `DELETE /api/wallet/tokens/{network}/{address}`. Payloads, including the nested token, use `deny_unknown_fields`, so a key or phrase field is rejected. Account erasure deletes the rows. Wallet calls use HTTP rather than the WebSocket, because requests sent while the socket reconnects after login were being lost.
+
+Verified: 29 shared unit tests (native transfer against the Cronos testnet vector, the CRO fee rule, ERC-20 metadata decoding, label cleaning, look-alikes, settings fallback, U256 add/sub), 3 integration tests (including a CRO transfer decoded and recovered), 2 server tests (per-owner persistence, isolation, validation, the 50-token cap and erasure), and 9 Playwright wallet tests. One of them runs the whole journey: send CRO, refuse a non-contract, flag a look-alike, add WCRO, send it, sign out, clear local storage, sign back in by key and find WCRO still selected, with mainnet keeping its own choice.
+
+## Show a new recovery phrase, 12 or 24 words — 2026-10-13
+
+A new recovery phrase can now be written on paper: **Show recovery phrase** lists the words numbered (two columns on a phone), **Hide** removes them from the page, and **Copy** still works. The words start hidden and hide again whenever the phrase changes. **12 words** (default) or **24 words** picks the length; switching generates a new phrase. `mnemonic_from_entropy` now takes 16 or 32 bytes, checked against BIP-39's all-zero vectors (“abandon … about”, “abandon ×23 art”). Translations for the six languages were updated.
+
+Verified: `make test-wallet` (22 Rust, 5 JS, 2 integration, 8 Playwright) passed, and the auth test for a new phrase now checks hidden by default, the shown words equal the copied phrase, Hide, and a 24-word phrase. Clippy for the WASM frontend is clean.
+
+## Stablecoin wallet: USDC on Cronos — 2026-10-12
+
+Added the **Wallet** page (USDC on Cronos mainnet, devUSDC.e on Cronos testnet), private-key login, and saved-wallet sign-in. Only the derived private key and wallet index are kept, in browser local storage; the saved private key is never rendered and leaves only through a confirmed **Copy**.
+
+Verified in three layers. **Unit:** 22 Rust tests in `causewaybay-shared` (the Causewaybay Wallet's transaction, EIP-55 and unit vectors; transfer checks and fee ceiling; the 256-bit integer) and 5 `node --test` cases for the card helpers (easeInOutExpo matched to `tween.rs`, money, address masking). **Integration:** `crates/shared/tests/wallet_flow.rs` signs a transfer from a phrase, decodes the raw bytes with an independent RLP decoder and recovers the signer on both chains; `cronos_live.rs` (ignored by default) checked chain ids, the token contracts' `symbol()`/`decimals()` and gas prices on the real nodes, and both nodes refused a throwaway-key transfer for insufficient funds only — after accepting its encoding, chain id and signature. **Browser:** `wallet.spec.mjs` (7) and the `wallet-flow.spec.mjs` journey (new wallet → approval → receive → send → network switch → sign out → back in by key) against a fake Cronos node, checking the exact signed bytes and that no secret reaches the page, local storage beyond the key, or any backend request; `wallet-live.spec.mjs` read real balances on both networks and got a real quote without sending. `make test-wallet` and `make test-wallet-live` passed; `cargo fmt --check` and both Clippy runs were clean.
+
+Regression: 14 related suites (78 tests) on this branch and on `main` failed the same set, all pre-existing (sidebar Admin button and heading wording). `mlx_manager::tests::shutdown_kills_the_worker_process_group` failed once under the full parallel suite and passed 5/5 alone; it is timing-based and unchanged here.
+
 ## Clarify Cloud TextEdit controls — 2026-10-06
 
 Renamed Cloud's ambiguous **Start session / Stop session** buttons to **Start TextEdit replies / Stop TextEdit replies**, including Korean **TextEdit 답변 시작 / 중지** and the other five translations. The optional TextEdit section now explains that replies are added to TextEdit and screen capture works while this feature is off. Existing navigation, capture controls, session context and history are unchanged. The frontend was rebuilt; no backend or client restart was needed.

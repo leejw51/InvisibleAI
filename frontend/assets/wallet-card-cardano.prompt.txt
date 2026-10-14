@@ -1,0 +1,8 @@
+Asset type: credit-card face artwork for the Invisible AI wallet (Cardano card).
+Composition: wide landscape at the ISO credit-card ratio, full-bleed abstract artwork with no card edges, no frame and no border. The left third and the bottom third stay calm and low in detail so white text overlays read clearly.
+Subject: concentric rings of fine sapphire light orbiting softly over brushed deep-blue anodised metal, like a calm constellation diagram rendered in polished glass.
+Style/medium: premium fintech metal-card design; polished 3D render, smooth gradients, subtle fine grain, refined specular highlights and gentle depth of field.
+Lighting/mood: scholarly, calm, trustworthy; midnight blue at the lower left with cool silver-blue highlights at the upper right.
+Constraints: no letters, numbers, words, logos, chips, card numbers, brand marks, people, watermarks or UI. Background is opaque.
+
+Generated with xAI grok-imagine-image-quality on 2026-10-13 by scripts/generate-wallet-art.mjs.

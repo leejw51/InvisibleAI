@@ -1,7 +1,9 @@
 use serde::{Deserialize, Serialize};
 pub mod chat;
+pub mod evm;
 pub mod invisible;
 pub mod quiz;
+pub mod registry;
 pub mod solved;
 pub mod status;
 pub use chat::*;
@@ -535,6 +537,7 @@ pub mod config {
         file.sync_data()
     }
 }
+pub mod chains;
 pub mod identity;
 
 #[cfg(test)]

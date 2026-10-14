@@ -39,6 +39,7 @@ pub mod toolchains;
 pub mod transport;
 pub mod usage;
 pub mod users;
+pub mod wallet;
 pub mod wiki;
 
 use anyhow::Result;

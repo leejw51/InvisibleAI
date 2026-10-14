@@ -1,0 +1,9 @@
+Asset type: sprite for a glowing coin that flies across a money-transfer game scene.
+Aspect ratio: 1:1
+Composition: one single coin, seen face-on, perfectly centered, filling about 70 % of the frame, on a pure black background (#000000) with nothing else.
+Subject: a thick, polished gold coin with a bevelled rim and a simple embossed star in the middle, emitting a warm soft golden glow and a few tiny sparkle glints around its rim.
+Style/medium: premium mobile-game item icon, glossy 3D render, crisp edges.
+Lighting/mood: bright, joyful, rewarding.
+Constraints: background must be pure flat black with no gradient, vignette, floor, shadow or reflection; no letters, numbers, words, logos, people or watermarks.
+
+Generated with xAI grok-imagine-image-quality on 2026-10-14 by scripts/generate-wallet-art.mjs.

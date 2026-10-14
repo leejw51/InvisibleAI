@@ -21,6 +21,30 @@ impl Identity {
             .map_err(|_| "Could not derive wallet identity".to_string())?;
         Ok(Self(key.private_key().clone()))
     }
+    /// A raw secp256k1 key, as 64 hex characters with or without `0x`.
+    pub fn from_private_key(value: &str) -> Result<Self, String> {
+        let invalid = || {
+            "Enter a valid private key: 64 hex characters, optionally starting with 0x.".to_string()
+        };
+        let value = value.trim();
+        let raw = value.strip_prefix("0x").unwrap_or(value);
+        if raw.len() != 64 || !raw.bytes().all(|b| b.is_ascii_hexdigit()) {
+            return Err(invalid());
+        }
+        let mut bytes = Zeroizing::new([0u8; 32]);
+        hex::decode_to_slice(raw, bytes.as_mut()).map_err(|_| invalid())?;
+        SigningKey::from_slice(bytes.as_ref())
+            .map(Self)
+            .map_err(|_| invalid())
+    }
+    /// The key as `0x`-prefixed hex, for the browser's local storage only.
+    pub fn private_key_hex(&self) -> Zeroizing<String> {
+        let bytes = Zeroizing::new(self.0.to_bytes());
+        Zeroizing::new(format!("0x{}", hex::encode(bytes.as_slice())))
+    }
+    pub fn signing_key(&self) -> &SigningKey {
+        &self.0
+    }
     pub fn address(&self) -> String {
         address(self.0.verifying_key())
     }
@@ -43,7 +67,11 @@ pub fn validate_wallet_index(index: u32) -> Result<(), String> {
     Ok(())
 }
 /// The caller must supply entropy from the operating system/browser CSPRNG.
-pub fn mnemonic_from_entropy(entropy: &[u8; 16]) -> Result<Zeroizing<String>, String> {
+/// A 12-word phrase from 16 bytes of entropy, or a 24-word phrase from 32.
+pub fn mnemonic_from_entropy(entropy: &[u8]) -> Result<Zeroizing<String>, String> {
+    if !matches!(entropy.len(), 16 | 32) {
+        return Err("Could not generate recovery phrase".into());
+    }
     bip39::Mnemonic::from_entropy(entropy)
         .map(|mnemonic| Zeroizing::new(mnemonic.to_string()))
         .map_err(|_| "Could not generate recovery phrase".into())
@@ -136,6 +164,11 @@ mod tests {
     fn indexed_wallets_and_generated_mnemonics_match_public_vectors() {
         let phrase = mnemonic_from_entropy(&[0; 16]).unwrap();
         assert_eq!(phrase.as_str(), PHRASE);
+        // BIP-39's 256-bit all-zero vector: 23 × "abandon" then "art".
+        let long = mnemonic_from_entropy(&[0; 32]).unwrap();
+        assert_eq!(long.as_str(), format!("{}art", "abandon ".repeat(23)));
+        assert!(Identity::from_mnemonic(&long).is_ok());
+        assert!(mnemonic_from_entropy(&[0; 20]).is_err());
         assert_eq!(
             Identity::from_mnemonic_at(PHRASE, 0).unwrap().address(),
             Identity::from_mnemonic(PHRASE).unwrap().address()
@@ -152,6 +185,35 @@ mod tests {
         assert!(Identity::from_mnemonic_at(test, 2147483647).is_ok());
         assert!(Identity::from_mnemonic_at(test, 2147483648).is_err());
         assert!(Identity::from_mnemonic_at(test, u32::MAX).is_err());
+    }
+    #[test]
+    fn private_keys_round_trip_and_match_the_mnemonic_wallet() {
+        let from_phrase = Identity::from_mnemonic(PHRASE).unwrap();
+        let key = from_phrase.private_key_hex();
+        // Public vector: the private key of the "abandon … about" wallet at index 0.
+        assert_eq!(
+            key.as_str(),
+            "0x1ab42cc412b618bdea3a599e3c9bae199ebf030895b039e9db1e30dafb12b727"
+        );
+        for text in [
+            key.as_str(),
+            &key[2..],
+            &format!("  {}  ", key.to_uppercase().replacen("0X", "0x", 1)),
+        ] {
+            assert_eq!(
+                Identity::from_private_key(text).unwrap().address(),
+                from_phrase.address()
+            );
+        }
+        for bad in [
+            "",
+            "0x1234",
+            &"0".repeat(64),
+            &"f".repeat(64),
+            &format!("0x{}", "g".repeat(64)),
+        ] {
+            assert!(Identity::from_private_key(bad).is_err(), "{bad}");
+        }
     }
     #[test]
     fn verifies_external_signature_vector() {

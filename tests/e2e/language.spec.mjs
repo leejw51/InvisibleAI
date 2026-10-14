@@ -30,7 +30,7 @@ test('translation catalog covers every marked label and preserves named placehol
       expect(placeholders(value), key).toEqual(placeholders(key));
     }
   }
-  for (const file of ['main', 'chat', 'cloud', 'assistance', 'wiki', 'invisible', 'login', 'admin', 'dashboard', 'images', 'videos', 'i18n', 'theme']) {
+  for (const file of ['main', 'chat', 'cloud', 'assistance', 'wiki', 'invisible', 'login', 'account', 'wallet', 'admin', 'dashboard', 'images', 'videos', 'i18n', 'theme']) {
     const source = fs.readFileSync(`crates/frontend/src/${file}.rs`, 'utf8');
     for (const match of source.split('#[cfg(test)]')[0].matchAll(/\btf?\(\s*("(?:[^"\\]|\\.)*")/g)) {
       const key = JSON.parse(match[1]);

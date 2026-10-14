@@ -34,6 +34,8 @@ pub fn copy_on_http(text: &str) -> bool {
         .and_then(|f| f.call1(document.as_ref(), &"copy".into()).ok())
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
+    // The text may be a secret: empty the field before it leaves the DOM.
+    area.set_value("");
     area.remove();
     if let Some(previous) = previous.and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok()) {
         let _ = previous.focus();

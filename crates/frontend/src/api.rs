@@ -283,6 +283,8 @@ pub async fn api<T: DeserializeOwned>(
         || url.starts_with("/api/auth/")
         || url == "/api/session"
         || url == "/api/settings" && method == "GET"
+        // Wallet choices are tiny and must not be lost while the socket reconnects.
+        || url.starts_with("/api/wallet")
     {
         return http(method, url, body).await;
     }

@@ -1,0 +1,8 @@
+Asset type: credit-card face artwork for the Invisible AI wallet (Midnight card).
+Composition: wide landscape at the ISO credit-card ratio, full-bleed abstract artwork with no card edges, no frame and no border. The left third and the bottom third stay calm and low in detail so white text overlays read clearly.
+Subject: a smooth, flawless polished obsidian surface curving gently like a lens, with a soft aurora of indigo and magenta light glowing beneath it, as if seen through dark smoked glass; suggests privacy and hidden depth. The surface is perfectly intact: no cracks, no shards, no scratches, no broken glass.
+Style/medium: premium fintech metal-card design; polished 3D render, smooth gradients, subtle fine grain, refined specular highlights and gentle depth of field.
+Lighting/mood: mysterious, private, premium; near-black at the lower left with a restrained violet-magenta glow at the upper right.
+Constraints: no letters, numbers, words, logos, chips, card numbers, brand marks, people, watermarks or UI. Background is opaque.
+
+Generated with xAI grok-imagine-image-quality on 2026-10-13 by scripts/generate-wallet-art.mjs.

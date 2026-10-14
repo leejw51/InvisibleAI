@@ -1,0 +1,8 @@
+Asset type: credit-card face artwork for the Invisible AI wallet (Solana card).
+Composition: wide landscape at the ISO credit-card ratio, full-bleed abstract artwork with no card edges, no frame and no border. The left third and the bottom third stay calm and low in detail so white text overlays read clearly.
+Subject: flowing satin waves in vivid violet that melt into mint-teal and aqua, like light refracting through liquid glass, with tiny prismatic sparkles at the crests.
+Style/medium: premium fintech metal-card design; polished 3D render, smooth gradients, subtle fine grain, refined specular highlights and gentle depth of field.
+Lighting/mood: energetic, futuristic, optimistic; dark plum at the lower left glowing into a violet-to-teal gradient at the upper right.
+Constraints: no letters, numbers, words, logos, chips, card numbers, brand marks, people, watermarks or UI. Background is opaque.
+
+Generated with xAI grok-imagine-image-quality on 2026-10-13 by scripts/generate-wallet-art.mjs.

@@ -1,0 +1,163 @@
+{
+  "$comment": "Solana, Cardano and Midnight key derivation, addresses and transaction encoding, generated with each chain's official SDK. Regenerate from test-wallet3 with `npm run generate` in its vectors/ directory.",
+  "source": "@solana/web3.js, cardano-serialization-lib, @midnight-ntwrk/wallet-sdk-hd",
+  "$note": "solana.transfer_tx.signature_base58 holds base64, not base58 \u2014 the generator mislabelled it. The Rust suite decodes it as base64.",
+  "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+  "bip39": {
+    "entropy_hex": "00000000000000000000000000000000",
+    "seed_hex": "5eb00bbddcf069084889a8ab9155568165f5c453ccb85e70811aaed6f6da5fc19a5ac40b389cd370d086206dec8aa6c43daea6690f20ad3d8d48b2d2ce9e38e4",
+    "seed_passphrase_TREZOR_hex": "c55257c360c07c72029aebc1b53c05ed0362ada38ead3e3e9efa3708e53495531f09a6987599d18264c1e1c92f2cf141630c7a3c4ab7c81b2f001698e7463b04"
+  },
+  "solana": {
+    "accounts": [
+      {
+        "path": "m/44'/501'/0'/0'",
+        "slip10_key_hex": "37df573b3ac4ad5b522e064e25b63ea16bcbe79d449e81a0268d1047948bb445",
+        "slip10_chain_code_hex": "fb304a2a20f3d97f5240150cd6261a3f7d52e0981381f2c1f935d124d827de83",
+        "pubkey_hex": "f036276246a75b9de3349ed42b15e232f6518fc20f5fcd4f1d64e81f9bd258f7",
+        "address": "HAgk14JpMQLgt6rVgv7cBQFJWFto5Dqxi472uT3DKpqk",
+        "keypair64_hex": "37df573b3ac4ad5b522e064e25b63ea16bcbe79d449e81a0268d1047948bb445f036276246a75b9de3349ed42b15e232f6518fc20f5fcd4f1d64e81f9bd258f7"
+      },
+      {
+        "path": "m/44'/501'/1'/0'",
+        "slip10_key_hex": "ba5e7b6e3680b4eb81db8e54c8e466b2e9a899355888403355d858ab985d2fc4",
+        "slip10_chain_code_hex": "4f7aee000d5cebebda3545a4a0ee01c3f65db636ec944164f8983bd71650484e",
+        "pubkey_hex": "f8029acf5cbcbdd5ac46ec147f3b78a3df6e5022ef0411db2bab650d329a4cd4",
+        "address": "Hh8QwFUA6MtVu1qAoq12ucvFHNwCcVTV7hpWjeY1Hztb",
+        "keypair64_hex": "ba5e7b6e3680b4eb81db8e54c8e466b2e9a899355888403355d858ab985d2fc4f8029acf5cbcbdd5ac46ec147f3b78a3df6e5022ef0411db2bab650d329a4cd4"
+      },
+      {
+        "path": "m/44'/501'/2'/0'",
+        "slip10_key_hex": "2f2d4843b13aec3867edc61fbeac4a1fa58797a8629aa35217bd183405bcc202",
+        "slip10_chain_code_hex": "c9e276665821819fc27ff6f761f040b7cf63bce89fa45893960368c4136986d6",
+        "pubkey_hex": "60c5985f58a32ff8ab91e2fbd1d211b8de6b4acc4f6ce4458830efc0c801ca1c",
+        "address": "7WktogJEd2wQ9eH2oWusmcoFTgeYi6rS632UviTBJ2jm",
+        "keypair64_hex": "2f2d4843b13aec3867edc61fbeac4a1fa58797a8629aa35217bd183405bcc20260c5985f58a32ff8ab91e2fbd1d211b8de6b4acc4f6ce4458830efc0c801ca1c"
+      }
+    ],
+    "sign": {
+      "message_utf8": "midnight-cardano-solana test vector",
+      "signature_hex": "52e95ba23743b3219fd434b45e928cb298cf27a59852df2e68efc5538f75769af66805cac25f8601c7397d5413973b68e085174f338855b0dd96c15729cf6601"
+    },
+    "transfer_tx": {
+      "from": "HAgk14JpMQLgt6rVgv7cBQFJWFto5Dqxi472uT3DKpqk",
+      "to": "Hh8QwFUA6MtVu1qAoq12ucvFHNwCcVTV7hpWjeY1Hztb",
+      "lamports": 1000000,
+      "recent_blockhash": "11111111111111111111111111111111",
+      "message_hex": "01000103f036276246a75b9de3349ed42b15e232f6518fc20f5fcd4f1d64e81f9bd258f7f8029acf5cbcbdd5ac46ec147f3b78a3df6e5022ef0411db2bab650d329a4cd40000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001020200010c0200000040420f0000000000",
+      "signed_tx_hex": "01aee26155d5a61a427097065b205853755b7adba7565c481fdddf3c122dc525d54c4a0cd6a03297799906e28523142a836c675a6a2e3607d8633494774f3f120101000103f036276246a75b9de3349ed42b15e232f6518fc20f5fcd4f1d64e81f9bd258f7f8029acf5cbcbdd5ac46ec147f3b78a3df6e5022ef0411db2bab650d329a4cd40000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001020200010c0200000040420f0000000000",
+      "signed_tx_base64": "Aa7iYVXVphpCcJcGWyBYU3VbetunVlxIH93fPBItxSXVTEoM1qAyl3mZBuKFIxQqg2xnWmouNgfYYzSUd08/EgEBAAED8DYnYkanW53jNJ7UKxXiMvZRj8IPX81PHWToH5vSWPf4AprPXLy91axG7BR/O3ij325QIu8EEdsrq2UNMppM1AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAgIAAQwCAAAAQEIPAAAAAAA=",
+      "signature_base58": "ruJhVdWmGkJwlwZbIFhTdVt626dWXEgf3d88Ei3FJdVMSgzWoDKXeZkG4oUjFCqDbGdaai42B9hjNJR3Tz8SAQ=="
+    }
+  },
+  "cardano": {
+    "root_xprv_hex": "60ce7dbec3616e9fc17e0c32578b3f380337b1b61a1f3cb9651aee30670e6f53970419a23a2e4e4082d12bf78faa8645dfc882cee2ae7179e2b07fe88098abb2072310084784c7308182dbbdb1449b2706586f1ff5cbf13d15e9b6e78c15f067",
+    "account_xprv_hex": "c026fb6c43215bf0b2e2132ad4852d6e2b47bb09eae796ea9571f9e06f0e6f53817147a33facaf204927be405e3dbcd2e31abe734b354d5e1bc7317d3ada5b68b0e2df16538508046649d0e6d5b32969555a23f2f1ebf2db2819359b0d88bd16",
+    "account_xpub_hex": "beb7e770b3d0f1932b0a2f3a63285bf9ef7d3e461d55446d6a3911d8f0ee55c0b0e2df16538508046649d0e6d5b32969555a23f2f1ebf2db2819359b0d88bd16",
+    "accounts": [
+      {
+        "path": "m/1852'/1815'/0'/0/0",
+        "xprv_hex": "105d2ef2192150655a926bca9cccf5e2f6e496efa9580508192e1f4a790e6f53de06529129511d1cacb0664bcf04853fdc0055a47cc6d2c6d20512702076065288848e8af62a27a57e982215741c9eac17e6e45cbfd6ea65a0e0dcc03bb777b2",
+        "payment_pubkey_hex": "7ea09a34aebb13c9841c71397b1cabfec5ddf950405293dee496cac2f437480a",
+        "payment_keyhash_hex": "0fdc780023d8be7c9ff3a6bdc0d8d3b263bd0cc12448c40948efbf42",
+        "base_addr_testnet": "addr_test1qq8ac7qqy0vtulyl7wntmsxc6wex80gvcyjy33qffrhm7sh927ysx5sftuw0dlft05dz3c7revpf7jx0xnlcjz3g69mqkt5dmn",
+        "base_addr_mainnet": "addr1qy8ac7qqy0vtulyl7wntmsxc6wex80gvcyjy33qffrhm7sh927ysx5sftuw0dlft05dz3c7revpf7jx0xnlcjz3g69mq4afdhv",
+        "enterprise_addr_testnet": "addr_test1vq8ac7qqy0vtulyl7wntmsxc6wex80gvcyjy33qffrhm7ss9hjl0y"
+      },
+      {
+        "path": "m/1852'/1815'/0'/0/1",
+        "xprv_hex": "30b8a1fd8fed35febc91a0ded3e49c41ce883625bca29f877765e34c7c0e6f53520bd4fb56a4546f0c82f99747b9e09c65971c64c75a1386f016ccf840af283a5e2d5be510b65aaaaeaa7a764b58538f22ae1c278f06db39d8c39495d4c5ec00",
+        "payment_pubkey_hex": "86e24e36b7f0d1ad2afa266179207eb04f02642898bb58a2b6f80e491b658060",
+        "payment_keyhash_hex": "047a68b1455233e294da486bf72792b8fa848d30d001fa2cdb8268f4",
+        "base_addr_testnet": "addr_test1qqz85693g4fr8c55mfyxhae8j2u04pydxrgqr73vmwpx3a8927ysx5sftuw0dlft05dz3c7revpf7jx0xnlcjz3g69mqlu9096",
+        "base_addr_mainnet": "addr1qyz85693g4fr8c55mfyxhae8j2u04pydxrgqr73vmwpx3a8927ysx5sftuw0dlft05dz3c7revpf7jx0xnlcjz3g69mqu2c0f9",
+        "enterprise_addr_testnet": "addr_test1vqz85693g4fr8c55mfyxhae8j2u04pydxrgqr73vmwpx3aqxt9qff"
+      },
+      {
+        "path": "m/1852'/1815'/0'/0/2",
+        "xprv_hex": "68874b7c010174a4df9d2dfa09c92d1089f1882c19caa3900a439dac780e6f53ad413c48153e07ca4991262c64c9420f7211e49e71c817d3e115f9bee2e36716fbe5b08e8ca7804d288ee31895df33b7fa0e4ab17651a53a87ad4b050e89d05d",
+        "payment_pubkey_hex": "5e8b424dc521d6a0b8223ec1b7598de4a64c28561ac04de3add316679d1e672c",
+        "payment_keyhash_hex": "924832df6e20fe468d3e6049da09074296f6e9b4f83d3446f4100832",
+        "base_addr_testnet": "addr_test1qzfysvkldcs0u35d8esynksfqapfdahfknur6dzx7sgqsvh927ysx5sftuw0dlft05dz3c7revpf7jx0xnlcjz3g69mq5d2gfl",
+        "base_addr_mainnet": "addr1qxfysvkldcs0u35d8esynksfqapfdahfknur6dzx7sgqsvh927ysx5sftuw0dlft05dz3c7revpf7jx0xnlcjz3g69mqhmhg9q",
+        "enterprise_addr_testnet": "addr_test1vzfysvkldcs0u35d8esynksfqapfdahfknur6dzx7sgqsvsy5uz0z"
+      }
+    ],
+    "stake_pubkey_hex": "012f5dc3115b8a07981e6e50f5a671e2c6fbb26c3ffde1cd1dcaf40a7fe8f160",
+    "stake_keyhash_hex": "e557890352095f1cf6fd2b7d1a28e3c3cb029f48cf34ff890a28d176",
+    "reward_addr_testnet": "stake_test1urj40zgr2gy4788kl54h6x3gu0pukq5lfr8nflufpg5dzas324ywz",
+    "sign": {
+      "message_utf8": "midnight-cardano-solana test vector",
+      "signature_hex": "e74970f28805e1063e07f1ac26a87161c8d7c5be9343a0349b099f9480b263c4058fbadbb9cb2b2ba3527c9cb3dfa0e44812cf59173626babb3323e3ba132301"
+    },
+    "transfer_tx": {
+      "from": "addr_test1qq8ac7qqy0vtulyl7wntmsxc6wex80gvcyjy33qffrhm7sh927ysx5sftuw0dlft05dz3c7revpf7jx0xnlcjz3g69mqkt5dmn",
+      "to": "addr_test1qqz85693g4fr8c55mfyxhae8j2u04pydxrgqr73vmwpx3a8927ysx5sftuw0dlft05dz3c7revpf7jx0xnlcjz3g69mqlu9096",
+      "input": {
+        "tx_hash": "0000000000000000000000000000000000000000000000000000000000000001",
+        "index": 0
+      },
+      "outputs": [
+        {
+          "addr": "addr_test1qqz85693g4fr8c55mfyxhae8j2u04pydxrgqr73vmwpx3a8927ysx5sftuw0dlft05dz3c7revpf7jx0xnlcjz3g69mqlu9096",
+          "lovelace": "2000000"
+        },
+        {
+          "addr": "addr_test1qq8ac7qqy0vtulyl7wntmsxc6wex80gvcyjy33qffrhm7sh927ysx5sftuw0dlft05dz3c7revpf7jx0xnlcjz3g69mqkt5dmn",
+          "lovelace": "7830109"
+        }
+      ],
+      "fee": "169891",
+      "ttl": 90000000,
+      "body_cbor_hex": "a400d9010281825820000000000000000000000000000000000000000000000000000000000000000100018282583900047a68b1455233e294da486bf72792b8fa848d30d001fa2cdb8268f4e557890352095f1cf6fd2b7d1a28e3c3cb029f48cf34ff890a28d1761a001e8480825839000fdc780023d8be7c9ff3a6bdc0d8d3b263bd0cc12448c40948efbf42e557890352095f1cf6fd2b7d1a28e3c3cb029f48cf34ff890a28d1761a00777a5d021a000297a3031a055d4a80",
+      "tx_hash_hex": "1c938ff645042ef52c917d5d546c74e09e25a96bf71a390abb054e18a93be67e",
+      "witness_set_cbor_hex": "a100d90102818258207ea09a34aebb13c9841c71397b1cabfec5ddf950405293dee496cac2f437480a58404242108fe08ad5d7d0ee0062d71911d185dbe824c8ae8419be306f640b704dafd8487801e794d13f0a5c493560bdc1cde2b2046e53e710d61f379eb636065604",
+      "vkey_pubkey_hex": "7ea09a34aebb13c9841c71397b1cabfec5ddf950405293dee496cac2f437480a",
+      "vkey_sig_hex": "4242108fe08ad5d7d0ee0062d71911d185dbe824c8ae8419be306f640b704dafd8487801e794d13f0a5c493560bdc1cde2b2046e53e710d61f379eb636065604",
+      "signed_tx_hex": "84a400d9010281825820000000000000000000000000000000000000000000000000000000000000000100018282583900047a68b1455233e294da486bf72792b8fa848d30d001fa2cdb8268f4e557890352095f1cf6fd2b7d1a28e3c3cb029f48cf34ff890a28d1761a001e8480825839000fdc780023d8be7c9ff3a6bdc0d8d3b263bd0cc12448c40948efbf42e557890352095f1cf6fd2b7d1a28e3c3cb029f48cf34ff890a28d1761a00777a5d021a000297a3031a055d4a80a100d90102818258207ea09a34aebb13c9841c71397b1cabfec5ddf950405293dee496cac2f437480a58404242108fe08ad5d7d0ee0062d71911d185dbe824c8ae8419be306f640b704dafd8487801e794d13f0a5c493560bdc1cde2b2046e53e710d61f379eb636065604f5f6"
+    }
+  },
+  "midnight": {
+    "accounts": [
+      {
+        "path": "m/44'/2400'/0'/0/0",
+        "night_sk_hex": "822fa63c57f6317cd51d12d80f0e64c2bc2164088dec1c71ca34a87a890190aa",
+        "verifying_key_hex": "c76a7f2b975d39e6d8af0e285b6805260031efeced12f17f7c7015bb13a6089c",
+        "address_hex": "6b98a1afafeaa1625c6ce5bae500a35401a262b2bcb511a7dd4983618d9a4468",
+        "addr_undeployed": "mn_addr_undeployed1dwv2rta0a2skyhrvukaw2q9r2sq6yc4jhj63rf7afxpkrrv6g35q07rgeu",
+        "addr_testnet": "mn_addr_test1dwv2rta0a2skyhrvukaw2q9r2sq6yc4jhj63rf7afxpkrrv6g35q7lmm4w",
+        "addr_mainnet": "mn_addr1dwv2rta0a2skyhrvukaw2q9r2sq6yc4jhj63rf7afxpkrrv6g35qw3dyt6"
+      },
+      {
+        "path": "m/44'/2400'/0'/0/1",
+        "night_sk_hex": "a5d814122c11b2aa75421d07ad58104ef6edd6d3ddfeaf891dfd433ca4b1664c",
+        "verifying_key_hex": "0d2a8e8f6900a76d530bed3e33e2f9e6a0a6a0a239019ef19e5fe46d1165808e",
+        "address_hex": "ab0c1d7f18984d850b38153be4fe07c6351b6f34abe4e47643edafb660a6b1b6",
+        "addr_undeployed": "mn_addr_undeployed14vxp6lccnpxc2zecz5a7fls8cc63kme540jwgajrakhmvc9xkxmqmpxdyt",
+        "addr_testnet": "mn_addr_test14vxp6lccnpxc2zecz5a7fls8cc63kme540jwgajrakhmvc9xkxmq2q77ge",
+        "addr_mainnet": "mn_addr14vxp6lccnpxc2zecz5a7fls8cc63kme540jwgajrakhmvc9xkxmq6wgpkd"
+      },
+      {
+        "path": "m/44'/2400'/0'/0/2",
+        "night_sk_hex": "57bc0e7570b48bbc396ef281ef41d22e03ed33fb275fa794625f3d59787e3f8a",
+        "verifying_key_hex": "8cbf3252b4c3a28ab484dfd9721319fb5a910e6ff4f97cd0bd1c11bf1acf5778",
+        "address_hex": "68401af11c87219216edb56dcc138f0f0a82a64b9ebe12f4dca15fa209e2a899",
+        "addr_undeployed": "mn_addr_undeployed1dpqp4ugususey9hdk4kucyu0pu9g9fjtn6lp9axu5906yz0z4zvscznmz2",
+        "addr_testnet": "mn_addr_test1dpqp4ugususey9hdk4kucyu0pu9g9fjtn6lp9axu5906yz0z4zvsfrtgwc",
+        "addr_mainnet": "mn_addr1dpqp4ugususey9hdk4kucyu0pu9g9fjtn6lp9axu5906yz0z4zvsedahsv"
+      }
+    ],
+    "zswap": {
+      "path": "m/44'/2400'/0'/3/0",
+      "seed_hex": "92933dd3dff04c57c9f8950d6e08bd5c6f295655c03627a658e09b0726558cad",
+      "coin_public_key_hex": "238d8504a53eb90ce3053646bf17a9102bb29a34e695033fb5ca978a3b5b5f69",
+      "encryption_public_key_hex": "cfbaf8ac54cb8fe19b0884e43109b0d59d681260bcc07bd2d3ebcb149203f53d",
+      "shield_addr_undeployed": "mn_shield-addr_undeployed1ywxc2p9986usecc9xert79afzq4m9x35u62sx0a4e2tc5w6mta5ulwhc432vhrlpnvygfep3pxcdt8tgzfstesrm6tf7hjc5jgpl20gvyq9aj",
+      "shield_addr_testnet": "mn_shield-addr_test1ywxc2p9986usecc9xert79afzq4m9x35u62sx0a4e2tc5w6mta5ulwhc432vhrlpnvygfep3pxcdt8tgzfstesrm6tf7hjc5jgpl20g2sk540"
+    },
+    "dust": {
+      "path": "m/44'/2400'/0'/2/0",
+      "seed_hex": "7bb19a43ffccad92ca25d52dac163c92967b53ff17dda1bbf9061db6a47b09b2"
+    }
+  }
+}

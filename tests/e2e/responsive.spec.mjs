@@ -186,9 +186,9 @@ test('appearance toggle works before login and persists through login and logout
     await expect(page.getByRole('heading', {name: 'Hey, what’s on your mind?', exact: true})).toBeVisible();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
     await expect(page.getByTestId('theme-toggle')).toBeInViewport();
+    // Sign out sits in the main navigation, not under Settings.
     await openNavigation(page);
-    await page.locator('.everyday-settings > summary').click();
-    await page.getByRole('button', {name: 'Sign out', exact: true}).click();
+    await page.getByRole('navigation', {name: 'Main navigation'}).getByRole('button', {name: 'Sign out', exact: true}).click();
     await expect(page.getByLabel('Recovery phrase')).toBeVisible();
     await page.reload();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');

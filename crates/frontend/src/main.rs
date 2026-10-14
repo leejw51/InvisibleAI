@@ -29,6 +29,7 @@ mod theme;
 mod tween;
 mod uploads;
 mod videos;
+mod wallet;
 mod wiki;
 use api::{api, encode};
 use causewaybay_shared::*;
@@ -1615,6 +1616,7 @@ impl Component for App {
                         else if self.page=="ai"{{ai_settings::page(self.language,self.session["address"].as_str().unwrap_or("local").to_string(),self.settings.clone(),ctx.link().callback(|_|Msg::Refresh),ctx.link().callback(Msg::Navigate))}}
                         else if self.page=="skills"{<skills::Skills key={format!("{}:{}",self.session["address"],self.selection_version)} language={self.language} owner={self.session["address"].as_str().unwrap_or("local").to_string()} settings={self.settings.clone()} ai_saved={ctx.link().callback(|_|Msg::Refresh)} navigate={ctx.link().callback(Msg::Navigate)}/>}
                         else if self.page=="files"{{self.files_view(ctx)}}
+                        else if self.page=="wallet"{<wallet::Wallet key={self.session["address"].as_str().unwrap_or("local").to_string()} session={self.session.clone()} copy={ctx.link().callback(Msg::CopyText)}/>}
                         else if self.page=="dashboard"{<status::Status key={format!("{}-{}",self.session["address"],self.selection_version)} language={self.language} connection={self.connection} copy={ctx.link().callback(Msg::CopyText)}/>}
                         else if self.page=="devices"{{dashboard::view(self.dashboard.as_ref(),self.connection,self.is_admin(),self.session["address"].as_str(),dashboard::Actions { rename:ctx.link().callback(Msg::RenameNode), default:ctx.link().callback(Msg::DefaultCaptureDevice), copy:ctx.link().callback(Msg::CopyText) }, &self.devices.default)}}
                         else if self.page=="admin" && self.is_admin(){<admin::Admin language={self.language} settings={ctx.link().callback(|_|Msg::Modal("settings".into()))}/>}
@@ -1871,6 +1873,9 @@ impl App {
                 {self.nav(ctx,"home","Capture","screen",None)}
                 {self.nav(ctx,"save","Save anything","plus",None)}
                 {self.nav(ctx,"chat","Ask anything","message",None)}
+                {self.nav(ctx,"wallet","Wallet","wallet",None)}
+                // Signing out is an everyday action, not a setting.
+                if self.session["required"]==true { <button class="nav-item" data-nav="sign-out" onclick={ctx.link().callback(|_|Msg::Logout)}>{icon("logout")}<span>{t("Sign out")}</span></button> }
             </nav>
             <details class="more-tools" open={library}><summary>{icon("book")}{t("More tools")}</summary><nav aria-label={t("Additional tools")}>
                 {self.nav(ctx,"notes","Notes","file",None)}
@@ -1894,7 +1899,6 @@ impl App {
                 if self.is_admin(){ {self.nav(ctx,"admin","Admin","shield",None)} }
                 if self.session["address"].is_string() { <button class="settings-nav" onclick={ctx.link().callback(|_|Msg::Modal("account".into()))}>{icon("user")}<span>{t("Account details")}</span></button> }
                 <button class="settings-nav danger-nav" data-nav="delete-all" onclick={ctx.link().callback(|_|Msg::Modal("delete-all".into()))}>{icon("trash")}<span>{t("Delete all")}</span></button>
-                if self.session["required"]==true { <button class="settings-nav" onclick={ctx.link().callback(|_|Msg::Logout)}>{icon("arrow")}<span>{t("Sign out")}</span></button> }
                 </details><div class="profile"><span class="avatar">{"Y"}</span><span><strong>{self.session["name"].as_str().map(str::to_owned).unwrap_or_else(||t("Your workspace"))}</strong><small>{t("Personal · Invisible AI")}</small></span><span class="profile-dot"/></div>
             </div>
         </aside>}
@@ -1923,6 +1927,7 @@ impl App {
                 "devices" => "Devices",
                 "dashboard" => "Dashboard",
                 "quiz" => "Quiz playground",
+                "wallet" => "Wallet",
                 _ => "Multi-device capture",
             }
         };
@@ -2141,7 +2146,7 @@ fn location_page() -> String {
     match path.trim_matches('/') {
         page @ ("save" | "notes" | "wiki" | "autonomous" | "assistance" | "overview" | "chat"
         | "library" | "files" | "images" | "videos" | "code" | "coding" | "skills"
-        | "dashboard" | "devices" | "admin" | "quiz" | "ai") => page.into(),
+        | "dashboard" | "devices" | "admin" | "quiz" | "ai" | "wallet") => page.into(),
         // Older links: the backend session page was /cloud and the Dashboard was /status.
         "cloud" => "autonomous".into(),
         "status" => "dashboard".into(),

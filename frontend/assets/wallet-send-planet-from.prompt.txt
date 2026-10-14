@@ -1,0 +1,9 @@
+Asset type: seamless wrap-around surface texture for a small glowing planet that represents the sender's wallet in a game scene.
+Aspect ratio: 2:1
+Composition: equirectangular map: flat, evenly lit, edge to edge, no horizon and no visible sphere; the left and right edges continue into each other.
+Subject: an iridescent crystalline world of violet and lilac facets with thin veins of glowing gold light running between them, like a precious geode.
+Style/medium: stylized premium game texture, rich detail, smooth.
+Lighting/mood: magical, valuable.
+Constraints: no letters, numbers, words, logos, people, watermarks or UI; no stars or space background; the whole frame is surface.
+
+Generated with xAI grok-imagine-image-quality on 2026-10-14 by scripts/generate-wallet-art.mjs.

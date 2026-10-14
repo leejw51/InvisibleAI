@@ -7,7 +7,7 @@ import fs from 'node:fs';
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'causewaybay-e2e-'));
 export default defineConfig({
   testDir: './tests/e2e',
-  testIgnore: [...(process.env.RUN_LIVE_AI === '1' ? [] : ['**/live.spec.mjs', '**/automatic-capture.spec.mjs']), ...(process.env.TEST_PACKAGE === '1' ? [] : ['**/package.spec.mjs']), ...(process.env.RUN_NATIVE_CAPTURE === '1' ? [] : ['**/native-capture.spec.mjs']), ...(process.env.RUN_NATIVE_NOTES === '1' ? [] : ['**/native-notes.spec.mjs']), ...(process.env.RUN_NATIVE_SCREEN === '1' ? [] : ['**/native-screen.spec.mjs'])],
+  testIgnore: [...(process.env.RUN_LIVE_AI === '1' ? [] : ['**/live.spec.mjs', '**/automatic-capture.spec.mjs']), ...(process.env.TEST_PACKAGE === '1' ? [] : ['**/package.spec.mjs']), ...(process.env.RUN_NATIVE_CAPTURE === '1' ? [] : ['**/native-capture.spec.mjs']), ...(process.env.RUN_NATIVE_NOTES === '1' ? [] : ['**/native-notes.spec.mjs']), ...(process.env.RUN_NATIVE_SCREEN === '1' ? [] : ['**/native-screen.spec.mjs']), ...(process.env.RUN_LIVE_WALLET === '1' ? [] : ['**/wallet-live.spec.mjs'])],
   fullyParallel: false,
   workers: 1,
   timeout: 45000,
