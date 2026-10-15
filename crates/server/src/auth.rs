@@ -167,8 +167,9 @@ pub fn principal(s: &AppState, headers: &HeaderMap) -> Api<Principal> {
 }
 pub fn authorize(s: &AppState, headers: &HeaderMap, method: &str, path: &str) -> Api<Principal> {
     same_origin(headers)?;
-    // VPN capture nodes may connect without a token unless APP_TOKEN is configured.
-    // This grants only the client transport, never workspace or setup APIs.
+    // Capture nodes need a bearer only when APP_TOKEN is configured; then
+    // either APP_TOKEN or the local capture-token is accepted. This grants
+    // only the client transport, never workspace or setup APIs.
     let node_path = path
         .strip_prefix("/api")
         .unwrap_or(path)
@@ -179,13 +180,12 @@ pub fn authorize(s: &AppState, headers: &HeaderMap, method: &str, path: &str) ->
             .and_then(|v| v.to_str().ok())
             .and_then(|v| v.strip_prefix("Bearer "))
             .unwrap_or("");
-        if s.capture_token
-            .as_ref()
-            .is_some_and(|token| !constant_eq(bearer, token))
+        if let Some(token) = &s.token
+            && !constant_eq(bearer, token)
             && !s
-                .token
+                .capture_token
                 .as_ref()
-                .is_some_and(|token| constant_eq(bearer, token))
+                .is_some_and(|capture| constant_eq(bearer, capture))
         {
             return Err(unauthorized());
         }

@@ -11,7 +11,7 @@ Please do not file public issues for anything that could expose another user's d
 ## What the design promises
 
 - **Local by default.** A network listener requires an explicit `APP_TOKEN`. Unauthenticated local-browser access accepts only loopback hostnames/IPs, preventing DNS rebinding through arbitrary Host headers.
-- **Authenticated capture.** Production capture connections require a bearer credential. A generated 0600 `capture-token` is shared automatically with the same Mac's CLI. Remote clients use `APP_TOKEN` (or the private capture credential). Each client also keeps a private `device-key`; a different key cannot replace its registered ID or owner. Reinstalling a client requires preserving that key or enrolling a new ID.
+- **Capture credential.** When `APP_TOKEN` is set, capture connections must present it (or the generated 0600 `capture-token` the same Mac's CLI shares automatically). Without `APP_TOKEN`, the capture transport is not token-checked, so keep the listener on loopback or a trusted VPN. Each client also keeps a private `device-key`; a different key cannot replace its registered ID or owner. Reinstalling a client requires preserving that key or enrolling a new ID.
 - **Hybrid tagging stays local.** Background Wiki analysis never sends a Hybrid account's notes to a cloud model. Cloud AI mode explicitly permits cloud tagging.
 - **Checkpoint isolation.** Generated code cannot write the project's `.git` directory. Git checkpoints disable hooks and fsmonitor and run inside a separate filesystem/network sandbox with bounded runtime and output, including for existing repository filters.
 

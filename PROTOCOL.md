@@ -60,7 +60,7 @@ Every protected HTTP operation and every WebSocket dispatch checks current autho
 
 Every content route, room/event stream, search, AI retrieval tool and browser-presence query is scoped to the authenticated normalized wallet address, with no administrator bypass. Node ownership separately limits capture requests; explicitly shared hardware does not share the captured data. Display names are deterministic labels; only the full address is the identity key. Existing ownerless data remains in the `local` namespace. Data is not end-to-end encrypted.
 
-Without `CWBBOT_ADMIN`, the existing local/demo mode or optional access-token mode remains available. In wallet mode `APP_TOKEN` is a capture-node credential, not a browser login or admin credential. Production capture always requires a bearer credential. Without APP_TOKEN, the backend creates a private capture-token file for the same-Mac client. A registered ID is bound to the client device-key hash; mismatched or absent keys cannot replace it. This is possession-based pairing, not hardware attestation.
+Without `CWBBOT_ADMIN`, the existing local/demo mode or optional access-token mode remains available. In wallet mode `APP_TOKEN` is a capture-node credential, not a browser login or admin credential. Capture requires a bearer credential only when APP_TOKEN is set; then APP_TOKEN or the private capture-token file (shared with the same-Mac client) is accepted. Without APP_TOKEN, capture connections are not token-checked. A registered ID is bound to the client device-key hash; mismatched or absent keys cannot replace it. This is possession-based pairing, not hardware attestation.
 
 ## Browser WebSocket
 
@@ -117,7 +117,7 @@ rust-cli http://backend.example:3000 0xYOUR_OWNER_WALLET_ADDRESS
 
 The first explicitly shares the node with approved users; the second allows only the matching approved wallet to capture. Admins do not bypass ownership. Release packages provide the same client as `bin/client` and the backend as `bin/server`; source builds also provide `rust_cli` and `causewaybay` compatibility aliases. The URL and owner wallet are saved in client JSONL before connecting. No arguments restores that saved connection, including ownership, node ID and computer name; without a saved URL it prints connection help. `--help` always prints help. Advanced `client --owner-wallet ADDRESS` and `client --shared` set ownership; omitting both in the advanced command restores the saved owner.
 
-Connect to `/api/client/ws`, adding `Authorization: Bearer <APP_TOKEN-or-capture-token>` in production. The node ID is stable in client JSONL; the name defaults to the computer name.
+Connect to `/api/client/ws`, adding `Authorization: Bearer <APP_TOKEN-or-capture-token>` when the backend sets APP_TOKEN. The node ID is stable in client JSONL; the name defaults to the computer name.
 
 ```json
 {"type":"hello","id":"stable-client-id","name":"MacBook","platform":"macos","callbacks":"sse","owner_wallet":null,"device_key":"64-hex-character-private-device-key"}

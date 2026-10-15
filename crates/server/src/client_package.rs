@@ -47,7 +47,7 @@ pub fn info(s: &AppState, owner_wallet: Option<String>) -> ClientPackage {
         platform: format!("{} / {}", std::env::consts::OS, std::env::consts::ARCH),
         backend_url,
         owner_wallet,
-        token_required: s.capture_token.is_some(),
+        token_required: s.token.is_some(),
     }
 }
 

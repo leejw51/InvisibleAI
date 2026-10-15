@@ -994,7 +994,7 @@ mod enrollment_regressions {
         register_device(&s, "mac", "My Mac", "macOS", Some("alice"), Some(&key)).unwrap();
     }
     #[tokio::test]
-    async fn capture_requires_a_secret_and_local_browser_rejects_rebinding() {
+    async fn capture_secret_only_with_app_token_and_local_browser_rejects_rebinding() {
         let dir = tempfile::tempdir().unwrap();
         let s = AppState::open_configured(
             dir.path().join("data"),
@@ -1005,7 +1005,32 @@ mod enrollment_regressions {
         .unwrap();
         let mut headers = HeaderMap::new();
         headers.insert("host", "127.0.0.1:3000".parse().unwrap());
-        assert!(crate::auth::authorize(&s, &headers, "GET", "/api/client/ws").is_err());
+        // Without APP_TOKEN the capture transport is not token-checked.
+        assert!(
+            crate::auth::authorize(&s, &headers, "GET", "/api/client/ws")
+                .unwrap()
+                .node
+        );
+        let guarded = AppState::open_configured(
+            dir.path().join("guarded-data"),
+            dir.path().join("guarded-config"),
+            false,
+            Some("synthetic-app-token-1234".into()),
+        )
+        .unwrap();
+        assert!(crate::auth::authorize(&guarded, &headers, "GET", "/api/client/ws").is_err());
+        for secret in [
+            "synthetic-app-token-1234".to_string(),
+            guarded.capture_token.clone().unwrap(),
+        ] {
+            let mut with_bearer = headers.clone();
+            with_bearer.insert("authorization", format!("Bearer {secret}").parse().unwrap());
+            assert!(
+                crate::auth::authorize(&guarded, &with_bearer, "GET", "/api/client/ws")
+                    .unwrap()
+                    .node
+            );
+        }
         headers.insert(
             "authorization",
             format!("Bearer {}", s.capture_token.as_ref().unwrap())
