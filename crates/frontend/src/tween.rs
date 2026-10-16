@@ -4,6 +4,8 @@
 use wasm_bindgen::JsCast;
 use wasm_bindgen::closure::Closure;
 use yew::prelude::*;
+/// The pending animation-frame callback a tween owns, shared with the frame itself so it can reschedule or drop itself.
+type FrameClosure = std::rc::Rc<std::cell::RefCell<Option<Closure<dyn FnMut(f64)>>>>;
 
 /// Standard easeInOutExpo: f(0)=0, f(1)=1, symmetric around (0.5, 0.5).
 pub fn ease_in_out_expo(t: f64) -> f64 {
@@ -82,7 +84,7 @@ pub fn in_view(target: &web_sys::HtmlElement) -> bool {
 }
 /// A running scroll tween; dropping it stops the motion where it is.
 pub struct ScrollTween {
-    frame: std::rc::Rc<std::cell::RefCell<Option<Closure<dyn FnMut(f64)>>>>,
+    frame: FrameClosure,
     handle: std::rc::Rc<std::cell::Cell<i32>>,
     /// The list whose CSS smooth scrolling is paused while the tween runs.
     list: Option<web_sys::HtmlElement>,
@@ -151,8 +153,7 @@ pub fn ease_into_view(target: &web_sys::HtmlElement, duration_ms: f64) -> Option
     if let Some(l) = &list {
         let _ = l.style().set_property("scroll-behavior", "auto");
     }
-    let frame: std::rc::Rc<std::cell::RefCell<Option<Closure<dyn FnMut(f64)>>>> =
-        Default::default();
+    let frame: FrameClosure = Default::default();
     let handle = std::rc::Rc::new(std::cell::Cell::new(0));
     let (next, next_handle) = (frame.clone(), handle.clone());
     let paused = list.clone();

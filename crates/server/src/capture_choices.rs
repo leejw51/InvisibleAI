@@ -64,9 +64,10 @@ mod tests {
             default: "mac-1".into(),
             continuous: vec!["mac-2".into()],
         };
-        update(PrivateState(a.clone()), Json(choice.clone()))
+        let Json(saved) = update(PrivateState(a.clone()), Json(choice.clone()))
             .await
             .unwrap();
+        assert_eq!(saved, choice);
         assert_eq!(a.settings().unwrap().user_capture, Some(choice));
         assert_eq!(b.settings().unwrap().user_capture, None);
         let bad = CaptureChoices {
