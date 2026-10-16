@@ -5,6 +5,7 @@ import './companion.js';
 import './waiting-companion.js';
 import './celebrate.js';
 import './capture-shine.js';
+import './capture-motion.js';
 
 const reduced = matchMedia('(prefers-reduced-motion: reduce)');
 const seen = new WeakSet();
@@ -25,6 +26,8 @@ function enter(root) {
   for (const element of elements) {
     if (seen.has(element)) continue;
     seen.add(element);
+    // The Capture page builds its hero in line by line (capture-motion.js).
+    if (element.matches('.chat-page.is-capture > .page-intro')) continue;
     if (element.matches('.chat-placeholder img')) {
       move(element, { opacity: [0, 1], y: [14, 0], rotate: [-6, 0], scale: [0.94, 1] }, { ...spring, stiffness: 180, damping: 16 });
     } else {
