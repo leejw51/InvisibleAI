@@ -83,7 +83,14 @@ class WikiGraph extends HTMLElement {
       this.cleanup();
     }
   }
-  attributeChangedCallback(name) { if (!this.renderer) return; if (name === 'data-graph') this.build(); this.schedule(); }
+  attributeChangedCallback(name) {
+    if (!this.renderer) return;
+    if (name === 'data-graph') this.build();
+    // The selected label is marked at once: a phone's tag panel can push the
+    // canvas out of view, and an offscreen map does not draw.
+    if (name === 'data-selected') for (const n of this.nodes) n.label?.classList.toggle('is-selected', n.id === (this.dataset.selected || ''));
+    this.schedule();
+  }
   track(r) { this.resources.push(r); return r; }
   sphere(kind, size) {
     const radius = kind === 'tag' ? .34 + Math.min(.6, (size || 1) * .05) : .2;

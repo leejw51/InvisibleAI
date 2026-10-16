@@ -82,7 +82,9 @@ class InvisibleCompanion extends HTMLElement {
   get state() { return this.dataset.activity || this.dataset.state; }
   get active() { return this.visible && !document.hidden && !this.motion.matches; }
   stopMotion() {
-    for (const control of this.controls) control.stop();
+    // Yew can remove a keyed companion before its first frame mounts it
+    // (back then forward within one frame): there is nothing to stop yet.
+    for (const control of this.controls ?? []) control.stop();
     this.controls = [];
     this.figure?.style.removeProperty('transform');
   }
