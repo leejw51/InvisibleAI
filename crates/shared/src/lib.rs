@@ -72,6 +72,20 @@ pub struct Settings {
     pub user_models: std::collections::BTreeMap<String, String>,
     #[serde(default)]
     pub default_ai: Option<UserAiPreferences>,
+    /// This account's capture computer choices, so a new login or browser
+    /// starts with the same device.
+    #[serde(default)]
+    pub user_capture: Option<CaptureChoices>,
+}
+
+/// The capture computer an account uses: the active one, the default from
+/// Devices, and those picked for continuous capture.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct CaptureChoices {
+    pub active: String,
+    pub default: String,
+    pub continuous: Vec<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]

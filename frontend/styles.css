@@ -1893,3 +1893,70 @@ cwb-send-stage.is-failed{box-shadow:0 0 0 2px #ff8a9a88,0 40px 80px -40px #3a0f1
 :root[data-theme="dark"] :is(.wallet-balance-main strong,.wallet-review-amount strong,.wallet-review dd,.wallet-send h2,.wallet-locked h2){color:#eadff7}
 :root[data-theme="dark"] .wallet-activity li{background:#2b2536}
 :root[data-theme="dark"] .wallet-mainnet-note{background:#3a3020;border-color:#5a4a2c;color:#f0d69a}
+
+/* Capture shortcuts: device and AI, always beside the companion. */
+.chat-page>.page-intro{position:relative}
+.chat-page>.page-intro>.quick-picks{position:absolute;top:10px;right:12px;z-index:3;grid-column:1/-1;grid-row:1/-1;align-self:start;justify-self:end;display:flex;flex-direction:column;align-items:stretch;gap:6px;width:250px;max-width:calc(100% - 24px);min-width:0;padding:0}
+.quick-pick-group{display:flex;flex-direction:column;gap:4px}
+.quick-pick{display:flex;align-items:center;gap:6px;min-width:0;padding:2px 4px 2px 11px;border:1px solid var(--line);border-radius:12px;background:#fffdfacc;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);box-shadow:0 6px 18px #6a4c8a12;font-size:11px;color:var(--muted);transition:border-color .2s,box-shadow .2s}
+.quick-pick:focus-within{border-color:#b89bd2;box-shadow:0 0 0 3px #b89bd233}
+.quick-pick>svg{width:14px;height:14px;flex:none;color:#8f6aa8}
+.quick-pick>span{flex:none}
+.quick-pick select{flex:1;min-width:0;min-height:36px;padding:4px 22px 4px 4px;border:0;background:transparent;color:#5b436a;font-size:13px;font-weight:600;text-overflow:ellipsis;cursor:pointer}
+.quick-pick select:focus{outline:none}
+.quick-pick select:disabled{cursor:default;opacity:.65}
+.quick-pick{flex-wrap:wrap}.quick-pick .error-text{width:100%;font-size:10px;line-height:1.5;padding:0 0 6px;color:#a35b3f}
+.quick-pick-group.is-offline .quick-pick{border-color:#e2b7a4}
+.quick-picks .device-unavailable{margin:0;font-size:10px;line-height:1.5;color:#a35b3f}
+@media(pointer:coarse){.quick-pick select{min-height:44px;font-size:16px}}
+@media(min-width:701px){.chat-page:not(.has-conversation)>.page-intro>.quick-picks~invisible-companion{width:150px;height:128px;align-self:end;justify-self:end;margin-bottom:-10px}.chat-page.has-conversation>.page-intro>.quick-picks{top:0;right:140px}.chat-page.has-conversation>.page-intro>div:not(.quick-picks){padding-right:270px}}
+@media(max-width:700px){.chat-page>.page-intro>.quick-picks{position:static;grid-column:1/-1;grid-row:3;width:100%;flex-direction:row;flex-wrap:wrap;margin-top:12px}.quick-picks>*{flex:1 1 160px}}
+:root[data-theme="dark"] .quick-pick{background:#221e2bcc;border-color:var(--line);box-shadow:none}
+:root[data-theme="dark"] .quick-pick select{background:transparent;color:#eadff7}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]) .quick-pick{background:#221e2bcc;box-shadow:none}:root:not([data-theme="light"]) .quick-pick select{background:transparent;color:#eadff7}}
+
+/* After Capture the screenshot, then the answer, glow in and out once. */
+.chat-message.is-focused{animation:capture-focus 1.4s cubic-bezier(.87,0,.13,1) both}
+.chat-message.is-focused .chat-image img{animation:capture-fade .5s cubic-bezier(.87,0,.13,1) both}
+@keyframes capture-focus{0%{box-shadow:0 0 0 0 #a77fd000}35%{box-shadow:0 0 0 3px #a77fd066,0 14px 36px #7a55a02e}100%{box-shadow:0 0 0 0 #a77fd000}}
+@keyframes capture-fade{from{opacity:0}to{opacity:1}}
+@media(prefers-reduced-motion:reduce){.chat-message.is-focused,.chat-message.is-focused .chat-image img{animation:none}}
+
+/* Short desktop windows: the hero and the console give up padding, not controls,
+   so Capture, Device, AI and Auto all stay above the composer. */
+@media(min-width:701px) and (max-height:760px){.chat-page>.page-intro{margin-bottom:8px;padding-bottom:10px}.invisible-console{margin-top:12px}}
+@media(min-width:701px) and (max-height:700px){.chat-page>.page-intro{padding-top:2px;padding-bottom:6px;margin-bottom:6px}.chat-page>.page-intro p{display:none}.chat-page>.page-intro h2{font-size:22px;margin:4px 0 6px}.chat-page>.page-intro>.secondary-button{margin-top:6px}.chat-page:not(.has-conversation)>.page-intro>.quick-picks~invisible-companion{height:104px;width:124px}.invisible-console{padding:14px 18px;margin-top:8px}.invisible-control-heading{margin-bottom:10px}.workspace-ai-settings{padding:8px 12px}.everyday-workspace>summary{padding-top:10px;padding-bottom:10px}}
+@media(min-width:701px) and (max-height:700px){.demo-banner{padding:6px 11px;margin-bottom:10px}.chat-page>.page-intro h2{font-size:20px}.chat-page>.page-intro>.secondary-button{min-height:38px;padding:6px 12px;margin-top:4px}.invisible-console{padding:10px 16px;margin-top:6px}.workspace-ai-settings{padding:6px 12px}.invisible-control-heading{margin-bottom:6px}}
+@media(min-width:701px) and (max-height:700px){.chat-page:not(.has-conversation)>.page-intro>.quick-picks~invisible-companion{display:none}}
+/* Phones: one row of two shortcuts; the selects shrink instead of widening the page. */
+.quick-pick,.quick-pick-group{min-width:0}
+.quick-pick select{flex:1 1 0;width:0;max-width:100%}
+@media(max-width:700px){.chat-page>.page-intro>.quick-picks{flex-wrap:nowrap;gap:8px}.quick-picks>*{flex:1 1 0;min-width:0}.quick-pick{padding-left:8px}.quick-pick>span{display:none}}
+@media(max-width:700px) and (max-height:760px){.chat-page>.page-intro p{display:none}.chat-page>.page-intro{margin-bottom:8px}.chat-page>.page-intro>.quick-picks{margin-top:6px}.invisible-console{padding:12px 14px;margin-top:8px}.workspace-ai-settings{padding:8px 12px}.invisible-control-heading{margin-bottom:8px}}
+/* Phones: the shortcuts get their own last row, after the heading and New chat. */
+@media(max-width:700px){.chat-page:not(.has-conversation)>.page-intro>div.quick-picks,.chat-page.has-conversation>.page-intro>div.quick-picks{grid-row:4;grid-column:1/-1;align-self:start;justify-self:stretch;padding:0;margin-top:14px}.quick-pick{overflow:hidden}}
+/* Safari ignores min-height on native selects: draw the shortcut selects
+   ourselves so they are as tall to tap as they are in Chrome. */
+.quick-pick select{appearance:none;-webkit-appearance:none;min-height:0;padding:9px 24px 9px 4px;line-height:1.3;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5l3.5 3.5 3.5-3.5' fill='none' stroke='%238f6aa8' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 6px center/12px 12px;border-radius:9px}
+@media(pointer:coarse){.quick-pick select{padding-top:12px;padding-bottom:12px}}
+:root[data-theme="dark"] .quick-pick select{background-color:transparent}
+
+/* The Capture page's one press: Capture is the big primary action, Send steps back. */
+.chat-compose-actions>.dock-capture.primary-button{padding:14px 22px;font-size:15px;font-weight:600;gap:10px;min-width:150px;justify-content:center;box-shadow:0 10px 26px #7a55a02e}
+.chat-compose-actions>.dock-capture.primary-button svg{width:18px;height:18px}
+.chat-compose-actions>.dock-capture.primary-button:disabled{box-shadow:none}
+.chat-compose-actions>.dock-send.secondary-button{margin-left:auto}
+@media(max-width:700px){.chat-compose-actions>.dock-capture.primary-button{min-width:0;padding:12px 16px}}
+
+/* Capture shine (frontend/capture-shine.js animates --shine-x and --capture-glow). */
+.chat-compose-actions>.dock-capture.primary-button{position:relative;overflow:hidden;isolation:isolate;background:linear-gradient(135deg,#9670d6 0%,#7653bd 48%,#a07de0 100%);box-shadow:0 10px 26px #7a55a02e,0 0 0 0 transparent,0 0 22px rgb(167 127 224/var(--capture-glow,.22))}
+.chat-compose-actions>.dock-capture.primary-button::after{content:"";position:absolute;inset:-20%;z-index:-1;pointer-events:none;background:linear-gradient(105deg,transparent 36%,#ffffff26 42%,#ffffff8c 47%,#fffffff2 50%,#ffffff8c 53%,#ffffff26 58%,transparent 64%);transform:translateX(var(--shine-x,-140%))}
+.chat-compose-actions>.dock-capture.primary-button>*{position:relative;z-index:1}
+.chat-compose-actions>.dock-capture.primary-button:hover:not(:disabled){filter:brightness(1.06) saturate(1.05)}
+.chat-compose-actions>.dock-capture.primary-button:disabled{background:linear-gradient(135deg,#b9a3dc,#a690cf);filter:none}
+.chat-compose-actions>.dock-capture.primary-button:disabled::after{display:none}
+.capture-ring{position:fixed;z-index:80;pointer-events:none;border-radius:14px;border:2px solid #b28df0;box-shadow:0 0 18px #a77fd066}
+.capture-spark{position:fixed;z-index:81;pointer-events:none;width:9px;height:9px;margin:-4.5px 0 0 -4.5px;border-radius:50%;background:radial-gradient(circle,#fff 0 30%,#d8c2ff 55%,#a77fd000 72%);color:#f3e9ff;font-size:15px;line-height:9px;text-align:center;text-shadow:0 0 6px #c9a8ff}
+.capture-spark:not(:empty){background:none}
+@media(prefers-reduced-motion:reduce){.chat-compose-actions>.dock-capture.primary-button::after{display:none}}
+:root[data-theme="dark"] .chat-compose-actions>.dock-capture.primary-button:not(:disabled){background:linear-gradient(135deg,#8b63cf 0%,#6a48b0 48%,#9673d8 100%)}

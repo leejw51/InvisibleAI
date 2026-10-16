@@ -27,6 +27,24 @@ impl Choices {
         !self.active.is_empty()
     }
 }
+impl From<causewaybay_shared::CaptureChoices> for Choices {
+    fn from(c: causewaybay_shared::CaptureChoices) -> Self {
+        Self {
+            active: c.active,
+            default: c.default,
+            continuous: c.continuous,
+        }
+    }
+}
+impl From<&Choices> for causewaybay_shared::CaptureChoices {
+    fn from(c: &Choices) -> Self {
+        Self {
+            active: c.active.clone(),
+            default: c.default.clone(),
+            continuous: c.continuous.clone(),
+        }
+    }
+}
 pub fn key(owner: &str) -> String {
     format!("causewaybay.capture.v1:{}", owner.to_lowercase())
 }
@@ -66,6 +84,18 @@ mod tests {
         assert_eq!(choice.active, "A");
         assert!(!choice.initialize(&[node("0", true, true)]));
         assert_eq!(choice.active, "A");
+    }
+    #[test]
+    fn account_choices_round_trip_without_losing_fields() {
+        let local = Choices {
+            active: "laptop".into(),
+            default: "desk".into(),
+            continuous: vec!["desk".into(), "laptop".into()],
+        };
+        let shared = causewaybay_shared::CaptureChoices::from(&local);
+        assert_eq!(shared.active, "laptop");
+        assert_eq!(shared.default, "desk");
+        assert_eq!(Choices::from(shared), local);
     }
     #[test]
     fn default_and_explicit_choices_survive_reload_and_disconnect() {

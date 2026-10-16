@@ -17,7 +17,8 @@ gloo-timers = { version = "0.3", features = ["futures"] }
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 js-sys = "0.3"
-web-sys = { version = "0.3", features = ["AnimationEvent", "CssStyleDeclaration", "MediaQueryList", "Crypto", "EventSource", "MessageEvent", "Storage", "StorageEvent", "Location", "History", "HtmlInputElement", "HtmlTextAreaElement", "HtmlSelectElement", "AbortController", "AbortSignal", "Blob", "File", "FileList", "Navigator", "Clipboard", "KeyboardEvent", "Window", "Document", "HtmlElement", "DragEvent", "DataTransfer", "ClipboardEvent", "Element", "DomTokenList"] }
+web-sys = { version = "0.3", features = ["AnimationEvent", "CssStyleDeclaration", "MediaQueryList", "Crypto", "EventSource", "MessageEvent", "Storage", "StorageEvent", "Location", "History", "HtmlInputElement", "HtmlTextAreaElement", "HtmlSelectElement", "AbortController", "AbortSignal", "Blob", "File", "FileList", "Navigator", "Clipboard", "KeyboardEvent", "Window", "Document", "HtmlElement", "DragEvent", "DataTransfer", "ClipboardEvent", "Element", "DomTokenList",
+    "DomRect"] }
 pulldown-cmark = "0.13"
 ammonia = "4"
 idb = "0.6"

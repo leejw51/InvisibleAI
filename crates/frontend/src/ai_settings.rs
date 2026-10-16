@@ -139,6 +139,9 @@ pub struct Props {
     /// The full page shows the modes too; a panel keeps to provider and model.
     #[prop_or_default]
     pub full: bool,
+    /// A one-line shortcut: the provider list only, for quick switching.
+    #[prop_or_default]
+    pub compact: bool,
     /// The pick in use, emitted on every change: `(provider, model)`.
     pub changed: Callback<(String, String)>,
     /// The account policy changed on the backend; the shell reloads settings.
@@ -310,6 +313,14 @@ impl Component for AiPicker {
                 !settings.local_ai.local_only && ready("claude_code"),
             ),
         ];
+        if ctx.props().compact {
+            return html! {<label class="quick-pick" for={select_id.clone()} data-testid={format!("{}-ai-picker",prefix.to_lowercase())}>{icon(if local {"shield"} else {"spark"})}<span>{t("AI")}</span>
+                <select id={select_id.clone()} data-testid={select_id} aria-label={format!("{prefix} {}",t("AI provider"))} disabled={self.busy||ctx.props().disabled} value={self.provider.clone()} onchange={link.callback(|e:Event|Msg::Choose(e.target_unchecked_into::<HtmlSelectElement>().value()))}>
+                    {for settings.providers.iter().filter(|p|p.configured||settings.demo||p.id==self.provider).map(|p|html!{<option value={p.id.clone()} selected={p.id==self.provider} disabled={settings.local_ai.local_only&&!matches!(p.id.as_str(),"apple"|"mlx")}>{p.name.clone()}</option>})}
+                </select>
+                if !self.error.is_empty(){<span class="error-text" role="alert">{t(&self.error)}</span>}
+            </label>};
+        }
         html! {<div class={classes!("ai-picker",ctx.props().full.then_some("is-full"))} data-testid={format!("{}-ai-picker",prefix.to_lowercase())}>
             if ctx.props().full {<div class="ai-picker-modes" role="group" aria-label={t("AI mode")}>
                 {for modes.iter().map(|(id,available)|{let id=id.to_string();let active=mode==id;let pick=id.clone();html!{<button type="button" key={id.clone()} class={classes!("chip-button",active.then_some("is-active"))} aria-pressed={active.to_string()} disabled={self.busy||ctx.props().disabled||!*available} onclick={link.callback(move |_|Msg::Mode(pick.clone()))}>{icon(match id.as_str(){"ondevice"=>"shield","hybrid"=>"hybrid","codex"=>"codex","claude_code"=>"code",_=>"globe"})}{t(mode_label(&id))}</button>}})}

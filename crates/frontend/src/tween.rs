@@ -53,6 +53,143 @@ pub fn eta_text(remaining_bytes: u64, bytes_per_second: u64) -> String {
     }
 }
 
+/// Whether `target` already sits comfortably on screen: below the header and
+/// in the upper part of the window, inside its scroll list if it has one.
+pub fn in_view(target: &web_sys::HtmlElement) -> bool {
+    let Some(window) = web_sys::window() else {
+        return true;
+    };
+    let height = window
+        .inner_height()
+        .ok()
+        .and_then(|h| h.as_f64())
+        .unwrap_or(0.0);
+    let top = target.get_bounding_client_rect().top();
+    let mut floor = height * 0.6;
+    if let Some(list) = target
+        .closest(".chat-messages")
+        .ok()
+        .flatten()
+        .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
+    {
+        let list_rect = list.get_bounding_client_rect();
+        if top < list_rect.top() - 1.0 {
+            return false;
+        }
+        floor = floor.min(list_rect.bottom() - 40.0);
+    }
+    top >= 60.0 && top <= floor
+}
+/// A running scroll tween; dropping it stops the motion where it is.
+pub struct ScrollTween {
+    frame: std::rc::Rc<std::cell::RefCell<Option<Closure<dyn FnMut(f64)>>>>,
+    handle: std::rc::Rc<std::cell::Cell<i32>>,
+    /// The list whose CSS smooth scrolling is paused while the tween runs.
+    list: Option<web_sys::HtmlElement>,
+}
+impl Drop for ScrollTween {
+    fn drop(&mut self) {
+        if let Some(w) = web_sys::window() {
+            let _ = w.cancel_animation_frame(self.handle.get());
+        }
+        self.frame.borrow_mut().take();
+        // A tween replaced mid-flight still hands smooth scrolling back.
+        if let Some(l) = &self.list {
+            let _ = l.style().remove_property("scroll-behavior");
+        }
+    }
+}
+/// Eases `target` into view, fast: its scroll list (if any) brings it near
+/// the top and the page brings the list under the header, both with
+/// easeInOutExpo. Readers who prefer reduced motion get the final position
+/// at once. The caller shows any glow; this only moves.
+pub fn ease_into_view(target: &web_sys::HtmlElement, duration_ms: f64) -> Option<ScrollTween> {
+    use web_sys::HtmlElement;
+    let window = web_sys::window()?;
+    let list = target
+        .closest(".chat-messages")
+        .ok()
+        .flatten()
+        .and_then(|e| e.dyn_into::<HtmlElement>().ok());
+    let list_from = list.as_ref().map_or(0.0, |l| l.scroll_top() as f64);
+    let list_to = list.as_ref().map_or(0.0, |l| {
+        let offset = target.get_bounding_client_rect().top() - l.get_bounding_client_rect().top();
+        (list_from + offset - 12.0)
+            .clamp(0.0, (l.scroll_height() - l.client_height()).max(0) as f64)
+    });
+    // Where the list (or the target itself) sits on the page once the list has moved.
+    let anchor: &HtmlElement = list.as_ref().unwrap_or(target);
+    let page_from = window.scroll_y().unwrap_or(0.0);
+    let header = 96.0;
+    let mut anchor_top = anchor.get_bounding_client_rect().top();
+    if list.is_none() {
+        anchor_top -= 12.0;
+    }
+    let max_page = window
+        .document()
+        .and_then(|d| d.document_element())
+        .map_or(0.0, |d| d.scroll_height() as f64)
+        - window
+            .inner_height()
+            .ok()
+            .and_then(|h| h.as_f64())
+            .unwrap_or(0.0);
+    let page_to = (page_from + anchor_top - header).clamp(0.0, max_page.max(0.0));
+    let reduced = window
+        .match_media("(prefers-reduced-motion: reduce)")
+        .ok()
+        .flatten()
+        .is_some_and(|m| m.matches());
+    if reduced || duration_ms <= 0.0 {
+        if let Some(l) = &list {
+            l.set_scroll_top(list_to.round() as i32);
+        }
+        window.scroll_to_with_x_and_y(0.0, page_to);
+        return None;
+    }
+    // CSS smooth scrolling would chase every frame; the tween owns the motion.
+    if let Some(l) = &list {
+        let _ = l.style().set_property("scroll-behavior", "auto");
+    }
+    let frame: std::rc::Rc<std::cell::RefCell<Option<Closure<dyn FnMut(f64)>>>> =
+        Default::default();
+    let handle = std::rc::Rc::new(std::cell::Cell::new(0));
+    let (next, next_handle) = (frame.clone(), handle.clone());
+    let paused = list.clone();
+    let mut start: Option<f64> = None;
+    *frame.borrow_mut() = Some(Closure::wrap(Box::new(move |ts: f64| {
+        let elapsed = ts - *start.get_or_insert(ts);
+        if let Some(l) = &list {
+            l.set_scroll_top(tween_value(list_from, list_to, elapsed, duration_ms).round() as i32);
+        }
+        if let Some(w) = web_sys::window() {
+            w.scroll_to_with_x_and_y(0.0, tween_value(page_from, page_to, elapsed, duration_ms));
+            if elapsed < duration_ms {
+                if let Some(f) = next.borrow().as_ref() {
+                    next_handle.set(
+                        w.request_animation_frame(f.as_ref().unchecked_ref())
+                            .unwrap_or(0),
+                    );
+                }
+                return;
+            }
+        }
+        if let Some(l) = &list {
+            let _ = l.style().remove_property("scroll-behavior");
+        }
+    }) as Box<dyn FnMut(f64)>));
+    handle.set(
+        window
+            .request_animation_frame(frame.borrow().as_ref()?.as_ref().unchecked_ref())
+            .ok()?,
+    );
+    Some(ScrollTween {
+        frame,
+        handle,
+        list: paused,
+    })
+}
+
 const DURATION_MS: f64 = 700.0;
 
 #[derive(Properties, PartialEq)]

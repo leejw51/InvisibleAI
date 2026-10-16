@@ -7,6 +7,7 @@ pub mod artifacts;
 pub mod assistance;
 pub mod auth;
 pub mod capture;
+pub mod capture_choices;
 pub mod chat;
 pub mod cli_ai;
 pub mod client_package;
@@ -337,6 +338,7 @@ impl AppState {
             local_ai: self.local_ai()?,
             user_ai: ai_preferences::read(self)?,
             user_models: ai_preferences::models(self)?,
+            user_capture: capture_choices::read(self)?,
             default_ai: ai_preferences::default_policy(self)?,
         })
     }

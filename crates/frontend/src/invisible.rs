@@ -25,7 +25,6 @@ pub struct Props {
     pub setup: Callback<()>,
     pub navigate: Callback<String>,
     pub admin: bool,
-    pub device_picker: Html,
 }
 pub struct Workspace {
     status: InvisibleStatus,
@@ -36,6 +35,10 @@ pub struct Workspace {
     polling: bool,
     busy: bool,
     error: String,
+    /// Once a run or an approval has opened the panel, it stays open when the
+    /// run ends: stopping Auto must not fold the controls away. The reader
+    /// can still fold it by hand, which Yew leaves alone.
+    shown_open: std::cell::Cell<bool>,
     _poll: Interval,
 }
 pub enum Msg {
@@ -86,6 +89,7 @@ impl Component for Workspace {
             polling: false,
             busy: false,
             error: String::new(),
+            shown_open: std::cell::Cell::new(false),
             _poll: Interval::new(2000, move || link.send_message(Msg::Poll)),
         }
     }
@@ -282,8 +286,10 @@ impl Component for Workspace {
         } else {
             "Start autonomous AI"
         };
-        html! {<details class="everyday-workspace" open={active || self.status.approval.is_some()}><summary>{icon("spark")}<span>{t("Your Mac & AI")}</span><small>{t(mode_label)}{" · "}{t(if self.status.approval.is_some() {"Approval needed"} else if active {"Running"} else {"Ready when you are"})}</small></summary><section class="invisible-workspace" aria-label={t("Invisible AI workspace")}>
-            <div class="workspace-device">{p.device_picker.clone()}</div>
+        if active || self.status.approval.is_some() {
+            self.shown_open.set(true);
+        }
+        html! {<details class="everyday-workspace" open={self.shown_open.get()}><summary>{icon("spark")}<span>{t("Your Mac & AI")}</span><small>{t(mode_label)}{" · "}{t(if self.status.approval.is_some() {"Approval needed"} else if active {"Running"} else {"Ready when you are"})}</small></summary><section class="invisible-workspace" aria-label={t("Invisible AI workspace")}>
             <div class="workspace-ai-settings" data-testid="processing-settings">
                 <span class="processing-symbol">{icon(crate::icons::mode_icon(&prefs.mode))}</span><span class="processing-summary"><small>{t("AI processing location")}</small><strong>{t(mode_label)}<span class="selection-check" aria-hidden="true">{icon("check")}</span></strong><span>{t(match prefs.mode.as_str(){"ondevice"=>"Processing stays on your backend Mac","hybrid"=>"Local first. Cloud help follows your settings.",_=>"Cloud AI · your selected provider"})}</span></span><button type="button" class="processing-change" onclick={p.navigate.reform(|_|"autonomous".to_string())}>{t("Change")}{icon("arrow")}</button>
             </div>
