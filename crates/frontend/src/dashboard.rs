@@ -29,6 +29,21 @@ pub fn view(
     let empty = Dashboard::default();
     let d = data.unwrap_or(&empty);
     let commands = capture_commands(&d.addresses, &base, owner);
+    let (_, primary) = endpoints(&d.addresses, &base)[0];
+    let install = install_command(primary, owner);
+    let wallet_line = owner
+        .map(|address| {
+            tf(
+                "Backend {url} · Wallet {wallet}",
+                &[("url", primary.into()), ("wallet", address.into())],
+            )
+        })
+        .unwrap_or_else(|| {
+            tf(
+                "Backend {url} · Shared capture (sign in with a wallet to enroll this Mac)",
+                &[("url", primary.into())],
+            )
+        });
     let count = |n: usize| {
         if !connected {
             "—".into()
@@ -52,7 +67,9 @@ pub fn view(
                 {icon(if connected {"check"} else {"clock"})}
                 <span>{t(match state { ConnectionState::Connected=>"Connected to your backend. This dashboard updates automatically.", ConnectionState::Connecting=>"Connecting to your backend…", ConnectionState::Reconnecting=>"Connection lost. Waiting 2 seconds between retries. Reconnection is automatic." })}</span>
             </div>
-            <section class="device-setup" id="device-setup" aria-label={t("Connect a capture device")}><h2>{t("Connect a capture device")}</h2><p>{t("Run this command on the computer whose screen you want to capture.")}</p>{for commands.iter().map(|(label,command)|html!{<div class="capture-command" role="group" aria-label={t(label)}><strong class="capture-command-label">{t(label)}</strong><div class="copyable-command"><code aria-label={t("Capture client command")}>{command}</code>{copy_button("Copy capture command",command,&actions.copy)}</div></div>})}<p>{if owner.is_some(){t("This connects the computer to your wallet. Allow Screen Recording when macOS asks.")}else{t("Allow Screen Recording when macOS asks. The client saves this connection and reconnects automatically.")}}</p><p class="device-enrollment-help">{t("For TextEdit Auto, stop the existing capture CLI on this Mac, then run the account command above. Your account is saved for the next launch.")}</p><a class="text-button" href="/">{t("Return to New thought")}{icon("arrow")}</a></section>
+            <section class="device-setup" id="device-setup" aria-label={t("Connect a capture device")}><h2>{t("Connect a capture device")}</h2><p>{t("Run this command on the computer whose screen you want to capture.")}</p>{for commands.iter().map(|(label,command)|html!{<div class="capture-command" role="group" aria-label={t(label)}><strong class="capture-command-label">{t(label)}</strong><div class="copyable-command"><code aria-label={t("Capture client command")}>{command}</code>{copy_button("Copy capture command",command,&actions.copy)}</div></div>})}<p>{if owner.is_some(){t("This connects the computer to your wallet. Allow Screen Recording when macOS asks.")}else{t("Allow Screen Recording when macOS asks. The client saves this connection and reconnects automatically.")}}</p><p class="device-enrollment-help">{t("For TextEdit Auto, stop the existing capture CLI on this Mac, then run the account command above. Your account is saved for the next launch.")}</p>
+            <div class="capture-install" role="group" aria-label={t("Install and run from source")}><strong class="capture-command-label">{t("No client yet? One paste installs Rust, builds the client from source, and connects it.")}</strong><p class="capture-install-meta" data-testid="capture-install-meta">{icon("monitor")}{wallet_line}</p><div class="copyable-command"><code class="install-command" aria-label={t("Install and run command")}>{&install}</code>{copy_button("Copy install command",&install,&actions.copy)}</div><p>{t("Paste it into Terminal on the Mac you want to capture. It needs Xcode Command Line Tools (macOS offers them on the first git run) and takes a few minutes the first time. If the backend requires a node token, put APP_TOKEN=… in front of the last line. Next time, run only the last line.")}</p><a class="text-button" href="/dashboard">{t("Prefer a download? Dashboard has client.zip")}{icon("arrow")}</a></div>
+            <a class="text-button" href="/">{t("Return to New thought")}{icon("arrow")}</a></section>
             <div class="dashboard-stats">
                 <article class="dashboard-stat"><span>{icon("monitor")}{t("Backend")}</span><strong data-testid="backend-status">{t(state.label())}</strong><small>{if connected {tf("Running for {duration}", &[("duration", duration(d.uptime_seconds))])}else{t("Waiting for the backend")}}</small></article>
                 <article class="dashboard-stat"><span>{icon("screen")}{t("Rust clients")}</span><strong data-testid="rust-connected">{count(d.rust_connected)}</strong><small>{t("Connected capture computers")}</small></article>
@@ -118,16 +135,46 @@ fn duration(seconds: u64) -> String {
     }
 }
 
-fn copy_button(label: &str, text: &str, callback: &Callback<String>) -> Html {
+pub fn copy_button(label: &str, text: &str, callback: &Callback<String>) -> Html {
     let text = text.to_string();
     html! {<button class="text-button copy-address" aria-label={t(label)} onclick={callback.reform(move |_|text.clone())}>{icon("copy")}{t("Copy")}</button>}
 }
+const REPOSITORY: &str = "https://github.com/leejw51/InvisibleAI";
+/// One paste on a fresh Mac: Rust, the source, a release build of the capture
+/// client, then the same connection command the page shows above it. Each line
+/// ends in `&&`, so the shell runs them in order and stops at the first failure.
+fn install_command(url: &str, owner: Option<&str>) -> String {
+    let wallet = owner
+        .map(|address| format!(" {address}"))
+        .unwrap_or_default();
+    [
+        "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y &&".to_string(),
+        ". \"$HOME/.cargo/env\" &&".into(),
+        format!(
+            "(git clone {REPOSITORY}.git || git -C InvisibleAI pull --ff-only) && cd InvisibleAI &&"
+        ),
+        "cargo build --release -p causewaybay-cli --bin rust-cli &&".into(),
+        "mkdir -p bin && cp target/release/rust-cli bin/client &&".into(),
+        format!("./bin/client {url}{wallet}"),
+    ]
+    .join("\n")
+}
 /// Advertise only discovered Tailscale endpoints; fall back to LAN/local/browser access.
-fn capture_commands(
+pub fn capture_commands(
     addresses: &[BackendAddress],
     fallback: &str,
     owner: Option<&str>,
 ) -> Vec<(String, String)> {
+    let wallet = owner
+        .map(|address| format!(" {address}"))
+        .unwrap_or_default();
+    endpoints(addresses, fallback)
+        .into_iter()
+        .map(|(label, url)| (label.into(), format!("./bin/client {url}{wallet}")))
+        .collect()
+}
+/// The addresses a capture client should use, best first; never empty.
+fn endpoints<'a>(addresses: &'a [BackendAddress], fallback: &'a str) -> Vec<(&'a str, &'a str)> {
     let mut endpoints = vec![];
     for label in ["Tailscale IP", "Tailscale DNS"] {
         if let Some(address) = addresses
@@ -149,17 +196,30 @@ fn capture_commands(
                 .unwrap_or(("Browser access", fallback)),
         );
     }
-    let wallet = owner
-        .map(|address| format!(" {address}"))
-        .unwrap_or_default();
     endpoints
-        .into_iter()
-        .map(|(label, url)| (label.into(), format!("./bin/client {url}{wallet}")))
-        .collect()
 }
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn install_command_ends_with_the_connection_and_stops_on_failure() {
+        let wallet = "0x1111111111111111111111111111111111111111";
+        let script = install_command("http://100.64.0.10:3000", Some(wallet));
+        let lines: Vec<_> = script.lines().collect();
+        assert_eq!(lines.len(), 6);
+        assert!(lines[..5].iter().all(|line| line.ends_with(" &&")));
+        assert_eq!(
+            lines[5],
+            format!("./bin/client http://100.64.0.10:3000 {wallet}")
+        );
+        assert!(script.contains("sh.rustup.rs"));
+        assert!(script.contains(&format!("git clone {REPOSITORY}.git")));
+        assert!(script.contains("--bin rust-cli"));
+        assert!(
+            install_command("http://127.0.0.1:3000", None)
+                .ends_with("./bin/client http://127.0.0.1:3000")
+        );
+    }
     #[test]
     fn commands_include_discovered_tailscale_dns_and_preserve_wallet() {
         let mut addresses: Vec<_> = [
