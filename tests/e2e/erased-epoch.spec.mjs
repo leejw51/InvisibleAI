@@ -2,6 +2,7 @@
 // browser's remembered value cannot lock it out, and a page that is told
 // about a Delete all elsewhere reconnects and can keep writing.
 import {test, expect} from '@playwright/test';
+import {openNav} from './workspace-controls.mjs';
 
 async function openChat(page) {
   await page.goto('/chat');
@@ -34,9 +35,8 @@ test('a page that is told about Delete all elsewhere keeps working', async ({bro
   await openChat(a);
   await send(a, 'Before the erasure');
   await openChat(b);
-  const toggle = b.getByRole('button', {name: 'Open navigation', exact: true});
-  if (await toggle.isVisible()) await toggle.click();
-  await b.locator('[data-nav="delete-all"]').click();
+  // Delete all sits inside the sidebar's closed Settings fold.
+  await openNav(b, 'delete-all');
   await b.getByTestId('delete-all-confirm').click();
   await expect(b.getByTestId('delete-all-dialog')).toHaveCount(0);
   // Page A hears about it, reconnects, and can send again without a reload.

@@ -1,5 +1,6 @@
 import {test,expect} from '@playwright/test';
 import {isolatedBackend} from './invisible-fixture.mjs';
+import {openNav} from './workspace-controls.mjs';
 
 isolatedBackend(test,3172);
 
@@ -7,16 +8,29 @@ async function openMenu(page) {
   const toggle=page.getByRole('button',{name:'Open navigation',exact:true});
   if(await toggle.isVisible() && await toggle.getAttribute('aria-expanded')!=='true') await toggle.click();
 }
+// openNav decides whether to unfold "More tools"/"Settings" from a one-shot
+// isVisible(): right after a load the sidebar may not be rendered yet, and a
+// folded item would then be clicked without opening its fold. Wait for the
+// sidebar to exist first (attached, not visible: a phone keeps it closed until
+// openNav presses the menu toggle).
+async function goTo(page,route) {
+  await page.locator('[data-nav="home"]').waitFor({state:'attached'});
+  await openNav(page,route);
+}
+// A page's <invisible-companion> mounts one animation frame after it renders
+// (data-render appears then). Let it mount before the next route change so each
+// history step is checked against a settled page.
+async function companionMounted(page) {
+  await expect.poll(()=>page.evaluate(()=>[...document.querySelectorAll('invisible-companion')].every(el=>el.dataset.render))).toBe(true);
+}
 
 test('main menus have distinct destinations, current states and reloadable history',async({page},info)=>{
   const errors=[];page.on('pageerror',error=>errors.push(error.message));
   await page.goto('/');
-  for(const [route,label] of [['autonomous','Autonomous AI'],['wiki','Wiki'],['library','Library'],['files','Files'],['images','Images'],['code','Code'],['dashboard','Dashboard'],['devices','Devices'],['assistance','Assistance settings'],['admin','Admin'],['chat','Chat']]) {
-    await openMenu(page);
+  for(const [route,label] of [['autonomous','Autonomous AI'],['wiki','Find anything'],['library','Library'],['files','Files'],['images','Images'],['code','Code'],['dashboard','Dashboard'],['devices','Devices'],['assistance','Assistance settings'],['admin','Admin'],['chat','Ask anything']]) {
     const item=page.locator(`[data-nav="${route}"]`);
     // The libraries and tools sit behind one fold; the four places to go do not.
-    if(!(await item.isVisible())) await page.locator(['ai','assistance','admin'].includes(route) ? '.everyday-settings > summary' : '.more-tools > summary').click();
-    await item.click();
+    await goTo(page, route);
     await expect(page).toHaveURL(new RegExp(`/${route}$`));
     await expect(item).toHaveAttribute('aria-current','page');
     await expect(page.locator('.breadcrumbs strong')).toHaveText(label);
@@ -25,8 +39,14 @@ test('main menus have distinct destinations, current states and reloadable histo
     await expect(page.locator('.breadcrumbs strong')).toHaveText(label);
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   }
+  // Each history step is given its page (and its mounted companion) before the
+  // next route change; the breadcrumb alone lands in the same frame as the render.
   await page.goBack();await expect(page).toHaveURL(/\/admin$/);
+  await expect(page.locator('.breadcrumbs strong')).toHaveText('Admin');
+  await companionMounted(page);
   await page.goForward();await expect(page).toHaveURL(/\/chat$/);
+  await expect(page.locator('.breadcrumbs strong')).toHaveText('Ask anything');
+  await companionMounted(page);
   await openMenu(page);
   await page.locator('.more-tools > summary').click();
   await page.locator('[data-nav="overview"]').click();
@@ -42,7 +62,22 @@ test('main menus have distinct destinations, current states and reloadable histo
   expect(errors).toEqual([]);
 });
 
-test('mobile sidebar search closes the menu even when already in the memo library',async({page})=>{
+// <invisible-companion> mounts in a requestAnimationFrame; two history steps in
+// one frame (back then forward) replace the keyed page companion before that
+// frame, and disconnectedCallback used to throw "this.controls is not iterable".
+test('two history steps inside one frame raise no page errors',async({page})=>{
+  const errors=[];page.on('pageerror',error=>errors.push(error.message));
+  await page.goto('/');
+  await goTo(page,'admin');await expect(page).toHaveURL(/\/admin$/);
+  await goTo(page,'chat');await expect(page).toHaveURL(/\/chat$/);
+  for(let i=0;i<5;i++){await page.goBack();await page.goForward();}
+  await expect(page).toHaveURL(/\/chat$/);
+  await expect(page.locator('.breadcrumbs strong')).toHaveText('Ask anything');
+  expect(errors).toEqual([]);
+});
+
+// The sidebar search entry went away with the hero redesign (3ba973a); the Library page keeps #memo-search.
+test.fixme('mobile sidebar search closes the menu even when already in the memo library',async({page})=>{
   await page.setViewportSize({width:390,height:844});
   await page.goto('/library');
   await page.getByRole('button',{name:'Open navigation',exact:true}).click();
@@ -53,7 +88,7 @@ test('mobile sidebar search closes the menu even when already in the memo librar
   await expect(page.locator('#memo-search')).toHaveValue('a useful thought');
 });
 
-test('sidebar search leaves the pinned filter and searches the whole memo library',async({page,request})=>{
+test.fixme('sidebar search leaves the pinned filter and searches the whole memo library',async({page,request})=>{
   const created=await request.post('/api/memos',{data:{title:'Unpinned menu review',content:'A searchable unpinned thought.'}});
   expect(created.ok()).toBe(true);
   await page.goto('/library');

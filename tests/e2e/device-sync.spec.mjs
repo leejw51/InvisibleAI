@@ -6,19 +6,33 @@ import os from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
 import net from 'node:net';
+import {openConversationOptions, openNav} from './workspace-controls.mjs';
 
+// This spec runs its own backend in wallet/login mode (CWBBOT_ADMIN set) on a
+// fixed port; the shared fixture server (PW_PORT) stays untouched.
 const base = 'http://127.0.0.1:3142';
 // Public BIP-39 fixtures; no real account credentials are used.
 const rootPhrase = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
 const memberPhrase = 'test test test test test test test test test test test junk';
 const rootAddress = '0x9858effd232b4033e47d90003d41ec34ecaeda94';
 const memberAddress = '0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266';
-const picker = page => page.getByRole('combobox', {name:'Chat room', exact:true});
+// The room picker lives in the "Conversation options" fold (closed by default)
+// once a room is open: a CSS locator keeps value and option assertions working
+// while it is hidden; actions on it open the fold first (see options()).
+const picker = page => page.locator('.chat-page select[aria-label="Chat room"]');
 const prompt = page => page.getByRole('textbox', {name:'Chat message', exact:true});
 const button = (page, name) => page.getByRole('button', {name, exact:true});
 let server, dir;
+// Second contexts and proxies register here so they are closed even when a
+// test times out (Playwright skips `finally` blocks after a timeout).
+const cleanups = [];
+const killServer = () => { if (server && server.exitCode === null && server.signalCode === null) server.kill('SIGKILL'); };
+process.on('exit', killServer);
 
 test.beforeAll(async ({request}) => {
+  // A leaked server on 3142 would silently answer the health poll with stale data.
+  const taken = await request.get(`${base}/api/health`).then(r => r.status() === 200, () => false);
+  if (taken) throw new Error(`port 3142 is already in use: kill the leaked causewaybay-server first`);
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cwb-device-sync-'));
   server = spawn('./target/debug/causewaybay-server', ['serve', '--demo', '--no-semantic'], {
     env:{...process.env, CWBBOT_ADMIN:rootAddress, BIND_ADDR:'127.0.0.1:3142', DATA_DIR:path.join(dir,'data'), CAUSEWAYBAY_CONFIG_DIR:dir,
@@ -26,11 +40,18 @@ test.beforeAll(async ({request}) => {
   });
   await expect.poll(async () => (await request.get(`${base}/api/health`).catch(() => null))?.status()).toBe(200);
 });
+test.afterEach(async () => {
+  for (const cleanup of cleanups.splice(0).reverse()) await cleanup().catch(() => {});
+});
 test.afterAll(async () => {
   if (server?.exitCode === null && server.signalCode === null) {
-    const exited = once(server, 'exit'); server.kill('SIGTERM'); await exited;
+    const exited = once(server, 'exit');
+    server.kill('SIGTERM');
+    const forced = setTimeout(() => server.kill('SIGKILL'), 5000);
+    await exited; clearTimeout(forced);
   }
-  fs.rmSync(dir, {recursive:true, force:true});
+  process.off('exit', killServer);
+  if (dir) fs.rmSync(dir, {recursive:true, force:true});
 });
 
 async function observeSse(page) {
@@ -62,14 +83,15 @@ async function ready(page) {
   await expect(prompt(page)).toBeEnabled();
   await expect.poll(() => page.evaluate(() => window.deviceSync.sources.some(source => source.readyState === EventSource.OPEN))).toBe(true);
 }
-async function navigation(page) {
-  const menu = button(page, 'Open navigation');
-  if (await menu.isVisible() && await menu.getAttribute('aria-expanded') !== 'true') await menu.click();
-}
+// Open the fold that holds the room picker and toolbar before acting on them;
+// the fold is rebuilt (closed) around every room change, so open it each time.
+const options = page => openConversationOptions(page);
+// The global "New thought" button is gone: the sidebar Capture item navigates
+// home and every home navigation starts a fresh thought (thought_epoch bump),
+// from the Capture page as well as from Ask anything.
 async function fresh(page) {
   const old = await picker(page).inputValue();
-  await navigation(page);
-  await button(page, 'New thought').click();
+  await openNav(page, 'home');
   await expect(picker(page)).not.toHaveValue(old);
   await ready(page);
   return picker(page).inputValue();
@@ -87,6 +109,7 @@ async function notice(page, kind, room) {
 async function secondDevice(browser, info) {
   const {viewport, userAgent, isMobile, hasTouch} = info.project.use;
   const context = await browser.newContext({viewport,userAgent,isMobile,hasTouch,reducedMotion:'reduce'});
+  cleanups.push(() => context.close());
   const page = await context.newPage();
   await observeSse(page);
   return {context, page};
@@ -126,12 +149,14 @@ async function notificationProxy() {
     upstream.on('error', () => socket.destroy());
   });
   await new Promise(resolve => proxy.listen(0, '127.0.0.1', resolve));
-  return {
+  const handle = {
     url:`http://127.0.0.1:${proxy.address().port}`,
     disconnect() {blocked = true; for (const response of streams) response.destroy();},
     resume() {blocked = false; muteReplay = true;},
     async close() {for (const socket of sockets) socket.destroy(); await new Promise(resolve => proxy.close(resolve));},
   };
+  cleanups.push(() => handle.close());
+  return handle;
 }
 
 test('same account follows New thought on both devices and receives messages through SSE', async ({page, browser}, info) => {
@@ -142,6 +167,7 @@ test('same account follows New thought on both devices and receives messages thr
     await login(other.page); await ready(other.page);
     await expect(picker(other.page)).toHaveValue(await picker(page).inputValue());
     await prompt(other.page).fill('Old device draft');
+    await options(other.page);
     await button(other.page, 'Multi Capture').click();
     await expect(other.page.locator('.chat-attachment')).toHaveCount(1);
     const room = await fresh(page);
@@ -177,6 +203,7 @@ test('chat room creation and rename sync while selected conversations and drafts
     await expect(picker(other.page).locator(`option[value="${room}"]`)).toHaveCount(1);
     await expect(picker(other.page)).toHaveValue(thought);
     await expect(prompt(other.page)).toHaveValue('Keep this thought draft');
+    await options(other.page);
     await picker(other.page).selectOption(room);
     await send(page, 'Shared chat message');
     await expect(other.page.locator('.from-user')).toContainText('Shared chat message');
@@ -238,7 +265,7 @@ test('logging in again resumes the shared thought without an extra reset', async
     await login(page); await ready(page);
     await login(other.page); await ready(other.page);
     await fresh(other.page);
-    await navigation(other.page); await button(other.page, 'Sign out').click();
+    await openNav(other.page, 'sign-out');
     await expect(other.page.getByLabel('Recovery phrase', {exact:true})).toBeVisible();
     const current = await fresh(page);
     await send(page, 'Continue on another device');

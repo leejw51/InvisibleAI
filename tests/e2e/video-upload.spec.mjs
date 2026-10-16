@@ -2,6 +2,7 @@ import {test, expect} from '@playwright/test';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import {openConversationOptions} from './workspace-controls.mjs';
 
 // Videos above the 25 MB single-request limit go up through the resumable
 // chunked protocol (offset-checked PATCH appends of raw Blob slices) on the
@@ -69,11 +70,16 @@ test('a large video attached in chat shows progress and becomes an attachment', 
   const {file, bytes} = bigVideo(name, 30 * MB);
   const seen = watchUploads(page);
   await page.goto('/chat');
-  const rooms = page.getByRole('combobox', {name: 'Chat room', exact: true});
+  await openConversationOptions(page);
+  // New chat unmounts the conversation-options fold while the room is created
+  // and remounts it closed: a label query still reads the hidden picker.
+  const rooms = page.getByLabel('Chat room', {exact: true});
   const before = await rooms.inputValue();
   await page.getByRole('button', {name: 'New chat', exact: true}).click();
   await expect(rooms).not.toHaveValue(before);
-  await expect(rooms).not.toHaveValue('');
+  await expect(rooms).toHaveValue(/^[a-f\d-]{36}$/);
+  // The file input lives inside the fold too.
+  await openConversationOptions(page);
   // Hold the final step so the progress bar is observable. (Chunks themselves
   // are never intercepted: WebKit's request interception drops Blob bodies.)
   let release;

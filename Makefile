@@ -161,6 +161,11 @@ test-native-qwen: build-debug mlx-ai
 # Capture → on-device answer → Solved badge and celebration (27B full, 9B basic).
 test-native-solve: build-debug mlx-ai
 	RUN_NATIVE_QWEN=1 npm run test:e2e -- tests/e2e/native-capture-solve.spec.mjs --project=chromium
+.PHONY: test-lifecycle
+# `make start2`/`stop` round trip. It rebuilds the tree and binds a fixed port, so
+# it runs on its own, outside the default e2e sweep.
+test-lifecycle: build-debug
+	RUN_LIFECYCLE=1 npm run test:e2e -- tests/e2e/lifecycle.spec.mjs --project=chromium
 .PHONY: test-native-screen
 test-native-screen: build-debug
 	RUN_NATIVE_SCREEN=1 npm run test:e2e -- tests/e2e/native-screen.spec.mjs

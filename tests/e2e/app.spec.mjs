@@ -1,4 +1,4 @@
-import {openConversationOptions} from './workspace-controls.mjs';
+import {openConversationOptions, openMoreTools} from './workspace-controls.mjs';
 import { test, expect } from '@playwright/test';
 
 test.beforeEach(async ({ page }) => {
@@ -18,21 +18,28 @@ test('polished home, asset, modes, and responsive layout', async ({ page }) => {
   page.on('pageerror', e => errors.push(e.message));
   await expect(page.getByRole('img', { name: /miniature Hong Kong/ })).toBeVisible();
   expect(await page.locator('.hero img').evaluate(img => img.complete && img.naturalWidth > 100)).toBeTruthy();
+  await openConversationOptions(page);
   await page.getByRole('button', { name: 'Image mode', exact: true }).click();
+  await openConversationOptions(page);
   await expect(page.getByRole('button', { name: 'Image mode', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByText('Send the screenshot directly to AI')).toBeVisible();
   await page.reload();
+  await openConversationOptions(page);
   await expect(page.getByRole('button', { name: 'Image mode', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await openConversationOptions(page);
   await page.getByRole('button', { name: 'Text mode', exact: true }).click();
   await expect(page.getByText('Extract text with Apple Vision, then ask AI')).toBeVisible();
+  await openConversationOptions(page);
   await expect(page.getByRole('button', { name: 'Text mode', exact: true })).toHaveClass('selected');
+  await openConversationOptions(page);
   await expect(page.getByRole('button', { name: 'Image mode', exact: true })).not.toHaveClass('selected');
   await page.screenshot({ path: 'test-results/home-desktop.png', fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(page.getByRole('button', { name: 'Capture', exact: true })).toBeVisible();
+  await expect(page.getByRole('main').getByRole('button',{name:'Capture',exact:true})).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
   await page.getByRole('button', { name: 'Open navigation' }).click();
-  await expect(page.getByRole('button', { name: 'Wiki', exact: true })).toBeVisible();
+  await openMoreTools(page);
+  await expect(page.locator('[data-nav="wiki"]')).toBeVisible();
   await page.getByRole('button', { name: 'Close navigation' }).click();
   await page.screenshot({ path: 'test-results/home-mobile.png', fullPage: true });
   expect(errors).toEqual([]);
@@ -41,8 +48,9 @@ test('polished home, asset, modes, and responsive layout', async ({ page }) => {
 test('Think streams an OCR fixture, saves it, and exports Markdown', async ({ page }) => {
   // Exercise the same clipboard fallback used on an HTTP VPN hostname.
   await page.evaluate(() => Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true }));
+  await openConversationOptions(page);
   await page.getByRole('button', { name: 'Text mode', exact: true }).click();
-  await page.getByRole('button', { name: 'Capture', exact: true }).click();
+  await page.getByRole('main').getByRole('button',{name:'Capture',exact:true}).click();
   await expect(page.locator('.answer-content')).toContainText('Change - to +');
   await expect(page.getByRole('button', { name: 'Copy answer' })).toBeVisible();
   await expect(page.locator('.save-status')).toHaveText('Saved to your library');
@@ -145,6 +153,7 @@ test('upload, preview, compile, and download a real Rust file', async ({ page })
 test('coding agent saves a file, invokes compiler, and shows tool results', async ({ page }) => {
   // The agent is a chat setting: allow file creation & compilation, then ask.
   await page.goto('/');
+  await openConversationOptions(page);
   await expect(page.getByRole('combobox', { name: 'Chat room', exact: true })).not.toHaveValue('');
   await openConversationOptions(page); await page.locator('.chat-options > summary').click();
   await page.getByRole('checkbox', { name: 'Allow file creation & compilation', exact: true }).check();

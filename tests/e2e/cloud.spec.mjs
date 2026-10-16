@@ -1,4 +1,4 @@
-import {expectProcessingMode} from './workspace-controls.mjs';
+import {expectProcessingMode, revealNav} from './workspace-controls.mjs';
 import {test, expect} from '@playwright/test';
 import {randomUUID} from 'node:crypto';
 import {isolatedBackend} from './invisible-fixture.mjs';
@@ -15,6 +15,13 @@ test.beforeEach(async ({request}) => {
   expect((await request.patch('/api/ai/preferences', {data:policy})).ok()).toBeTruthy();
   // Approval tests below opt into confirmation; automatic cloud help is the default.
   expect((await request.patch('/api/assistance/preferences', {data:{textedit_enabled:true,hybrid_confirm:true}})).ok()).toBeTruthy();
+});
+// Playwright skips a test's `finally` after a timeout: close fake Macs and stop
+// sessions from a hook so nothing outlives the test.
+const devices = [];
+test.afterEach(async ({request}) => {
+  for (const device of devices.splice(0)) device.close();
+  await stopAll(request).catch(() => {});
 });
 
 async function mac() {
@@ -44,7 +51,19 @@ async function mac() {
     };
   });
   const heartbeat = setInterval(() => {if (socket.readyState === 1) socket.send(JSON.stringify({type:'heartbeat'}));},10000);
-  return {id,commands,get text(){return text;},set text(value){text=value;},set errorCode(value){errorCode=value;},close(){clearInterval(heartbeat);socket.close();}};
+  const device = {id,commands,get text(){return text;},set text(value){text=value;},set errorCode(value){errorCode=value;},close(){clearInterval(heartbeat);socket.close();}};
+  devices.push(device);
+  return device;
+}
+// The AI mode cards, the save status and the Hybrid confirmation checkbox sit
+// inside the "AI settings & usage" fold of the Autonomous page, closed by
+// default (and again after every reload); role queries skip folded content.
+async function openAiSettings(page) {
+  const details = page.locator('.simple-ai-settings');
+  const summary = details.locator(':scope > summary');
+  await expect(summary).toBeVisible();
+  if ((await details.getAttribute('open')) === null) await summary.click();
+  return page.getByRole('group',{name:/AI processing mode|AI 처리 위치/});
 }
 async function create(page,device,title='Studio notes') {
   await page.getByRole('button',{name:'Add a helper',exact:true}).click();
@@ -64,12 +83,15 @@ test('Cloud navigation is localized, empty state is safe, and direct links survi
   await page.getByTestId('language-select').selectOption('ko');
   const open = page.getByRole('button',{name:'메뉴 열기'});
   if (await open.isVisible()) await open.click();
+  // Autonomous AI sits inside the sidebar's "More tools" fold.
+  await revealNav(page,'autonomous');
   const nav = page.locator('[data-nav="autonomous"]');
   await expect(nav).toHaveText('자율 AI');
   await nav.click();
   await expect(page).toHaveURL(/\/autonomous$/);
   await expect(page.getByRole('heading',{name:'하던 일은 그대로, 도움은 곁에서.'})).toBeVisible();
-  await expect(page.getByRole('link',{name:'채팅 기록 열기',exact:true}).first()).toBeVisible();
+  // No helpers yet: the empty state invites the first one instead of listing chats.
+  await expect(page.getByRole('heading',{name:'첫 도우미를 만들어 볼까요?'})).toBeVisible();
   await page.getByRole('button',{name:'도우미 만들기',exact:true}).click();
   await page.getByRole('textbox',{name:'어떤 이름으로 부를까요?'}).fill('내 Mac');
   await expect(page.getByRole('button',{name:'나중에 시작하기'})).toBeEnabled();
@@ -244,10 +266,12 @@ test('Cloud mode cards save account policy, preserve providers, and sync across 
   try {
     await page.goto('/autonomous');
     await page.getByTestId('language-select').selectOption('ko');
+    await openAiSettings(page);
     const group = page.getByRole('group',{name:'AI 처리 위치'});
     await expect(group.getByRole('button',{name:/온디바이스/})).toHaveAttribute('aria-pressed','true');
     otherContext = await browser.newContext(); const other = await otherContext.newPage();
     await other.goto(baseURL+'/autonomous');
+    await openAiSettings(other);
     const otherGroup = other.getByRole('group',{name:'AI processing mode'});
     for (const [mode,label,en] of [['hybrid','하이브리드','Hybrid'],['cloudai','클라우드 AI','Cloud AI'],['ondevice','온디바이스','On-device']]) {
       await group.getByRole('button',{name:new RegExp(label)}).click();
@@ -255,6 +279,7 @@ test('Cloud mode cards save account policy, preserve providers, and sync across 
       expect(await(await request.get('/api/ai/preferences')).json()).toEqual({...selected,mode});
       await expect(otherGroup.getByRole('button',{name:new RegExp(en)})).toHaveAttribute('aria-pressed','true');
       await page.reload();
+      await openAiSettings(page);
       await expect(group.getByRole('button',{name:new RegExp(label)})).toHaveAttribute('aria-pressed','true');
     }
     expect(await(await request.get('/api/invisible/sessions')).json()).toEqual([]);
@@ -270,6 +295,7 @@ test('Cloud mode cards respect the admin Local-only restriction and restore pers
   const saved = await request.patch('/api/settings',{data:{provider:'apple',local_ai:{...local,local_only:true},default_ai:policy}});
   expect(saved.ok()).toBeTruthy();
   await page.goto('/autonomous');
+  await openAiSettings(page);
   const group = page.getByRole('group',{name:'AI processing mode'});
   await expect(group.getByRole('button',{name:/On-device/})).toHaveAttribute('aria-pressed','true');
   await expect(group.getByRole('button',{name:/Hybrid/})).toBeDisabled();
@@ -278,6 +304,7 @@ test('Cloud mode cards respect the admin Local-only restriction and restore pers
   expect((await request.patch('/api/ai/preferences',{data:{...policy,mode:'cloudai'}})).status()).toBe(400);
   expect((await request.patch('/api/settings',{data:{provider:'apple',local_ai:local}})).ok()).toBeTruthy();
   await page.reload();
+  await openAiSettings(page);
   await expect(group.getByRole('button',{name:/Cloud AI/})).toHaveAttribute('aria-pressed','true');
   await expect(group.getByRole('button',{name:/Hybrid/})).toBeEnabled();
 });
@@ -303,6 +330,7 @@ test('failed mode saves keep the old selection and delayed polls cannot undo a s
     });
   });
   await page.goto('/autonomous');
+  await openAiSettings(page);
   const group = page.getByRole('group',{name:'AI processing mode'});
   await expect(group.getByRole('button',{name:/On-device/})).toBeEnabled();
   await group.getByRole('button',{name:/Hybrid/}).click();
@@ -324,6 +352,7 @@ test('failed mode saves keep the old selection and delayed polls cannot undo a s
   await expect(page.locator('.cloud-ai-settings [role="alert"]')).toHaveCount(0);
   await expect.poll(async()=>(await(await request.get('/api/ai/preferences')).json()).mode).toBe('hybrid');
   await page.reload();
+  await openAiSettings(page);
   await expect(group.getByRole('button',{name:/Hybrid/})).toHaveAttribute('aria-pressed','true');
 });
 
@@ -337,7 +366,7 @@ test('changing Cloud mode invalidates pending Hybrid approval without sending it
     await expect(card.getByRole('region',{name:'Cloud approval'})).toBeVisible();
     const id = await card.getAttribute('data-session-id');
     const approval = (await(await request.get(`/api/invisible/sessions/${id}`)).json()).status.approval;
-    await page.getByRole('group',{name:'AI processing mode'}).getByRole('button',{name:/On-device/}).click();
+    await (await openAiSettings(page)).getByRole('button',{name:/On-device/}).click();
     await expect(card.getByRole('region',{name:'Cloud approval'})).toHaveCount(0);
     await expect(card.locator('.cloud-session-detail [role="status"]')).toHaveText('AI settings changed. Write a new note to continue.');
     expect((await request.post(`/api/invisible/sessions/${id}/approval`,{data:{id:approval.id,approve:true}})).status()).toBe(400);
@@ -376,17 +405,19 @@ test('remote control sends phone requests to the Mac: Safari, calculator, model 
     await page.getByRole('button',{name:'Add a helper',exact:true}).click();
     await page.getByRole('textbox',{name:'Name your helper'}).fill('Phone control');
     await page.getByRole('combobox',{name:'Which Mac?'}).selectOption(device.id);
-    await page.getByRole('combobox',{name:'Watched app on the Mac'}).selectOption('notes');
+    await page.getByRole('combobox',{name:'Where should I help?'}).selectOption('notes');
     await page.getByRole('button',{name:'Save for later',exact:true}).click();
     const card = page.getByRole('article',{name:'Phone control',exact:true});
     await expect(card).toBeVisible();
     const id = await card.getAttribute('data-session-id');
     const remote = card.getByTestId('remote-control');
-    await expect(remote.getByTestId('send-remote-prompt')).toBeDisabled();
-    await expect(remote).toContainText('Start the autonomous AI run to send requests from this device.');
+    // Remote control only exists while the helper runs: nothing to send to a stopped one.
+    await expect(remote).toHaveCount(0);
     await expect(card.getByRole('combobox',{name:'Watched app'})).toHaveValue('notes');
     await card.getByRole('button',{name:'Start helping'}).click();
     await expect(card.locator('.cloud-session-state')).toHaveText('Running');
+    await expect(remote).toBeVisible();
+    await expect(remote.getByTestId('send-remote-prompt')).toBeDisabled();
     await expect.poll(() => device.text).toContain('[End Invisible AI]');
     expect(device.commands.every(c => c.app === 'notes')).toBeTruthy();
     await expect(card.getByRole('combobox',{name:'Watched app'})).toBeDisabled();
@@ -423,7 +454,7 @@ test('remote control sends phone requests to the Mac: Safari, calculator, model 
     await page.screenshot({path:`test-results/cloud-remote-${info.project.name}.png`,fullPage:true});
     await card.getByRole('button',{name:'도움 멈추기'}).click();
     await expect(card.locator('.cloud-session-state')).toHaveText('중지됨');
-    await expect(remote.getByTestId('send-remote-prompt')).toBeDisabled();
+    await expect(remote).toHaveCount(0);
   } finally {await stopAll(request); device.close();}
 });
 
@@ -433,6 +464,7 @@ test('Hybrid sends cloud help automatically unless confirmation is turned on',as
     await request.patch('/api/assistance/preferences',{data:{hybrid_confirm:false}});
     await request.patch('/api/ai/preferences',{data:{...policy,mode:'hybrid'}});
     await page.goto('/autonomous');
+    await openAiSettings(page);
     const confirm = page.getByRole('checkbox',{name:'Ask before each cloud request'});
     await expect(confirm).not.toBeChecked();
     const card = await create(page,device,'Automatic cloud');

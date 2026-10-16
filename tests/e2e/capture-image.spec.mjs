@@ -6,6 +6,7 @@ import {DatabaseSync} from 'node:sqlite';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import {openConversationOptions} from './workspace-controls.mjs';
 
 // Public test wallet, synthetic pixels, isolated backend and real Rust transport.
 const wallet = '0x9858effd232b4033e47d90003d41ec34ecaeda94';
@@ -24,6 +25,7 @@ async function login(page, base) {
   await page.goto(base);
   await page.getByLabel('Recovery phrase').fill(phrase);
   await page.getByRole('button', {name:'Sign in', exact:true}).click();
+  await openConversationOptions(page);
   await expect(page.getByRole('combobox', {name:'Chat room'})).not.toHaveValue('');
 }
 async function decoded(image, width, height) {
@@ -82,7 +84,7 @@ test('network capture shows thumbnails in both browsers; click opens the unchang
     await login(observer, local);
     await expect.poll(async () => (await (await page.request.get(remote+'/api/clients')).json()).some(c => c.id === 'thumbnail-node' && c.online)).toBe(true);
     await page.getByRole('combobox', {name:'Active capture device'}).selectOption('thumbnail-node');
-    await page.getByRole('button', {name:'Capture', exact:true}).click();
+    await page.getByRole('main').getByRole('button',{name:'Capture',exact:true}).click();
     await expect.poll(() => calls.length).toBe(1);
     expect(calls[0]).toMatchObject({capture:true, prompt:'', client_id:'thumbnail-node'});
     expect(calls[0].provider).not.toBe('');

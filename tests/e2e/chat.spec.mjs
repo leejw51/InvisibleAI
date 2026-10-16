@@ -3,14 +3,25 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import {openConversationOptions} from './workspace-controls.mjs';
+// The fixture server listens on PW_PORT (default 3099); spawned clients must dial the same one.
+const base=`http://127.0.0.1:${process.env.PW_PORT||'3099'}`;
+// Children spawned by a test are killed in afterEach: Playwright skips a test's
+// `finally` once the test has timed out, so a try/finally would leak them.
+const children=[];
+test.afterEach(()=>{for(const child of children.splice(0)) child.kill('SIGTERM');});
 async function newChat(page) {
   await page.goto('/chat');
   await expect(page.getByRole('heading',{name:'Keep the thought going.'})).toBeVisible();
+  await openConversationOptions(page);
   const before=await page.getByRole('combobox',{name:'Chat room'}).inputValue();
   await page.getByRole('button',{name:'New chat',exact:true}).click();
+  await openConversationOptions(page);
   await expect(page.getByRole('combobox',{name:'Chat room'})).not.toHaveValue(before);
+  await openConversationOptions(page);
   await expect(page.getByRole('combobox',{name:'Chat room'})).not.toHaveValue('');
   await expect(page.getByRole('textbox',{name:'Chat message',exact:true})).toBeEnabled();
+  await openConversationOptions(page);
   return page.getByRole('combobox',{name:'Chat room'}).inputValue();
 }
 async function cached(page) {
@@ -27,7 +38,8 @@ test('chat GUIDs, IndexedDB-only message cache, room sync, reconnect, and mobile
   await expect.poll(async()=> (await cached(page)).filter(m=>m.roomid===room&&m.role==='assistant'&&m.status==='complete').length).toBe(1);
   const record=(await cached(page)).find(m=>m.roomid===room);expect(record.messageid).toMatch(/^[a-f\d-]{36}$/);expect(Number.isSafeInteger(record.messagesyncid)).toBe(true);
   expect(await page.evaluate(()=>JSON.stringify(localStorage))).not.toContain(prompt);
-  await page.reload();await page.getByRole('combobox',{name:'Chat room'}).selectOption(room);
+  await openConversationOptions(page);
+  await page.reload();await openConversationOptions(page);await page.getByRole('combobox',{name:'Chat room'}).selectOption(room);
   await expect(page.locator('.from-user')).toContainText(prompt);await expect(page.locator('.from-ai')).toHaveCount(1);
   await context.setOffline(true);
   const second='Sent while the browser was disconnected';
@@ -42,25 +54,24 @@ test('chat GUIDs, IndexedDB-only message cache, room sync, reconnect, and mobile
 });
 test('chat links to Autonomous AI to manage an existing backend capture session',async({page,request})=>{
   const folder=fs.mkdtempSync(path.join(os.tmpdir(),'cwb-continuous-'));
-  const child=spawn('./target/debug/rust-cli',['client','--backend','http://127.0.0.1:3099','--name','Continuous Mac','--client-id','continuous-test'],{env:{...process.env,APP_TOKEN:'',CAUSEWAYBAY_CLIENT_CONFIG_DIR:folder},stdio:'ignore'});
-  try {
-    await expect.poll(async()=> (await (await request.get('/api/clients')).json()).some(c=>c.id==='continuous-test'&&c.online)).toBeTruthy();
-    const room=await newChat(page);
-    await expect(page.locator('.capture-options')).toHaveCount(0);
-    // Cloud AI polling is floored at one minute by default; lower it for this test.
-    expect((await request.patch('/api/settings',{data:{local_ai:{local_only:false,apple_enabled:false,mlx_enabled:false,mlx_url:'http://127.0.0.1:8080/v1',speech_provider:'auto',speech_locale:'en-US',mlx_speech_model:'',auto_interval_seconds:60,local_interval_seconds:5,cloud_min_interval_seconds:2}}})).ok()).toBeTruthy();
-    expect((await request.post(`/api/rooms/${room}/capture`,{data:{client_ids:['continuous-test'],interval_seconds:2,request:{}}})).ok()).toBeTruthy();
-    await expect(page.getByRole('link',{name:'Manage in Autonomous AI'})).toBeVisible();
-    await expect.poll(()=>page.locator('.from-user').count()).toBeGreaterThanOrEqual(2);
-    await page.getByRole('link',{name:'Manage in Autonomous AI'}).click();
-    const card=page.locator(`[data-session-id="${room}"]`);
-    await card.getByRole('button',{name:'Stop polling',exact:true}).click();
-    await expect(card.getByRole('button',{name:'Start polling',exact:true})).toBeVisible();
-    const before=(await (await request.get(`/api/rooms/${room}/sync`)).json()).next;
-    await page.waitForTimeout(3000);
-    expect((await (await request.get(`/api/rooms/${room}/capture`)).json()).active).toBe(false);
-    expect((await (await request.get(`/api/rooms/${room}/sync?after=${before}`)).json()).messages).toEqual([]);
-  } finally {child.kill('SIGTERM');}
+  const child=spawn('./target/debug/rust-cli',['client','--backend',base,'--name','Continuous Mac','--client-id','continuous-test'],{env:{...process.env,APP_TOKEN:'',CAUSEWAYBAY_CLIENT_CONFIG_DIR:folder},stdio:'ignore'});
+  children.push(child);
+  await expect.poll(async()=> (await (await request.get('/api/clients')).json()).some(c=>c.id==='continuous-test'&&c.online)).toBeTruthy();
+  const room=await newChat(page);
+  await expect(page.locator('.capture-options')).toHaveCount(0);
+  // Cloud AI polling is floored at one minute by default; lower it for this test.
+  expect((await request.patch('/api/settings',{data:{local_ai:{local_only:false,apple_enabled:false,mlx_enabled:false,mlx_url:'http://127.0.0.1:8080/v1',speech_provider:'auto',speech_locale:'en-US',mlx_speech_model:'',auto_interval_seconds:60,local_interval_seconds:5,cloud_min_interval_seconds:2}}})).ok()).toBeTruthy();
+  expect((await request.post(`/api/rooms/${room}/capture`,{data:{client_ids:['continuous-test'],interval_seconds:2,request:{}}})).ok()).toBeTruthy();
+  await expect(page.getByRole('link',{name:'Manage in Autonomous AI'})).toBeVisible();
+  await expect.poll(()=>page.locator('.from-user').count()).toBeGreaterThanOrEqual(2);
+  await page.getByRole('link',{name:'Manage in Autonomous AI'}).click();
+  const card=page.locator(`[data-session-id="${room}"]`);
+  await card.getByRole('button',{name:'Stop polling',exact:true}).click();
+  await expect(card.getByRole('button',{name:'Start polling',exact:true})).toBeVisible();
+  const before=(await (await request.get(`/api/rooms/${room}/sync`)).json()).next;
+  await page.waitForTimeout(3000);
+  expect((await (await request.get(`/api/rooms/${room}/capture`)).json()).active).toBe(false);
+  expect((await (await request.get(`/api/rooms/${room}/sync?after=${before}`)).json()).messages).toEqual([]);
 });
 test('chat uploads, file processing and deletion, plus the image library',async({page,request})=>{
   const room=await newChat(page);
@@ -78,7 +89,7 @@ test('chat uploads, file processing and deletion, plus the image library',async(
   await page.getByRole('button',{name:'Close dialog'}).click();
   await card.getByRole('button',{name:'Delete chat-data.csv',exact:true}).click();await card.getByRole('button',{name:'Confirm delete chat-data.csv',exact:true}).click();
   await expect(card).toHaveCount(0);
-  await page.getByRole('button',{name:'Ask anything',exact:true}).click();await page.getByRole('combobox',{name:'Chat room'}).selectOption(room);
+  await page.getByRole('button',{name:'Ask anything',exact:true}).click();await openConversationOptions(page);await page.getByRole('combobox',{name:'Chat room'}).selectOption(room);
   await expect(page.locator('.chat-file')).toHaveCount(0);
   const image=await (await request.post('/api/files',{data:{name:'gallery-test.png',data_base64:'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jJXcAAAAASUVORK5CYII='}})).json();
   if(!(await page.locator('[data-nav="images"]').isVisible())) await page.locator('.more-tools > summary').click();
@@ -130,6 +141,7 @@ test('multiple photos and comments stay together across follow-ups, reload, and 
   await expect(page.locator('.from-ai .answer-content').last()).toContainText('demo mode');
   await expect(page.getByRole('button',{name:'Stop answer'})).toHaveCount(0);
   await page.reload();
+  await openConversationOptions(page);
   await page.getByRole('combobox',{name:'Chat room'}).selectOption(room);
   await expect(page.locator('.from-user')).toHaveCount(3);
   await expect(page.locator('.from-user .chat-photo')).toHaveCount(3);
@@ -138,7 +150,9 @@ test('multiple photos and comments stay together across follow-ups, reload, and 
   expect((await page.locator('.chat-messages').boundingBox()).height).toBeGreaterThanOrEqual(280);
   await page.screenshot({path:'test-results/photo-chat-mobile.png',fullPage:true});
   const files=(await (await request.get('/api/files')).json()).filter(f=>['first.png','second.png','discard.png','followup.png'].includes(f.name));
+  await openConversationOptions(page);
   await page.getByRole('button',{name:'Clear chatroom',exact:true}).click();
+  await openConversationOptions(page);
   await page.getByRole('button',{name:'Confirm clear chatroom',exact:true}).click();
   await expect(page.locator('.chat-message')).toHaveCount(0);
   for(const file of files)expect((await request.get(`/api/files/${file.id}/download`)).ok()).toBe(false);

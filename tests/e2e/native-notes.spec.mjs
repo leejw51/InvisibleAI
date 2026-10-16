@@ -1,4 +1,4 @@
-import {openWorkspace} from './workspace-controls.mjs';
+import {openWorkspace, openConversationOptions} from './workspace-controls.mjs';
 // Opt-in: real Rust processes, Apple Vision/Foundation Models, and TextEdit.
 // Only the capture image is synthetic. No cloud credentials or demo responses.
 import {test, expect} from '@playwright/test';
@@ -114,9 +114,10 @@ test('browser Capture → real Rust CLI → Vision OCR → Apple AI → Wiki, us
   await observeEvents(page, (event, id) => { events.push(event); memoId = id; });
   await page.goto('/overview');
   await page.getByRole('combobox', {name:'Capture client', exact:true}).selectOption(clientId);
+  await openConversationOptions(page);
   await page.getByRole('button', {name:'Text mode', exact:true}).click();
   await page.getByRole('textbox', {name:'Ask a question', exact:true}).fill('Answer the arithmetic question in the captured image.');
-  await page.getByRole('button', {name:'Capture', exact:true}).click();
+  await page.getByRole('main').getByRole('button',{name:'Capture',exact:true}).click();
   await expect(page.getByTestId('capture-preview').locator('img')).toBeVisible({timeout:30000});
   await expect.poll(() => events.find(e => e.kind === 'ocr_text')?.text ?? '', {timeout:30000}).toContain('7 + 5');
   await expect(page.locator('.save-status')).toHaveText('Saved to your library', {timeout:120000});

@@ -6,11 +6,22 @@ import os from 'node:os';
 import path from 'node:path';
 
 const exec = promisify(execFile);
+// A test that times out skips its finally block; stop whatever `make` started
+// after every test so a backend never outlives its test on a fixed port.
+const started = [];
+test.afterEach(async () => {
+  for (const stop of started.splice(0)) await stop().catch(() => {});
+});
 test('make start2 and stop manage both processes and print connection URLs', async ({ request, page }) => {
   test.setTimeout(120000);
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'causewaybay-make-'));
   const args = [`CONFIG_DIR=${dir}`, `CLIENT_CONFIG_DIR=${path.join(dir, 'client')}`, 'BIND_ADDR=0.0.0.0:3113', 'BACKEND_URL=http://127.0.0.1:3113'];
-  const env = { ...process.env, SEMANTIC_SEARCH: 'off', APP_TOKEN: '', XAI_API_KEY: '', OPENAI_API_KEY: '', ANTHROPIC_API_KEY: '', GEMINI_API_KEY: '' };
+  // A network listener needs wallet sign-in or a token; the token keeps the
+  // printed commands free of a wallet address.
+  const token = 'lifecycle-e2e-token-0123';
+  const env = { ...process.env, SEMANTIC_SEARCH: 'off', APP_TOKEN: token, XAI_API_KEY: '', OPENAI_API_KEY: '', ANTHROPIC_API_KEY: '', GEMINI_API_KEY: '' };
+  const auth = { headers: { Authorization: `Bearer ${token}` } };
+  started.push(() => exec('make', ['stop', ...args], { env }));
   try {
     const { stdout } = await exec('make', ['start2', ...args], { env });
     expect(stdout).toContain('Listening on    0.0.0.0:3113');
@@ -20,17 +31,19 @@ test('make start2 and stop manage both processes and print connection URLs', asy
     expect(stdout).toContain('/status');
     expect(stdout).toContain('Tailwind CSS');
     expect(stdout).toContain('Tailscale');
-    expect((await request.get('http://127.0.0.1:3113/assets/app.css')).ok()).toBeTruthy();
+    expect((await request.get('http://127.0.0.1:3113/assets/app.css', auth)).ok()).toBeTruthy();
     const networkHost = Object.values(os.networkInterfaces()).flat().find(a => a && a.family === 'IPv4' && !a.internal && !a.address.startsWith('169.254.'));
     if (networkHost) {
       const base = `http://${networkHost.address}:3113`;
       expect(stdout).toContain(`Web URL       ${base}`);
       expect(stdout).toContain(`API URL       ${base}/api`);
-      expect((await request.get(`${base}/api/health`)).ok()).toBeTruthy();
+      expect((await request.get(`${base}/api/health`, auth)).ok()).toBeTruthy();
       expect((await request.get(`${base}/`)).ok()).toBeTruthy();
     }
-    await expect.poll(async () => (await (await request.get('http://127.0.0.1:3113/api/clients')).json()).some(c => c.online)).toBeTruthy();
+    await expect.poll(async () => (await (await request.get('http://127.0.0.1:3113/api/clients', auth)).json()).some(c => c.online)).toBeTruthy();
     await page.goto('http://127.0.0.1:3113/devices');
+    await page.getByLabel('Workspace access token').fill(token);
+    await page.getByRole('button', { name: 'Open workspace', exact: true }).click();
     await expect(page.getByTestId('rust-connected')).toHaveText('1');
     await expect(page.getByTestId('web-connected')).toHaveText('1');
     expect(fs.readFileSync(path.join(dir, 'logs/backend.log'), 'utf8')).toContain('Rust clients: 1 · Web clients: 1');
@@ -51,6 +64,7 @@ test('make start, start3, and stop3 independently manage only the requested proc
   const args = [`CONFIG_DIR=${dir}`, `CLIENT_CONFIG_DIR=${clientDir}`, 'BIND_ADDR=127.0.0.1:3115', 'BACKEND_URL=http://127.0.0.1:3115'];
   const env = { ...process.env, SEMANTIC_SEARCH: 'off', APP_TOKEN: '', CWBBOT_ADMIN: '', XAI_API_KEY: '', OPENAI_API_KEY: '', ANTHROPIC_API_KEY: '', GEMINI_API_KEY: '' };
   const make = target => exec('make', [target, ...args], { env });
+  started.push(() => make('stop'));
   const serverPid = path.join(dir, 'run/server.pid');
   const clientPid = path.join(clientDir, 'run/client.pid');
   try {

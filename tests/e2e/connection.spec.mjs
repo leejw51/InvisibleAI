@@ -1,4 +1,5 @@
 import {test,expect} from '@playwright/test';
+import {openConversationOptions} from './workspace-controls.mjs';
 
 test('opening animation settles into a real connected confirmation',async({page},testInfo)=>{
   await page.emulateMedia({reducedMotion:'no-preference'});
@@ -12,7 +13,8 @@ test('opening animation settles into a real connected confirmation',async({page}
     const orb=splash.locator('.connection-orb');
     await expect(orb).toBeVisible();
     await expect.poll(()=>orb.evaluate(el=>el.complete&&el.naturalWidth>0)).toBe(true);
-    expect(await orb.evaluate(el=>getComputedStyle(el).animationName)).toBe('connection-float');
+    // The redesign's companion sculpture floats with `companion-arriving` (styles.css overrides connection-float).
+    expect(await orb.evaluate(el=>getComputedStyle(el).animationName)).toBe('companion-arriving');
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
     await expect.poll(()=>splash.locator('.connection-stage').evaluate(el=>getComputedStyle(el).opacity)).toBe('1');
     await page.screenshot({path:`test-results/connection-opening-${testInfo.project.name}.png`,fullPage:true});
@@ -126,10 +128,14 @@ test('an interrupted message keeps its draft and retry after recovery',async({pa
   await expect(badge).toHaveText('Connected');
   // Each browser project shares the demo server, so use a fresh conversation
   // when asserting that an interrupted submission creates exactly one message.
+  await openConversationOptions(page);
   const room=page.getByRole('combobox',{name:'Chat room',exact:true});
   await expect(room).not.toHaveValue('');
   const previousRoom=await room.inputValue();
+  // "New chat" opens a new conversation on Ask anything (/chat); the room
+  // picker folds under "Conversation options" again once the room arrives.
   await page.getByRole('button',{name:'New chat',exact:true}).click();
+  await openConversationOptions(page);
   await expect(room).not.toHaveValue(previousRoom);
   await expect(room).not.toHaveValue('');
   const draft=page.locator('.chat-dock textarea');

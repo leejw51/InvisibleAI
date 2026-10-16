@@ -1,6 +1,7 @@
 import {test,expect} from '@playwright/test';
 import {isolatedBackend} from './invisible-fixture.mjs';
 import fs from 'node:fs';
+import {openConversationOptions,openWorkspace,openNav} from './workspace-controls.mjs';
 const baseURL=isolatedBackend(test,3156);
 const defaults={wiki_enabled:false,wiki_auto_update:true,wiki_group_by:'topic',wiki_include_answers:true,textedit_enabled:true,textedit_settle_ms:1200,textedit_style:'concise'};
 test.beforeEach(async({request})=>{
@@ -264,7 +265,8 @@ test('TextEdit disabled is enforced by the backend and leaves Auto off',async({p
  const room=await(await request.post('/api/rooms',{data:{title:'Disabled notes'}})).json();
  const start=await request.post(`/api/rooms/${room.roomid}/notes`,{data:{client_id:'any-device'}});
  expect(start.status()).toBe(400);expect(await start.text()).toContain('Enable TextEdit assistance');
- await page.goto('/');await expect(page.getByTestId('textedit-auto-toggle')).toBeDisabled();
+ // The Auto toggle, its hint and the settings link sit in the "Your Mac & AI" fold, closed by default.
+ await page.goto('/');await openWorkspace(page);await expect(page.getByTestId('textedit-auto-toggle')).toBeDisabled();
  await expect(page.getByText('TextEdit assistance is disabled. Enable it in assistance settings to use Auto.')).toBeVisible();
  await page.getByRole('link',{name:'Customize Wiki & TextEdit'}).click();
  await page.getByLabel('Enable TextEdit assistance').check();await page.getByRole('button',{name:'Save assistance settings'}).click();
@@ -459,10 +461,12 @@ test('Wiki shows a picture, cloud usage and the chat room per message, and relat
  // A chat message with a picture and a short video becomes one memo and one Wiki node.
  await page.goto('/chat');
  await expect(page.getByRole('heading',{name:'Keep the thought going.'})).toBeVisible();
- const rooms=page.getByRole('combobox',{name:'Chat room',exact:true});
- const before=await rooms.inputValue();
+ // A fresh chat page has no room (the toolbar shows unfolded); New chat makes
+ // one and folds the room picker under "Conversation options".
  await page.getByRole('button',{name:'New chat',exact:true}).click();
- await expect(rooms).not.toHaveValue(before);
+ await openConversationOptions(page);
+ const rooms=page.getByRole('combobox',{name:'Chat room',exact:true});
+ await expect(rooms).not.toHaveValue('');
  await page.getByLabel('Attach to chat',{exact:true}).setInputFiles([
   {name:'harbour.png',mimeType:'image/png',buffer:fs.readFileSync('frontend/assets/harbour.png')},
   {name:'clip.mp4',mimeType:'video/mp4',buffer:fs.readFileSync('tests/e2e/fixtures/clip.mp4')},
@@ -706,16 +710,14 @@ test('a tag can be deleted from every message, and Delete all in the main menu f
  const document=(await (await request.get('/api/wiki')).json()).tags.find(t=>t.tag==='mining').document;
  expect((await request.get(`/api/wiki/${document}`)).status()).toBe(200);
  await expect.poll(async()=>(await (await request.get('/api/code')).json()).total).toBe(1);
- const toggle=page.getByRole('button',{name:'Open navigation'});
- if(await toggle.isVisible()) await toggle.click();
- await page.locator('[data-nav="delete-all"]').click();
+ // Delete all lives in the sidebar's Settings fold: openNav opens it first.
+ await openNav(page,'delete-all');
  const dialog=page.getByTestId('delete-all-dialog');
  await expect(dialog).toContainText('This cannot be undone');
  await page.getByRole('button',{name:'Cancel'}).click();
  await expect(dialog).toHaveCount(0);
  await expect(cards).toHaveCount(3);
- if(await toggle.isVisible()) await toggle.click();
- await page.locator('[data-nav="delete-all"]').click();
+ await openNav(page,'delete-all');
  await page.getByTestId('delete-all-confirm').click();
  await expect(page.getByRole('status').filter({hasText:'Everything was deleted'})).toBeVisible();
  await expect(page.getByTestId('delete-all-dialog')).toHaveCount(0);

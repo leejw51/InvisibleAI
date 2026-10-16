@@ -14,6 +14,7 @@ test('New thought keeps dropped files and Markdown as a Wiki source without a ch
   await request.patch('/api/assistance/preferences', {data:{wiki_enabled:true, wiki_auto_update:true}});
   await page.goto('/'); await openConversationOptions(page);
   await expect(page.getByRole('heading', {name:'Hey, what’s on your mind?', exact:true})).toBeVisible();
+  await openConversationOptions(page);
   const rooms = page.getByRole('combobox', {name:'Chat room', exact:true});
   await expect(rooms).not.toHaveValue('');
   // Start a fresh conversation for this file-only save.
@@ -89,6 +90,7 @@ test('New thought keeps dropped files and Markdown as a Wiki source without a ch
 test('Save memo keeps a typed thought as a memo without an AI reply', async ({page, request}) => {
   await page.goto('/'); await openConversationOptions(page);
   await expect(page.getByRole('heading', {name:'Hey, what’s on your mind?', exact:true})).toBeVisible();
+  await openConversationOptions(page);
   const rooms = page.getByRole('combobox', {name:'Chat room', exact:true});
   await expect(rooms).not.toHaveValue('');
   const room = await rooms.inputValue();

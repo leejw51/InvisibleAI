@@ -52,7 +52,8 @@ test('URL shortcut uses computer name; dashboard rename reaches CLI JSONL and su
   const env={...process.env,CAUSEWAYBAY_CLIENT_CONFIG_DIR:home,APP_TOKEN:''};
   let log='',child;
   const start=(args=['http://127.0.0.1:3099'])=>{child=spawn('./target/debug/rust-cli',args,{env,stdio:['ignore','pipe','pipe']});child.stdout.on('data',b=>{log+=b;});child.stderr.on('data',b=>{log+=b;});};
-  const config=()=>JSON.parse(fs.readFileSync(path.join(home,'client.jsonl'),'utf8').trim().split('\n').at(-1)).config;
+  // The CLI may be mid-write; a half-written last line reads as "not yet" so expect.poll keeps polling.
+  const config=()=>{try{return JSON.parse(fs.readFileSync(path.join(home,'client.jsonl'),'utf8').trim().split('\n').at(-1)).config;}catch{return undefined;}};
   try{
     start();
     await expect.poll(()=>log).toContain('SSE callbacks connected.');
@@ -66,7 +67,7 @@ test('URL shortcut uses computer name; dashboard rename reaches CLI JSONL and su
     await page.getByRole('textbox',{name:'Computer name',exact:true}).fill('My renamed capture computer');
     await page.getByRole('button',{name:'Save computer name',exact:true}).click();
     await expect(row).toContainText('My renamed capture computer');
-    await expect.poll(()=>config().name).toBe('My renamed capture computer');
+    await expect.poll(()=>config()?.name).toBe('My renamed capture computer');
     await expect.poll(()=>log).toContain('Computer name updated: My renamed capture computer');
     await stop(child);
     await expect.poll(async()=> (await (await request.get('/api/clients')).json()).find(c=>c.id===initial.client_id)?.online).toBe(false);
@@ -91,13 +92,13 @@ test('capture scope supports a selected subset and all connected computers',asyn
     await expect(page.getByRole('combobox',{name:'Capture client'})).toHaveValue('multiple');
     await expect(page.getByRole('checkbox',{name:'Desk',exact:true})).toBeChecked();
     await expect(page.getByRole('checkbox',{name:'Laptop',exact:true})).toBeChecked();
-    await page.getByRole('button',{name:'Capture',exact:true}).click();
+    await page.getByRole('main').getByRole('button',{name:'Capture',exact:true}).click();
     await expect(page.getByTestId('capture-result')).toHaveCount(2);
     await expect(page.locator('.batch-progress')).toHaveCount(0);
     expect((await page.getByTestId('capture-result').locator('header h2').allTextContents()).sort()).toEqual(['Desk','Laptop']);
     await page.getByRole('button',{name:'Multi-device capture',exact:true}).click();
     await page.getByRole('combobox',{name:'Capture client'}).selectOption('all');
-    await page.getByRole('button',{name:'Capture',exact:true}).click();
+    await page.getByRole('main').getByRole('button',{name:'Capture',exact:true}).click();
     await expect(page.getByTestId('capture-result')).toHaveCount(3);
     await expect(page.locator('.batch-progress')).toHaveCount(0);
     for(const name of ['Desk','Laptop','Studio'])await expect(page.getByTestId('capture-result').getByRole('heading',{name,exact:true})).toBeVisible();

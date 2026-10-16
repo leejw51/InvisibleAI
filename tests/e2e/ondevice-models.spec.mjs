@@ -78,7 +78,11 @@ test('the picker lists Apple LLM and the Qwen models with the backend GPU-memory
   await expect(page.getByTestId('ondevice-memory')).toContainText('Unified memory 16 GB');
   await expect(page.getByTestId('ondevice-memory')).toContainText('GPU budget 11 GB');
   await expect(page.getByTestId('ondevice-memory')).toContainText('make mlx-ai');
-  await expect(page.getByTestId('model-card-apple')).toContainText('Apple LLM');
+  // The picker offers the two Qwen choices; the other catalogue entries (Apple
+  // LLM, the 4B) only show while they are the runtime chosen in the dialog.
+  await expect(page.locator('.model-card')).toHaveCount(2);
+  await expect(page.getByTestId('model-card-apple')).toHaveCount(0);
+  await expect(page.getByTestId('model-card-qwen3.5-4b')).toHaveCount(0);
   await expect(page.getByTestId('model-card-qwen3.8-27b')).toContainText('too large for this Mac');
   await expect(page.getByTestId('model-card-qwen3.8-27b').getByRole('button', {name: 'Download anyway'})).toBeVisible();
   await expect(page.getByTestId('model-card-qwen3.5-9b')).toContainText('fits GPU memory');
@@ -88,6 +92,12 @@ test('the picker lists Apple LLM and the Qwen models with the backend GPU-memory
   await expect(page.getByRole('checkbox', {name: 'Enable MLX local', exact: true})).toBeChecked();
   await expect(page.getByRole('textbox', {name: 'Model', exact: true})).toHaveValue('mlx-community/Qwen3.5-9B-4bit');
   await expect(page.getByRole('button', {name: /MLX local/})).toHaveClass(/selected/);
+  // Picking the Apple runtime reveals its card; choosing that card switches the
+  // runtime on, the same way a Qwen card does.
+  await page.locator('.provider-grid').getByRole('button', {name: /Apple local/}).click();
+  await expect(page.getByTestId('model-card-apple')).toContainText('Apple LLM');
+  await expect(page.getByTestId('model-card-apple').getByRole('radio')).toHaveAttribute('aria-checked', 'true');
+  await expect(page.getByRole('checkbox', {name: 'Enable Apple local', exact: true})).not.toBeChecked();
   await page.getByTestId('model-card-apple').getByRole('radio').click();
   await expect(page.getByRole('checkbox', {name: 'Enable Apple local', exact: true})).toBeChecked();
   await expect(page.getByRole('textbox', {name: 'Model', exact: true})).toHaveValue('system');
@@ -111,8 +121,16 @@ test('the picker lists Apple LLM and the Qwen models with the backend GPU-memory
 
 test('an explicit download shows an easing progress bar, then the model is installed', async ({page, request}) => {
   const errors = []; page.on('pageerror', e => errors.push(e.message));
+  // The 4B card shows only while it is the chosen on-device model: make it the
+  // backend default first, so the dialog opens on it (and reopens on it later).
+  const chosen = await request.patch('/api/settings', {data: {
+    provider: 'mlx', model: REPO, default_ai: {mode: 'ondevice', local_provider: 'mlx', cloud_provider: 'grok'},
+    local_ai: {local_only: false, apple_enabled: false, mlx_enabled: true, mlx_url: 'http://127.0.0.1:8080/v1', speech_provider: 'auto', speech_locale: 'en-US', mlx_speech_model: ''},
+  }});
+  expect(chosen.ok()).toBeTruthy();
   await openSettings(page);
   const card = page.getByTestId('model-card-qwen3.5-4b');
+  await expect(card).toHaveClass(/selected/);
   await expect(card).toHaveClass(/not-installed/);
   await card.getByRole('button', {name: 'Download', exact: true}).click();
   const bar = card.getByRole('progressbar', {name: 'Downloading Qwen3.5 4B'});

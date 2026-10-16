@@ -168,9 +168,14 @@ test('local model follows admin updates in an open browser and ignores legacy mo
   });
   await page.goto('/');
   await openConversationOptions(page); await page.locator('.chat-options > summary').click();
-  const model = page.getByLabel('Chat AI model');
+  // An MLX pick offers the backend's model catalogue as a select (no free-text
+  // model field): the admin's installed model is the checked entry, and the
+  // obsolete browser caches never appear in it.
+  const model = page.getByLabel('Chat On-device model', {exact: true});
   await expect(model).toHaveValue('installed-first');
-  await expect(model).toHaveJSProperty('readOnly', true);
+  await expect(page.getByLabel('Chat AI model', {exact: true})).toHaveCount(0);
+  await expect(model.locator('option:checked')).toHaveText('installed-first');
+  expect((await model.locator('option').allTextContents()).join('\n')).not.toMatch(/obsolete/);
   expect((await request.patch('/api/settings', {data:{provider:'mlx',model:'installed-next'}})).ok()).toBeTruthy();
   // Keep the browser open: its periodic settings refresh must replace the local model.
   await expect(model).toHaveValue('installed-next', {timeout:25000});
