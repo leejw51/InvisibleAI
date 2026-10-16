@@ -1731,6 +1731,9 @@ pub async fn list(PrivateState(s): PrivateState, Query(q): Query<Search>) -> Api
     } else {
         ranked_sources(&s, &text).await?
     };
+    // Ask the index status before taking the database: the two locks are
+    // taken in the opposite order elsewhere, and holding both invites a deadlock.
+    let semantic_ready = s.semantic.ready();
     let conn = s.db.0.lock().unwrap();
     let owner = s.db.owner();
     let prefs = assistance::read_locked(&conn, owner)?;
@@ -1764,7 +1767,7 @@ pub async fn list(PrivateState(s): PrivateState, Query(q): Query<Search>) -> Api
         "tags": tag_counts(&conn, owner, &prefs.wiki_group_by)?,
         "related_tags": related_tags(&conn, owner, &tags)?,
         "settings": prefs,
-        "semantic": s.semantic.ready(),
+        "semantic": semantic_ready,
     })))
 }
 
@@ -1833,6 +1836,7 @@ pub async fn related(PrivateState(s): PrivateState, Path(id): Path<String>) -> A
         }
         None => vec![],
     };
+    let semantic_ready = s.semantic.ready();
     let conn = s.db.0.lock().unwrap();
     let owner = s.db.owner();
     let Some(focus) = item(&conn, owner, &id)? else {
@@ -1849,7 +1853,7 @@ pub async fn related(PrivateState(s): PrivateState, Path(id): Path<String>) -> A
         }
     }
     Ok(Json(
-        json!({"item":focus,"related":related,"semantic":s.semantic.ready()}),
+        json!({"item":focus,"related":related,"semantic":semantic_ready}),
     ))
 }
 
