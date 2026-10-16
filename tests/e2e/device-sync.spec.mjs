@@ -266,6 +266,7 @@ test('logging in again resumes the shared thought without an extra reset', async
     await login(other.page); await ready(other.page);
     await fresh(other.page);
     await openNav(other.page, 'sign-out');
+    await other.page.getByRole('dialog', {name: 'Sign out?'}).getByRole('button', {name: 'Confirm sign out'}).click();
     await expect(other.page.getByLabel('Recovery phrase', {exact:true})).toBeVisible();
     const current = await fresh(page);
     await send(page, 'Continue on another device');

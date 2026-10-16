@@ -36,6 +36,8 @@ pub struct Login {
     recorded: bool,
     account: bool,
     busy: bool,
+    /// Sign out was pressed once; the card asks before forgetting the key.
+    confirm_logout: bool,
     error: String,
     preview: Option<Timeout>,
 }
@@ -57,6 +59,7 @@ pub enum Msg {
     Login,
     Apply,
     Finished(Result<Value, String>),
+    ConfirmLogout(bool),
     Logout,
 }
 /// A fresh BIP-39 phrase of 12 or 24 words from the browser's secure random source.
@@ -140,6 +143,7 @@ impl Component for Login {
             busy: false,
             error: String::new(),
             preview: None,
+            confirm_logout: false,
         }
     }
     fn update(&mut self, ctx: &Context<Self>, msg: Msg) -> bool {
@@ -299,6 +303,7 @@ impl Component for Login {
                     Msg::Finished(api("POST", "/api/auth/apply", Some(json!({}))).await)
                 });
             }
+            Msg::ConfirmLogout(asked) => self.confirm_logout = asked,
             Msg::Logout => {
                 if self.busy {
                     return false;
@@ -327,7 +332,8 @@ impl Component for Login {
                 <p class="wallet-name" aria-label={t("Your name")}>{session["name"].as_str().unwrap_or_default()}</p>
                 if role=="unregistered" {<button class="primary-button" disabled={self.busy} onclick={ctx.link().callback(|_|Msg::Apply)}>{t("Apply for registration")}{icon("arrow")}</button>}
                 <button class="secondary-button" onclick={ctx.link().callback(|_|Msg::Account(true))}>{t("Account details")}</button>
-                <button class="text-button" disabled={self.busy} onclick={ctx.link().callback(|_|Msg::Logout)}>{t("Sign out")}</button>
+                if self.confirm_logout {<div class="sign-out-confirm" role="group" aria-label={t("Sign out?")}><p class="small-muted">{t("Sign out of this browser? Your workspace stays on the backend, but this browser forgets your wallet key: signing in again needs your recovery phrase or private key.")}</p><div><button class="text-button" disabled={self.busy} onclick={ctx.link().callback(|_|Msg::ConfirmLogout(false))}>{t("Cancel")}</button><button class="danger-button" disabled={self.busy} onclick={ctx.link().callback(|_|Msg::Logout)}>{icon("logout")}{t("Confirm sign out")}</button></div></div>}
+                else {<button class="text-button" disabled={self.busy} onclick={ctx.link().callback(|_|Msg::ConfirmLogout(true))}>{t("Sign out")}</button>}
             } else {
                 <h1>{t("Welcome to your space.")}</h1><p>{t("Sign in with your wallet recovery phrase or private key.")}</p>
                 if let Some(saved) = &self.saved {

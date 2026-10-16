@@ -186,6 +186,14 @@ test('appearance toggle works before login and persists through login and logout
     // Sign out sits in the main navigation, not under Settings.
     await openNavigation(page);
     await page.getByRole('navigation', {name: 'Main navigation'}).getByRole('button', {name: 'Sign out', exact: true}).click();
+    // Signing out asks once more; Cancel keeps the session, Confirm ends it.
+    const ask = page.getByRole('dialog', {name: 'Sign out?'});
+    await ask.getByRole('button', {name: 'Cancel'}).click();
+    await expect(ask).toHaveCount(0);
+    await expect(page.getByLabel('Recovery phrase')).toHaveCount(0);
+    await openNavigation(page);
+    await page.getByRole('navigation', {name: 'Main navigation'}).getByRole('button', {name: 'Sign out', exact: true}).click();
+    await page.getByRole('dialog', {name: 'Sign out?'}).getByRole('button', {name: 'Confirm sign out'}).click();
     await expect(page.getByLabel('Recovery phrase')).toBeVisible();
     await page.reload();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
