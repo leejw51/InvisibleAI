@@ -128,13 +128,25 @@ test.describe('capture shine', () => {
     // The sweep moves the highlight across the button within a few seconds.
     await expect.poll(() => capture.evaluate(el => el.style.getPropertyValue('--shine-x')), { timeout: 6000, intervals: [50] }).not.toMatch(/^(-140%)?$/);
     const sparks = page.locator('.capture-spark');
+    // The hero built itself in: every line ends fully shown, nothing left translated.
+    await expect.poll(() => page.locator('.chat-page.is-capture > .page-intro h2').evaluate(el => el.style.opacity), { timeout: 4000 }).toBe('1');
     await capture.click();
-    await expect(page.locator('.capture-ring')).toHaveCount(1);
+    // The press also flashes the shutter and opens a viewfinder that follows the post;
+    // all three are created on pointerdown, so one count catches them together.
+    await expect(page.locator('.capture-ring, .capture-flash, .capture-viewfinder')).toHaveCount(3);
     expect(await sparks.count()).toBeGreaterThan(4);
+    // The Dynamic Island opens with the post's stage, seals when the reply lands, then closes.
+    await expect(page.locator('.capture-island')).toContainText(/\S/);
     // Particles clean themselves up; nothing is left in the page.
     await expect(sparks).toHaveCount(0, { timeout: 3000 });
     await expect(page.locator('.capture-ring')).toHaveCount(0);
+    await expect(page.locator('.capture-flash')).toHaveCount(0);
+    await expect(page.locator('.capture-viewfinder')).toHaveCount(0, { timeout: 5000 });
     await expect(page.locator('.from-ai').last()).toContainText('returns 5');
+    await expect(page.locator('.capture-island.is-done')).toHaveCount(1);
+    await expect(page.locator('.capture-island')).toHaveCSS('opacity', '0', { timeout: 4000 });
+    // Every post carries its status for the scan the stylesheet paints while capturing.
+    expect(await page.locator('.chat-message').last().getAttribute('data-status')).toBeTruthy();
     // The shine never adds children to the button Yew renders.
     expect(await capture.evaluate(el => [...el.children].map(c => c.tagName.toLowerCase()))).toEqual(['svg', 'span']);
   });
@@ -147,9 +159,11 @@ test.describe('capture shine', () => {
     await expect(capture).toBeEnabled();
     await page.waitForTimeout(3500);
     expect(await capture.evaluate(el => el.style.getPropertyValue('--shine-x'))).toBe('-140%');
+    // Nothing built in either: the hero shows exactly as rendered, with no inline motion.
+    expect(await page.locator('.chat-page.is-capture > .page-intro h2').evaluate(el => el.getAttribute('style'))).toBeNull();
     await capture.click();
     await page.waitForTimeout(100);
-    await expect(page.locator('.capture-spark, .capture-ring')).toHaveCount(0);
+    await expect(page.locator('.capture-spark, .capture-ring, .capture-flash, .capture-viewfinder, .capture-island')).toHaveCount(0);
   });
 });
 
