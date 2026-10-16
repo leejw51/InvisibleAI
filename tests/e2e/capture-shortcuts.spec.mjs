@@ -150,6 +150,50 @@ test.describe('capture shine', () => {
     // The shine never adds children to the button Yew renders.
     expect(await capture.evaluate(el => [...el.children].map(c => c.tagName.toLowerCase()))).toEqual(['svg', 'span']);
   });
+  test('opening and arriving never flicker: no empty state while the room resolves, no hero reshaping after the reveal', async ({ page, request }) => {
+    await request.patch('/api/capture/choices', { data: { active: '', default: '', continuous: [] } });
+    await request.post('/api/rooms/thought', { data: { fresh: true } });
+    await page.goto('/');
+    const capture = captureButton(page);
+    await expect(capture).toBeEnabled();
+    await capture.click();
+    await expect(page.locator('.from-ai').last()).toContainText('returns 5');
+    // Opening the app on a room with a conversation: the page stays hidden
+    // (is-settling) until the conversation is known, and the first frame it
+    // shows is already the compact hero, never the fresh one reshaped later.
+    await page.addInitScript(() => {
+      window.__pageClasses = [];
+      const note = () => { const cls = document.querySelector('.chat-page')?.className; if (cls && window.__pageClasses.at(-1) !== cls) window.__pageClasses.push(cls); };
+      new MutationObserver(note).observe(document, { childList: true, subtree: true, attributes: true, attributeFilter: ["class"] });
+    });
+    await page.reload();
+    await expect(page.locator('.chat-message')).toHaveCount(2);
+    await expect.poll(() => page.locator('.chat-page.is-capture > .page-intro h2').evaluate(el => el.style.opacity), { timeout: 4000 }).toBe('1');
+    const classes = await page.evaluate(() => window.__pageClasses);
+    expect(classes[0]).toContain('is-settling');
+    const shown = classes.find(c => !c.includes('is-settling'));
+    expect(shown).toContain('has-conversation');
+    expect(await page.locator('.chat-page.is-settling').count()).toBe(0);
+    // Arriving from another page: the conversation area never shows the
+    // "fresh place to think" box while the room is being resolved.
+    await page.evaluate(() => {
+      window.__emptyStates = 0;
+      new MutationObserver(records => { for (const r of records) for (const n of r.addedNodes) if (n instanceof Element && (n.matches('.empty-state') || n.querySelector('.empty-state'))) window.__emptyStates++; })
+        .observe(document.body, { childList: true, subtree: true });
+    });
+    const go = async name => {
+      const item = page.locator(`.sidebar [data-nav="${name}"]`);
+      const fold = page.locator('.sidebar details:not([open])', { has: page.locator(`[data-nav="${name}"]`) });
+      if (await fold.count()) await fold.locator('> summary').click();
+      await item.click();
+    };
+    await go('devices');
+    await expect(page.locator('.chat-page')).toHaveCount(0);
+    await go('home');
+    await expect(page.locator('.chat-page.is-capture .chat-placeholder')).toBeVisible();
+    await expect.poll(() => page.locator('.chat-page.is-capture > .page-intro h2').evaluate(el => el.style.opacity), { timeout: 4000 }).toBe('1');
+    expect(await page.evaluate(() => window.__emptyStates)).toBe(0);
+  });
   test('reduced motion: no sweep and no sparkles', async ({ page, request }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await request.patch('/api/capture/choices', { data: { active: '', default: '', continuous: [] } });

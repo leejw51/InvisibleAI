@@ -12,12 +12,19 @@ const expo = [0.87, 0, 0.13, 1];
 const settle = [0.16, 1, 0.3, 1];
 const quick = { duration: 0.55, ease: settle };
 const active = () => !reduced.matches && document.visibilityState === 'visible';
+// Motion resolves keyframes on a later frame, and on first load that frame can
+// come a tenth of a second after Yew paints: the hero would show, vanish and
+// fade back in. Hiding a part inline before its fade is queued keeps the first
+// painted frame blank; the fade ends by writing opacity 1 over it.
+const hide = element => { element.style.opacity = '0'; return element; };
 
 // Hero build-in: the connect strip, each line of the intro, the shortcuts from
 // the right, the companion's pill, the console, the placeholder, then the dock
 // rises. One run per page instance; a re-render never replays it.
 function build(page) {
-  if (seen.has(page)) return;
+  // A page still settling (restoring a room) is hidden by the stylesheet
+  // until its conversation is known; its build-in starts when that class goes.
+  if (seen.has(page) || page.classList.contains('is-settling')) return;
   seen.add(page);
   if (!active()) return;
   const intro = page.querySelector(':scope > .page-intro');
@@ -26,20 +33,20 @@ function build(page) {
     page.querySelector('.everyday-workspace > summary'),
     ...page.querySelectorAll('.chat-placeholder > *'),
   ].filter(Boolean);
-  lines.forEach((line, i) => animate(line, { opacity: [0, 1], y: [14, 0] }, { ...quick, delay: 0.05 + i * 0.07 }));
+  lines.forEach((line, i) => animate(hide(line), { opacity: [0, 1], y: [14, 0] }, { ...quick, delay: 0.05 + i * 0.07 }));
   const wide = matchMedia('(min-width: 701px)').matches;
   page.querySelectorAll('.quick-pick').forEach((pick, i) =>
-    animate(pick, { opacity: [0, 1], ...(wide ? { x: [12, 0] } : { y: [8, 0] }) }, { ...quick, delay: 0.25 + i * 0.08 }));
+    animate(hide(pick), { opacity: [0, 1], ...(wide ? { x: [12, 0] } : { y: [8, 0] }) }, { ...quick, delay: 0.25 + i * 0.08 }));
   // The companion animates its own figure; only its pill and prop fade in.
   page.querySelectorAll('.companion-state, .companion-prop').forEach((part, i) =>
-    animate(part, { opacity: [0, 1] }, { duration: 0.6, delay: 0.45 + i * 0.1 }));
+    animate(hide(part), { opacity: [0, 1] }, { duration: 0.6, delay: 0.45 + i * 0.1 }));
   const dock = page.querySelector('.chat-dock');
-  if (dock) animate(dock, { opacity: [0, 1], y: [28, 0] }, { duration: 0.7, ease: settle, delay: 0.3 });
+  if (dock) animate(hide(dock), { opacity: [0, 1], y: [28, 0] }, { duration: 0.7, ease: settle, delay: 0.3 });
 }
 function strip(element) {
   if (seen.has(element)) return;
   seen.add(element);
-  if (active()) animate(element, { opacity: [0, 1], y: [-10, 0] }, quick);
+  if (active()) animate(hide(element), { opacity: [0, 1], y: [-10, 0] }, quick);
 }
 
 // The press: a shutter flash and a viewfinder that opens on the button, then
@@ -199,13 +206,14 @@ new MutationObserver(records => {
   for (const r of records) r.addedNodes.forEach(n => scan(n, fresh));
   for (const r of records) {
     // Yew swaps the text node when the stage changes; the span itself stays.
+    if (r.type === 'attributes' && r.attributeName === 'class' && r.target.matches('.chat-page.is-capture')) build(r.target);
     if (r.type === 'characterData' || (r.type === 'childList' && r.target instanceof Element && r.target.matches('.chat-waiting-text') && r.target.closest('.chat-page.is-capture'))) {
       const text = r.target instanceof Element ? r.target : r.target.parentElement;
       if (text?.matches?.('.chat-waiting-text') && text.closest('.chat-page.is-capture')) roll(text);
     }
   }
   islandSync();
-}).observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['data-status'] });
+}).observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['data-status', 'class'] });
 scan(document.body, new Set());
 
 const ready = button => button.isConnected && !button.disabled && button.classList.contains('primary-button');

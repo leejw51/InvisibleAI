@@ -1998,6 +1998,7 @@ cwb-send-stage.is-failed{box-shadow:0 0 0 2px #ff8a9a88,0 40px 80px -40px #3a0f1
 
 /* iPhone-sleek Capture page: glass materials, hairline borders, continuous corners,
    SF-style type and the iOS easing curve. Scoped to the Capture page and its strip. */
+.chat-page.is-capture.is-settling>*{visibility:hidden}
 .chat-page.is-capture,.connect-strip{--ios-ease:cubic-bezier(.32,.72,0,1);--glass:#ffffffc2;--glass-strong:#fffffff2;--hairline:#1d1a2414;--ink:#1d1a24;--capsule:#f1eff5;--ios-shadow:0 1px 2px #1d1a2408,0 14px 44px #4a3a6a12;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display",Inter,system-ui,sans-serif}
 .chat-page.is-capture:not(.has-conversation)>.page-intro{border:1px solid var(--hairline);border-radius:34px;background:radial-gradient(ellipse at 88% 30%,#e3d6ff99,transparent 48%),radial-gradient(ellipse at 10% 100%,#fbe9d255,transparent 55%),var(--glass-strong);box-shadow:var(--ios-shadow),inset 0 1px 0 #fff;-webkit-backdrop-filter:saturate(180%) blur(24px);backdrop-filter:saturate(180%) blur(24px)}
 .chat-page.is-capture>.page-intro h2{font-weight:700;letter-spacing:-.035em;color:var(--ink)}

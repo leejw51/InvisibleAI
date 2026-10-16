@@ -54,6 +54,10 @@ pub struct Chat {
     upload_progress: Option<crate::uploads::Progress>,
     capture: ContinuousStatus,
     capture_loaded: bool,
+    /// The Capture page is restoring a room whose conversation is not known
+    /// yet: the hero's shape depends on it, so the page stays hidden until
+    /// the first sync lands rather than switch layouts in front of the user.
+    settling: bool,
     ai: Option<AiInfo>,
     skills: Vec<String>,
     error: String,
@@ -242,11 +246,15 @@ impl Component for Chat {
             upload_progress: None,
             capture: ContinuousStatus::default(),
             capture_loaded: false,
+            settling: ctx.props().thought && ctx.props().thought_epoch == 0,
             ai: None,
             skills: vec![],
             error: String::new(),
             busy: false,
-            creating: false,
+            // The Capture page resolves its room on mount: it starts in the
+            // resolving state so the first frame already shows the conversation
+            // area, never the empty state the room swap would replace.
+            creating: ctx.props().thought,
             restore_room: true,
             checking: false,
             retry: None,
@@ -449,6 +457,8 @@ impl Component for Chat {
             Msg::Thought(fresh) => {
                 let version = self.begin_room();
                 self.restore_room = !fresh;
+                // A fresh room has no conversation; a restored one is unknown.
+                self.settling = !fresh;
                 ctx.link().send_future(async move {
                     Msg::Created(
                         version,
@@ -809,7 +819,10 @@ impl Component for Chat {
                         }
                         return changed;
                     }
-                    Err(e) => self.error = e,
+                    Err(e) => {
+                        self.settling = false;
+                        self.error = e;
+                    }
                 }
             }
             Msg::UseSession(room) => {
@@ -930,6 +943,7 @@ impl Component for Chat {
                 if room != self.room || version != self.room_version {
                     return false;
                 }
+                self.settling = false;
                 let mut after = 0;
                 match r {
                     Ok(snapshot) => {
@@ -1332,7 +1346,7 @@ impl Component for Chat {
                 .messages
                 .iter()
                 .any(|m| !m.deleted && m.status == "running");
-        html! {<section class={classes!("chat-page",capture_page.then_some("is-capture"),has_photos.then_some("has-photos"),self.messages.iter().any(|m|!m.deleted).then_some("has-conversation"))} {ondragover} {ondrop}><div class="page-intro"><div><div class="eyebrow">{icon("spark")}{t("A LITTLE SPACE FOR YOU")}</div><h2>{if ctx.props().thought {t("Hey, what’s on your mind?")}else{t("Keep the thought going.")}}</h2><p>{if ctx.props().thought {t("Big ideas, tiny questions, or just a little help with your day.")}else{t("Pick up an idea, or start something new.")}}</p></div><button class="secondary-button" disabled={self.creating || self.deleting} onclick={ctx.link().callback(|_|Msg::New)}>{icon("plus")}{t("New chat")}</button><div class="quick-picks" role="group" aria-label={t("Capture shortcuts")}>{self.device_picker(ctx)}<crate::ai_settings::AiPicker language={ctx.props().language} owner={ctx.props().owner.clone()} settings={ctx.props().settings.clone()} prefix="Quick" compact=true disabled={self.busy||self.deleting} changed={ctx.link().callback(|(p,m)|Msg::AiChosen(p,m))} ai_saved={ctx.props().ai_saved.clone()}/></div><invisible-companion data-state={if companion_busy {"thinking"} else if !self.prompt.trim().is_empty() {"listening"} else {"idle"}}><div class="companion-world" aria-hidden="true"/><div class="companion-halo" aria-hidden="true"/><button type="button" class="companion-touch" aria-label={t("Say hello to your companion")}><img class="companion-figure" src="/assets/everyday-companion.png" alt="" width="1280" height="1280"/></button><span class="companion-spark" aria-hidden="true">{"✦"}</span><span class="companion-state" role="status"><i/>{if companion_busy {t("Working…")} else if !self.prompt.trim().is_empty() {t("I’m all ears")} else {t("Ready when you are")}}</span></invisible-companion></div>
+        html! {<section class={classes!("chat-page",capture_page.then_some("is-capture"),(self.settling && (self.creating || !self.room.is_empty())).then_some("is-settling"),has_photos.then_some("has-photos"),self.messages.iter().any(|m|!m.deleted).then_some("has-conversation"))} {ondragover} {ondrop}><div class="page-intro"><div><div class="eyebrow">{icon("spark")}{t("A LITTLE SPACE FOR YOU")}</div><h2>{if ctx.props().thought {t("Hey, what’s on your mind?")}else{t("Keep the thought going.")}}</h2><p>{if ctx.props().thought {t("Big ideas, tiny questions, or just a little help with your day.")}else{t("Pick up an idea, or start something new.")}}</p></div><button class="secondary-button" disabled={self.creating || self.deleting} onclick={ctx.link().callback(|_|Msg::New)}>{icon("plus")}{t("New chat")}</button><div class="quick-picks" role="group" aria-label={t("Capture shortcuts")}>{self.device_picker(ctx)}<crate::ai_settings::AiPicker language={ctx.props().language} owner={ctx.props().owner.clone()} settings={ctx.props().settings.clone()} prefix="Quick" compact=true disabled={self.busy||self.deleting} changed={ctx.link().callback(|(p,m)|Msg::AiChosen(p,m))} ai_saved={ctx.props().ai_saved.clone()}/></div><invisible-companion data-state={if companion_busy {"thinking"} else if !self.prompt.trim().is_empty() {"listening"} else {"idle"}}><div class="companion-world" aria-hidden="true"/><div class="companion-halo" aria-hidden="true"/><button type="button" class="companion-touch" aria-label={t("Say hello to your companion")}><img class="companion-figure" src="/assets/everyday-companion.png" alt="" width="1280" height="1280"/></button><span class="companion-spark" aria-hidden="true">{"✦"}</span><span class="companion-state" role="status"><i/>{if companion_busy {t("Working…")} else if !self.prompt.trim().is_empty() {t("I’m all ears")} else {t("Ready when you are")}}</span></invisible-companion></div>
             if ctx.props().thought {<crate::invisible::Workspace language={ctx.props().language} settings={ctx.props().settings.clone()} client={self.capture_client(ctx).to_owned()} room={self.room.clone()} choose_room={ctx.link().callback(Msg::UseSession)} clients={ctx.props().clients.clone()} saved={ctx.props().ai_saved.clone()} setup={ctx.props().backend_settings.clone()} navigate={ctx.props().navigate.clone()} admin={ctx.props().admin}/>}
             if self.capture.active{<div class="live-capture-banner" role="status"><span><i/>{t("Continuous capture is running")}</span><a class="text-button" href="/autonomous">{t("Manage in Autonomous AI")}{icon("arrow")}</a></div>}
             if !ctx.props().settings.demo && !ai_ready {
@@ -1342,7 +1356,7 @@ impl Component for Chat {
                 </aside>
             }
             if !self.error.is_empty(){<div class="error-banner" role="alert">{t(&self.error)}if self.retry.is_some(){<button class="text-button" onclick={ctx.link().callback(|_|Msg::Retry)}>{t("Retry message")}</button>}</div>}
-            if self.room.is_empty(){{self.toolbar(ctx)}{self.toolbar_prompts(ctx)}<div class="empty-state">{icon("spark")}<h3>{t("A fresh place to think.")}</h3><p>{t("Start a chat to ask questions or capture your screen.")}</p><button class="primary-button" disabled={self.creating || self.deleting} onclick={ctx.link().callback(|_|Msg::New)}>{t("Start a conversation")}</button></div>}
+            if self.room.is_empty() && !self.creating {{self.toolbar(ctx)}{self.toolbar_prompts(ctx)}<div class="empty-state">{icon("spark")}<h3>{t("A fresh place to think.")}</h3><p>{t("Start a chat to ask questions or capture your screen.")}</p><button class="primary-button" disabled={self.creating || self.deleting} onclick={ctx.link().callback(|_|Msg::New)}>{t("Start a conversation")}</button></div>}
             else {
                 <div class="chat-messages" aria-label={t("Chat messages")}>if self.messages.iter().all(|m|m.deleted){<div class="chat-placeholder"><p>{t("Let’s make today a little easier.")}</p><span>{t("Ask a question, share a photo, or bring a half-formed idea.")}</span></div>}{for self.messages.iter().filter(|m|!m.deleted).map(|m|self.message(ctx,m))}<div ref={self.bottom.clone()}/></div>
                 <details class="conversation-options"><summary>{icon("settings")}{t("Conversation options")}</summary>
