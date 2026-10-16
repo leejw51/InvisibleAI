@@ -10,6 +10,7 @@ async function newChat(page) {
   await openConversationOptions(page);
   await expect(selector).not.toHaveValue(previous);
   await expect(selector).not.toHaveValue('');
+  await openConversationOptions(page);
   await expect(page.getByRole('button', {name: 'Multi Capture', exact: true})).toBeEnabled();
   return selector.inputValue();
 }
@@ -28,6 +29,7 @@ for (const action of ['clear', 'all']) {
       const room = await newChat(page);
       const prompt = page.getByRole('textbox', {name: 'Chat message', exact: true});
       await prompt.fill('Private draft that was never sent');
+      await openConversationOptions(page);
       const capture = page.getByRole('button', {name: 'Multi Capture', exact: true});
       for (let count = 1; count <= 2; count++) {
         await capture.click();
@@ -45,7 +47,9 @@ for (const action of ['clear', 'all']) {
       await expect(other.locator('.chat-page').getByRole('button', {name: 'Capture', exact: true})).toBeEnabled();
       await page.context().setOffline(true);
       if (action === 'clear') {
+        await openConversationOptions(other);
         await other.getByRole('button', {name: 'Clear chatroom', exact: true}).click();
+        await openConversationOptions(other);
         await other.getByRole('button', {name: 'Confirm clear chatroom', exact: true}).click();
       } else {
         const toggle = other.getByRole('button', {name: 'Open navigation', exact: true});
@@ -61,6 +65,7 @@ for (const action of ['clear', 'all']) {
       await page.context().setOffline(false);
       await expect(page.locator('.chat-attachment')).toHaveCount(0);
       await expect(page.locator('.chat-message')).toHaveCount(0);
+      await openConversationOptions(page);
       const selector = page.getByRole('combobox', {name: 'Chat room', exact: true});
       if (action === 'clear') {
         await expect(selector).toHaveValue(room);
@@ -93,6 +98,7 @@ for (const action of ['clear', 'all']) {
 
 test('Multi Capture enforces eight photos, disables empty Send message, and sends exactly one response', async ({page, request}, testInfo) => {
   const room = await newChat(page);
+  await openConversationOptions(page);
   const capture = page.getByRole('button', {name: 'Multi Capture', exact: true});
   const done = page.getByRole('button', {name: 'Send message', exact: true});
   const submitted = [];

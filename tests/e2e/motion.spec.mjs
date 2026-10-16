@@ -1,5 +1,6 @@
 import {test,expect} from '@playwright/test';
 import {isolatedBackend} from './invisible-fixture.mjs';
+import {openWorkspace} from './workspace-controls.mjs';
 
 isolatedBackend(test,3158);
 test.use({reducedMotion:'no-preference'});
@@ -97,6 +98,7 @@ test('controls ease into their states and confirm only a successful save',async(
  await page.getByText('How your Wiki works',{exact:true}).click();
  await expect.poll(()=>page.evaluate(()=>window.uiMotion.some(e=>e.name==='ui-detail'))).toBe(true);
  await page.goto('/');
+ await openWorkspace(page);
  await expect(page.locator('.invisible-console')).toBeVisible();
  await expect.poll(()=>page.evaluate(()=>window.uiMotion.some(e=>e.target.matches('.invisible-console')&&e.name==='ui-reveal'))).toBe(true);
 });

@@ -33,9 +33,10 @@ test('MacBook CLI → backend Apple Vision → live Grok → iPad UI → SQLite'
   const events = [];
   await observeEvents(page, event => events.push(event));
   await open(page);
+  await openConversationOptions(page);
   await page.getByRole('button', { name: 'Text mode', exact: true }).click();
   await page.getByRole('textbox', { name: 'Ask a question' }).fill('Answer the arithmetic question on the captured screen.');
-  await page.getByRole('button', { name: 'Capture', exact: true }).click();
+  await page.getByRole('main').getByRole('button',{name:'Capture',exact:true}).click();
   await expect(page.locator('.answer-content')).toContainText('12', { timeout: 150000 });
   await expect(page.locator('.save-status')).toHaveText('Saved to your library', { timeout: 150000 });
   expect(events.some(e => e.kind === 'ocr' && e.text.includes('7 + 5'))).toBeTruthy();
@@ -54,9 +55,10 @@ test('Image mode sends a real image to Grok without OCR', async ({ page }) => {
   const events = [];
   await observeEvents(page, event => events.push(event));
   await open(page);
+  await openConversationOptions(page);
   await page.getByRole('button', { name: 'Image mode', exact: true }).click();
   await page.getByRole('textbox', { name: 'Ask a question' }).fill('Solve the question in the screenshot.');
-  await page.getByRole('button', { name: 'Capture', exact: true }).click();
+  await page.getByRole('main').getByRole('button',{name:'Capture',exact:true}).click();
   await expect(page.locator('.answer-content')).toContainText('12', { timeout: 150000 });
   await expect(page.locator('.save-status')).toHaveText('Saved to your library', { timeout: 150000 });
   expect(events.some(e => e.kind === 'stage' && e.text.includes('Apple Vision'))).toBeFalsy();
@@ -103,10 +105,11 @@ test('capture all delivers SSE commands to two Rust clients and saves both Grok 
     const seen=new Map();
     await observeEvents(page,(event,id)=>{if(!seen.has(id))seen.set(id,[]);seen.get(id).push(event);});
     await open(page);
+    await openConversationOptions(page);
     await page.getByRole('button',{name:'Text mode',exact:true}).click();
     await page.getByRole('combobox',{name:'Capture client'}).selectOption('all');
     await page.getByRole('textbox',{name:'Ask a question'}).fill('Solve the arithmetic question on the screenshot.');
-    await page.getByRole('button',{name:'Capture',exact:true}).click();
+    await page.getByRole('main').getByRole('button',{name:'Capture',exact:true}).click();
     await expect(page.getByTestId('capture-result')).toHaveCount(2);
     await expect(page.locator('.batch-progress')).toHaveCount(0,{timeout:150000});
     expect(seen.size).toBe(2);
@@ -123,6 +126,7 @@ test('capture all delivers SSE commands to two Rust clients and saves both Grok 
 
 async function startNewChat(page) {
   await page.goto('/chat');
+  await openConversationOptions(page);
   const select=page.getByRole('combobox',{name:'Chat room'});
   await expect(page.getByRole('button',{name:'New chat',exact:true})).toBeVisible();
   const before=await select.inputValue();
@@ -142,15 +146,17 @@ test('chat shows captured images in both modes, exact OCR in text mode, and chec
   await openConversationOptions(page); await page.locator('.chat-options > summary').click();
   await page.getByRole('button',{name:'Text mode',exact:true}).click();
   await page.getByRole('textbox',{name:'Chat message',exact:true}).fill('Answer the arithmetic on the screenshot.');
-  await page.getByRole('button',{name:'Capture',exact:true}).click();
+  await page.getByRole('main').getByRole('button',{name:'Capture',exact:true}).click();
   await expect(page.locator('.chat-image img')).toHaveCount(1);
   await expect(page.locator('.chat-ocr')).toContainText('7 + 5',{timeout:30000});
   await expect(page.locator('.from-ai .answer-content').first()).toContainText('12',{timeout:150000});
+  await openConversationOptions(page);
   await page.getByRole('button',{name:'Image mode',exact:true}).click();
-  await page.getByRole('button',{name:'Capture',exact:true}).click();
+  await page.getByRole('main').getByRole('button',{name:'Capture',exact:true}).click();
   await expect(page.locator('.chat-image img')).toHaveCount(2);
   await expect(page.locator('.from-ai .answer-content').nth(1)).toContainText('12',{timeout:150000});
   await expect(page.locator('.chat-ocr')).toHaveCount(1);
+  await openConversationOptions(page);
   const room=await page.getByRole('combobox',{name:'Chat room'}).inputValue();
   const data=await (await request.get(`/api/rooms/${room}/sync`)).json();
   expect(data.messages.filter(m=>m.image_path).every(m=>m.image_path.startsWith('screenshots/'))).toBeTruthy();

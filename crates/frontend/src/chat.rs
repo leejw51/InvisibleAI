@@ -99,10 +99,38 @@ pub struct Chat {
     /// Replies that solved a captured problem while this chat watched, each
     /// with its place in this visit's streak; they play the celebration once.
     celebrations: std::collections::HashMap<String, usize>,
+    /// After Capture: the screenshot, then the answer, each eased into view
+    /// once as it arrives, so a hurried reader never has to scroll.
+    focus: Option<CaptureFocus>,
+    /// The message to ease into view on the next render, and whether this is
+    /// a settle (the same message, now complete) rather than its first showing.
+    focus_to: Option<(String, bool)>,
+    tween: Option<crate::tween::ScrollTween>,
+    /// The message glowing right now, and the timer that ends the glow. Kept
+    /// in state because Yew rewrites `class` on every render.
+    glow: Option<String>,
+    glow_generation: u64,
+    glow_timer: Option<Timeout>,
     _notifications: Option<crate::api::Notifications>,
+}
+/// Following one capture: the newest message before it, and how far the
+/// capture post and its reply have been shown.
+struct CaptureFocus {
+    after: i64,
+    capture: Stage,
+    reply: Stage,
+}
+#[derive(Clone, Copy, PartialEq, PartialOrd)]
+enum Stage {
+    Waiting,
+    Started,
+    Done,
 }
 pub enum Msg {
     Load,
+    /// A focused message glows for a moment, then the glow ends.
+    Glow(String),
+    GlowEnd(u64),
     Thought(bool),
     CurrentThought(u64, u64, Result<Option<Room>, String>),
     Notification(Value),
@@ -250,6 +278,12 @@ impl Component for Chat {
             bottom: NodeRef::default(),
             scroll: false,
             celebrations: Default::default(),
+            focus: None,
+            focus_to: None,
+            tween: None,
+            glow: None,
+            glow_generation: 0,
+            glow_timer: None,
             _notifications: crate::api::notifications(ctx.link().callback(Msg::Notification)).ok(),
             _poll: Interval::new(2000, move || link.send_message(Msg::Tick)),
         }
@@ -303,7 +337,25 @@ impl Component for Chat {
         }
         true
     }
-    fn rendered(&mut self, _: &Context<Self>, _: bool) {
+    fn rendered(&mut self, ctx: &Context<Self>, _: bool) {
+        if let Some((id, settle)) = self.focus_to.take() {
+            let target = web_sys::window()
+                .and_then(|w| w.document())
+                .and_then(|d| {
+                    d.query_selector(&format!(".chat-message[data-message-id=\"{id}\"]"))
+                        .ok()
+                        .flatten()
+                })
+                .and_then(|e| wasm_bindgen::JsCast::dyn_into::<web_sys::HtmlElement>(e).ok());
+            // A settle leaves a reader who is already looking at it alone.
+            if let Some(target) = target
+                && !(settle && crate::tween::in_view(&target))
+            {
+                self.tween = crate::tween::ease_into_view(&target, FOCUS_MS);
+                ctx.link().send_message(Msg::Glow(id));
+            }
+            self.scroll = false;
+        }
         if self.scroll {
             if let Some(el) = self.bottom.cast::<web_sys::HtmlElement>()
                 && let Some(parent) = el.parent_element()
@@ -318,6 +370,22 @@ impl Component for Chat {
     }
     fn update(&mut self, ctx: &Context<Self>, msg: Msg) -> bool {
         match msg {
+            Msg::Glow(id) => {
+                self.glow = Some(id);
+                self.glow_generation += 1;
+                let generation = self.glow_generation;
+                let link = ctx.link().clone();
+                self.glow_timer = Some(Timeout::new(GLOW_MS, move || {
+                    link.send_message(Msg::GlowEnd(generation))
+                }));
+            }
+            Msg::GlowEnd(generation) => {
+                if generation != self.glow_generation {
+                    return false;
+                }
+                self.glow = None;
+                self.glow_timer = None;
+            }
             Msg::Notification(v) => {
                 if matches!(
                     v["kind"].as_str(),
@@ -767,6 +835,9 @@ impl Component for Chat {
                 if room == self.room && self.stream.is_some() {
                     return false;
                 }
+                self.focus = None;
+                self.tween = None;
+                self.glow = None;
                 self.stream = None;
                 self.creating = false;
                 self.restore_room = true;
@@ -904,6 +975,10 @@ impl Component for Chat {
                         .cache
                         .unbounded_send(message_cache::Write::Message(Box::new(m.clone())));
                     self.merge(m);
+                    if self.focus.is_some() {
+                        // The capture focus decides where the list goes.
+                        self.scroll = false;
+                    }
                 }
             }
             Msg::Prompt(v) => self.prompt = v,
@@ -950,7 +1025,10 @@ impl Component for Chat {
                         self.prompt.clear();
                         self.error.clear();
                     }
-                    Err(e) => self.error = e,
+                    Err(e) => {
+                        self.focus = None;
+                        self.error = e;
+                    }
                 }
             }
             Msg::Send(capture) => {
@@ -973,6 +1051,7 @@ impl Component for Chat {
                     if self.capture.capture_queued || !self.attachments.is_empty() {
                         return false;
                     }
+                    self.begin_focus(capture);
                     self.busy = true;
                     let room = self.room.clone();
                     let version = self.draft_version;
@@ -986,6 +1065,7 @@ impl Component for Chat {
                         Msg::CaptureRequested(room, version, result)
                     });
                 } else {
+                    self.begin_focus(capture);
                     self.retry = Some(req.clone());
                     self.send(ctx, req);
                 }
@@ -1042,7 +1122,8 @@ impl Component for Chat {
                 self.busy = false;
                 match r {
                     Ok(_) => {
-                        self.scroll = true;
+                        self.scroll = self.focus.is_none();
+                        self.advance_focus();
                         self.prompt.clear();
                         self.attachments.clear();
                         self.multi_capture = false;
@@ -1050,7 +1131,10 @@ impl Component for Chat {
                         self.error.clear();
                         ctx.link().send_message(Msg::Tick);
                     }
-                    Err(e) => self.error = e,
+                    Err(e) => {
+                        self.focus = None;
+                        self.error = e;
+                    }
                 }
             }
             Msg::Upload(files) => {
@@ -1235,6 +1319,11 @@ impl Component for Chat {
                 && (m.image_path.is_some()
                     || m.attachments.iter().any(|f| f.mime.starts_with("image/")))
         });
+        // On the Capture page the fundamental action is one press: Capture is
+        // the primary button and Enter on an empty box presses it.
+        let capture_page = ctx.props().thought;
+        let enter_captures =
+            capture_page && self.prompt.trim().is_empty() && self.attachments.is_empty();
         let companion_busy = self.busy
             || self.creating
             || self.checking
@@ -1243,8 +1332,8 @@ impl Component for Chat {
                 .messages
                 .iter()
                 .any(|m| !m.deleted && m.status == "running");
-        html! {<section class={classes!("chat-page",has_photos.then_some("has-photos"),self.messages.iter().any(|m|!m.deleted).then_some("has-conversation"))} {ondragover} {ondrop}><div class="page-intro"><div><div class="eyebrow">{icon("spark")}{t("A LITTLE SPACE FOR YOU")}</div><h2>{if ctx.props().thought {t("Hey, what’s on your mind?")}else{t("Keep the thought going.")}}</h2><p>{if ctx.props().thought {t("Big ideas, tiny questions, or just a little help with your day.")}else{t("Pick up an idea, or start something new.")}}</p></div><button class="secondary-button" disabled={self.creating || self.deleting} onclick={ctx.link().callback(|_|Msg::New)}>{icon("plus")}{t("New chat")}</button><invisible-companion data-state={if companion_busy {"thinking"} else if !self.prompt.trim().is_empty() {"listening"} else {"idle"}}><div class="companion-world" aria-hidden="true"/><div class="companion-halo" aria-hidden="true"/><button type="button" class="companion-touch" aria-label={t("Say hello to your companion")}><img class="companion-figure" src="/assets/everyday-companion.png" alt="" width="1280" height="1280"/></button><span class="companion-spark" aria-hidden="true">{"✦"}</span><span class="companion-state" role="status"><i/>{if companion_busy {t("Working…")} else if !self.prompt.trim().is_empty() {t("I’m all ears")} else {t("Ready when you are")}}</span></invisible-companion></div>
-            if ctx.props().thought {<crate::invisible::Workspace language={ctx.props().language} settings={ctx.props().settings.clone()} client={self.capture_client(ctx).to_owned()} room={self.room.clone()} choose_room={ctx.link().callback(Msg::UseSession)} clients={ctx.props().clients.clone()} saved={ctx.props().ai_saved.clone()} setup={ctx.props().backend_settings.clone()} navigate={ctx.props().navigate.clone()} admin={ctx.props().admin} device_picker={self.device_picker(ctx)}/>}
+        html! {<section class={classes!("chat-page",has_photos.then_some("has-photos"),self.messages.iter().any(|m|!m.deleted).then_some("has-conversation"))} {ondragover} {ondrop}><div class="page-intro"><div><div class="eyebrow">{icon("spark")}{t("A LITTLE SPACE FOR YOU")}</div><h2>{if ctx.props().thought {t("Hey, what’s on your mind?")}else{t("Keep the thought going.")}}</h2><p>{if ctx.props().thought {t("Big ideas, tiny questions, or just a little help with your day.")}else{t("Pick up an idea, or start something new.")}}</p></div><button class="secondary-button" disabled={self.creating || self.deleting} onclick={ctx.link().callback(|_|Msg::New)}>{icon("plus")}{t("New chat")}</button><div class="quick-picks" role="group" aria-label={t("Capture shortcuts")}>{self.device_picker(ctx)}<crate::ai_settings::AiPicker language={ctx.props().language} owner={ctx.props().owner.clone()} settings={ctx.props().settings.clone()} prefix="Quick" compact=true disabled={self.busy||self.deleting} changed={ctx.link().callback(|(p,m)|Msg::AiChosen(p,m))} ai_saved={ctx.props().ai_saved.clone()}/></div><invisible-companion data-state={if companion_busy {"thinking"} else if !self.prompt.trim().is_empty() {"listening"} else {"idle"}}><div class="companion-world" aria-hidden="true"/><div class="companion-halo" aria-hidden="true"/><button type="button" class="companion-touch" aria-label={t("Say hello to your companion")}><img class="companion-figure" src="/assets/everyday-companion.png" alt="" width="1280" height="1280"/></button><span class="companion-spark" aria-hidden="true">{"✦"}</span><span class="companion-state" role="status"><i/>{if companion_busy {t("Working…")} else if !self.prompt.trim().is_empty() {t("I’m all ears")} else {t("Ready when you are")}}</span></invisible-companion></div>
+            if ctx.props().thought {<crate::invisible::Workspace language={ctx.props().language} settings={ctx.props().settings.clone()} client={self.capture_client(ctx).to_owned()} room={self.room.clone()} choose_room={ctx.link().callback(Msg::UseSession)} clients={ctx.props().clients.clone()} saved={ctx.props().ai_saved.clone()} setup={ctx.props().backend_settings.clone()} navigate={ctx.props().navigate.clone()} admin={ctx.props().admin}/>}
             if self.capture.active{<div class="live-capture-banner" role="status"><span><i/>{t("Continuous capture is running")}</span><a class="text-button" href="/autonomous">{t("Manage in Autonomous AI")}{icon("arrow")}</a></div>}
             if !ctx.props().settings.demo && !ai_ready {
                 <aside class="chat-setup" aria-label={t("AI setup")}><strong>{t("Choose an AI to get started.")}</strong>
@@ -1265,7 +1354,6 @@ impl Component for Chat {
                 <p class="small-muted chat-context-hint" id="chat-context-hint">{t("Anything you keep here is indexed and organized into your Wiki, and later questions in this chat use it as context.")}</p>
                 if self.attachments.iter().any(|f|attachment_kind(f)=="Metadata only") {<p class="small-muted chat-context-hint">{t("Files marked Metadata only include their name, size, and file signature; their contents cannot be decoded.")}</p>}
                 <div class="chat-extra-actions"><label class="secondary-button upload-label"><input type="file" multiple=true disabled={self.deleting || self.busy || self.attachments.len() >= MAX_CHAT_ATTACHMENTS} aria-label={t("Attach to chat")} aria-describedby="chat-context-hint" title={t("Any file · up to 8 files, 25 MB each")} onchange={ctx.link().batch_callback(|e:Event|{let input=e.target_unchecked_into::<HtmlInputElement>();let files=input.files().map(|files|(0..files.length()).filter_map(|i|files.get(i)).collect::<Vec<_>>()).unwrap_or_default();input.set_value("");Some(Msg::Upload(files))})}/>{icon("plus")}{t("Add any file")}</label><button class="secondary-button" title={t("Save without a chat reply; your selected AI may tidy and tag the note")} disabled={self.room.is_empty()||self.busy||self.deleting||(self.prompt.trim().is_empty()&&self.attachments.is_empty())} onclick={ctx.link().callback(|_|Msg::SaveMemo)}>{icon("file")}{t("Save memo")}</button><button class="secondary-button" aria-pressed={self.multi_capture.to_string()} disabled={self.room.is_empty()||self.busy||self.deleting||self.capture.active||!self.capture_ready(ctx)||self.attachments.len()>=MAX_CHAT_ATTACHMENTS} onclick={ctx.link().callback(|_|Msg::MultiCapture)}>{icon("screen")}{t("Multi Capture")}</button></div>
-                if !ctx.props().thought {{self.device_picker(ctx)}}
                 </div></details>
             }
                 <div class="chat-dock">
@@ -1286,18 +1374,74 @@ impl Component for Chat {
                 })}</div>
                 if self.multi_capture{<p class="capture-draft-status" role="status">{t("Keep clicking Multi Capture to add screenshots. Send message for one response.")}<button class="text-button" disabled={self.busy} onclick={ctx.link().callback(|_|Msg::CancelMulti)}>{t("Cancel")}</button></p>}
                 if !ctx.props().settings.demo && available.is_empty() {<p class="capture-action-hint capture-setup-hint" id="capture-action-hint" aria-label={t("Capture setup")}>{icon("screen")}{t("Connect a computer to capture its screen.")}<button class="text-button" onclick={ctx.props().navigate.reform(|_|"devices".into())}>{t("Connect a device")}{icon("arrow")}</button></p>}
-                else {<p class="capture-action-hint" id="capture-action-hint">{icon("screen")}{t("Capture saves a screenshot to this chat.")}</p>}
+                else {<p class="capture-action-hint" id="capture-action-hint">{icon("screen")}{t("Capture saves a screenshot to this chat.")}if capture_page {{" "}{t("Enter on an empty message captures too.")}}</p>}
                 if !ai_ready && !ctx.props().settings.demo {<p class="small-muted compose-keep-hint" role="status">{icon("file")}{t("No AI provider is enabled. Enter keeps the thought without asking AI.")}</p>}
                 <div class="chat-compose-actions" role="group" aria-label={t("Message toolbar")}>
-                    <button class="secondary-button" aria-label={t("Capture")} aria-describedby="capture-action-hint" disabled={self.room.is_empty()||self.busy||self.deleting||self.multi_capture||!ai_ready||!self.capture_ready(ctx)||(self.capture.active&&(self.capture.capture_queued||!self.attachments.is_empty()))} onclick={ctx.link().callback(|_|Msg::Send(true))}>{icon("screen")}<span class="dock-label">{t("Capture")}</span></button>
-                    <textarea aria-label={t("Chat message")} onkeydown={ctx.link().batch_callback(|e:KeyboardEvent|if e.key()=="Enter"&&!e.shift_key()&&!e.is_composing(){e.prevent_default();Some(Msg::Send(false))}else{None})} disabled={self.room.is_empty() || self.deleting || (self.busy && self.retry.is_some())} placeholder={t("Type, paste, or drop anything…")} value={self.prompt.clone()} {onpaste} oninput={ctx.link().callback(|e:InputEvent|Msg::Prompt(e.target_unchecked_into::<HtmlTextAreaElement>().value()))}/>
+                    <button class={classes!(if capture_page {"primary-button"} else {"secondary-button"},"dock-capture")} aria-label={t("Capture")} aria-describedby="capture-action-hint" disabled={self.room.is_empty()||self.busy||self.deleting||self.multi_capture||!ai_ready||!self.capture_ready(ctx)||(self.capture.active&&(self.capture.capture_queued||!self.attachments.is_empty()))} onclick={ctx.link().callback(|_|Msg::Send(true))}>{icon("screen")}<span class="dock-label">{t("Capture")}</span></button>
+                    <textarea aria-label={t("Chat message")} onkeydown={ctx.link().batch_callback(move |e:KeyboardEvent|if e.key()=="Enter"&&!e.shift_key()&&!e.is_composing(){e.prevent_default();Some(Msg::Send(enter_captures))}else{None})} disabled={self.room.is_empty() || self.deleting || (self.busy && self.retry.is_some())} placeholder={t("Type, paste, or drop anything…")} value={self.prompt.clone()} {onpaste} oninput={ctx.link().callback(|e:InputEvent|Msg::Prompt(e.target_unchecked_into::<HtmlTextAreaElement>().value()))}/>
 
-                    <button class="primary-button" aria-label={if ai_ready {t("Send message")} else {t("Keep in chat")}} disabled={self.room.is_empty()||self.busy||self.deleting||(self.prompt.trim().is_empty()&&self.attachments.is_empty())} onclick={ctx.link().callback(|_|Msg::Send(false))}><span class="dock-label">{if ai_ready {t("Send message")} else {t("Keep in chat")}}</span>{icon("arrow")}</button>
+                    <button class={classes!(if capture_page {"secondary-button"} else {"primary-button"},"dock-send")} aria-label={if ai_ready {t("Send message")} else {t("Keep in chat")}} disabled={self.room.is_empty()||self.busy||self.deleting||(self.prompt.trim().is_empty()&&self.attachments.is_empty())} onclick={ctx.link().callback(|_|Msg::Send(false))}><span class="dock-label">{if ai_ready {t("Send message")} else {t("Keep in chat")}}</span>{icon("arrow")}</button>
                 </div></div>
         </section>}
     }
 }
 impl Chat {
+    /// A capture request is on its way: follow it from the newest message on.
+    /// A typed message is followed the usual way, from the bottom.
+    fn begin_focus(&mut self, capture: bool) {
+        self.focus = capture.then(|| CaptureFocus {
+            after: self.messages.iter().map(|m| m.sequence).max().unwrap_or(0),
+            capture: Stage::Waiting,
+            reply: Stage::Waiting,
+        });
+    }
+    /// Ease the capture post into view when it appears and again once its
+    /// screenshot is in, then the reply when its first words arrive and again
+    /// when it is complete. An error counts as the final state.
+    fn advance_focus(&mut self) {
+        let Some(focus) = &mut self.focus else {
+            return;
+        };
+        let Some(post) = self
+            .messages
+            .iter()
+            .find(|m| m.role == "user" && m.sequence > focus.after)
+        else {
+            return;
+        };
+        if post.deleted {
+            // An unchanged screenshot was discarded: nothing to show.
+            self.focus = None;
+            return;
+        }
+        let post_stage = if post.image_path.is_some() || post.status == "error" {
+            Stage::Done
+        } else {
+            Stage::Started
+        };
+        let reply = self
+            .messages
+            .iter()
+            .find(|m| !m.deleted && m.role != "user" && m.memo_id == post.memo_id);
+        let reply_stage = match reply {
+            Some(r) if r.status != "running" => Stage::Done,
+            Some(r) if !r.text.is_empty() => Stage::Started,
+            _ => Stage::Waiting,
+        };
+        if reply_stage > focus.reply {
+            let settle = focus.reply == Stage::Started;
+            focus.reply = reply_stage;
+            focus.capture = Stage::Done;
+            self.focus_to = reply.map(|r| (r.messageid.clone(), settle));
+        } else if post_stage > focus.capture {
+            let settle = focus.capture == Stage::Started;
+            focus.capture = post_stage;
+            self.focus_to = Some((post.messageid.clone(), settle));
+        }
+        if focus.reply == Stage::Done {
+            self.focus = None;
+        }
+    }
     fn reconcile_connection_error(&mut self, connection: ConnectionState) {
         if connection == ConnectionState::Connected && crate::api::is_connection_error(&self.error)
         {
@@ -1380,24 +1524,24 @@ impl Chat {
                 <button class="text-button" aria-label={t("Copy all text")} disabled={self.messages.iter().all(|m|m.deleted)} onclick={ctx.props().copy.reform({let text=self.messages.iter().filter(|m|!m.deleted).map(message_text).filter(|s|!s.is_empty()).collect::<Vec<_>>().join("\n\n");move |_|text.clone()})}>{icon("copy")}{t("Copy all")}</button>
         </div>}
     }
+    /// The capture computer, always on screen beside the companion: one tap
+    /// to change it, kept on the account so the next login starts with it.
     fn device_picker(&self, ctx: &Context<Self>) -> Html {
         let p = ctx.props();
-        let current = p
-            .clients
-            .iter()
-            .find(|c| c.id == self.capture_client(ctx) && c.can_capture);
-        html! {<div class="active-capture-device">
-            <label for="active-capture-device">{icon("screen")}{t("Active capture device")}</label>
-            <select id="active-capture-device" aria-label={t("Active capture device")} value={self.capture_client(ctx).to_owned()} disabled={!self.capture_loaded||!self.capture.client_ids.is_empty()}
+        let selected = self.capture_client(ctx).to_owned();
+        let current = p.clients.iter().find(|c| c.id == selected && c.can_capture);
+        let unavailable = !selected.is_empty() && !current.is_some_and(|c| c.online);
+        let locked = !self.capture.client_ids.is_empty();
+        html! {<div class={classes!("quick-pick-group",unavailable.then_some("is-offline"))}><label class="quick-pick quick-device" for="active-capture-device" title={t(if locked {"This session keeps the same capture computer."} else {"Choose one capture computer for this session."})}>{icon("screen")}<span>{t("Device")}</span>
+            <select id="active-capture-device" aria-label={t("Active capture device")} value={selected.clone()} disabled={!self.capture_loaded||locked}
                 onchange={p.choose_device.reform(|e:Event|e.target_unchecked_into::<HtmlSelectElement>().value())}>
-                if self.capture_client(ctx).is_empty() {<option value="" selected=true disabled=true>{if p.settings.demo {t("Demo capture")}else{t("Choose a device")}}</option>}
-                if !self.capture_client(ctx).is_empty() && current.is_none() {<option value={self.capture_client(ctx).to_owned()} selected=true disabled=true>{t("Saved device unavailable")}</option>}
-                {for p.clients.iter().filter(|c|c.can_capture).map(|c|html!{<option value={c.id.clone()} selected={c.id==self.capture_client(ctx)} disabled={!c.online}>
-                    {format!("{}{} · {}",c.name,if c.id==p.devices.default {format!(" ({})",t("Default"))}else{String::new()},t(if c.online {"Connected"}else{"Offline"}))}
+                if selected.is_empty() {<option value="" selected=true disabled=true>{if p.settings.demo {t("Demo capture")}else{t("Choose a device")}}</option>}
+                if !selected.is_empty() && current.is_none() {<option value={selected.clone()} selected=true disabled=true>{t("Saved device unavailable")}</option>}
+                {for p.clients.iter().filter(|c|c.can_capture).map(|c|html!{<option value={c.id.clone()} selected={c.id==selected} disabled={!c.online}>
+                    {if c.online {c.name.clone()} else {format!("{} · {}",c.name,t("Offline"))}}
                 </option>})}
-            </select>
-            <span class="small-muted">{t(if self.capture.client_ids.is_empty() {"Choose one capture computer for this session."} else {"This session keeps the same capture computer."})}</span>
-            if !self.capture_client(ctx).is_empty() && !current.is_some_and(|c|c.online) {<p class="device-unavailable" role="status">{t("Selected device is offline or unavailable. Reconnect it or choose another device.")}</p>}
+            </select></label>
+            if unavailable {<p class="device-unavailable" role="status">{t("Selected device is offline or unavailable. Reconnect it or choose another device.")}</p>}
         </div>}
     }
     /// The video upload bar: checking reads the video on this device to
@@ -1455,6 +1599,7 @@ impl Chat {
             self.messages.push(m);
         }
         self.messages.sort_by_key(|m| m.sequence);
+        self.advance_focus();
     }
     fn load_rooms(&mut self, ctx: &Context<Self>) {
         self.rooms_version += 1;
@@ -1531,7 +1676,9 @@ impl Chat {
         let stop = m.memo_id.clone();
         let date = js_sys::Date::new(&wasm_bindgen::JsValue::from_str(&m.created_at));
         let time = format!("{:02}:{:02}", date.get_hours(), date.get_minutes());
-        html! {<article class={classes!("chat-message",if user{"from-user"}else{"from-ai"})} data-message-id={m.messageid.clone()} data-sync-id={m.messagesyncid.to_string()} data-celebrate={celebrate.clone()} data-celebrate-title={celebrate.is_some().then(||t("Solved it!"))} data-celebrate-streak={celebrate.is_some().then(||t("Streak"))} data-celebrate-detail={celebrate.and(solved.as_ref()).map(|s|format!("{} = {}",s.problem,s.result))}><div class="chat-message-meta"><strong>{if user{t("You")}else if failed_without_reply{t(if m.stage.starts_with("Capturing "){"Capture failed"}else{"Request failed"})}else if m.memo_kind=="note"{t("Tidied note")}else{"Invisible AI".into()}}</strong><span>{if failed_without_reply {t("No AI response")} else if m.provider=="memo" || (user && m.memo_kind=="note") {t("Kept as a note")} else if m.provider=="remote" {t("Mac action")} else if user {m.client_name.clone().unwrap_or_default()} else {format!("{} · {} · {}",t(if matches!(m.provider.as_str(),"apple"|"mlx") {"Local AI"} else {"Cloud LLM"}),m.provider,m.model)}}</span></div>
+        // Keyed so a message keeps its DOM node when the list grows: the focus
+        // glow, image state and enter motion all belong to that one message.
+        html! {<article key={m.messageid.clone()} class={classes!("chat-message",if user{"from-user"}else{"from-ai"},self.glow.as_deref().is_some_and(|g|g==m.messageid).then_some("is-focused"))} data-message-id={m.messageid.clone()} data-sync-id={m.messagesyncid.to_string()} data-celebrate={celebrate.clone()} data-celebrate-title={celebrate.is_some().then(||t("Solved it!"))} data-celebrate-streak={celebrate.is_some().then(||t("Streak"))} data-celebrate-detail={celebrate.and(solved.as_ref()).map(|s|format!("{} = {}",s.problem,s.result))}><div class="chat-message-meta"><strong>{if user{t("You")}else if failed_without_reply{t(if m.stage.starts_with("Capturing "){"Capture failed"}else{"Request failed"})}else if m.memo_kind=="note"{t("Tidied note")}else{"Invisible AI".into()}}</strong><span>{if failed_without_reply {t("No AI response")} else if m.provider=="memo" || (user && m.memo_kind=="note") {t("Kept as a note")} else if m.provider=="remote" {t("Mac action")} else if user {m.client_name.clone().unwrap_or_default()} else {format!("{} · {} · {}",t(if matches!(m.provider.as_str(),"apple"|"mlx") {"Local AI"} else {"Cloud LLM"}),m.provider,m.model)}}</span></div>
             if self.editing.as_ref().is_some_and(|e|e.messageid==m.messageid){<div class="chat-edit"><textarea aria-label={t("Edit message")} value={self.edit_text.clone()} oninput={ctx.link().callback(|e:InputEvent|Msg::EditText(e.target_unchecked_into::<HtmlTextAreaElement>().value()))}/><button class="primary-button" onclick={ctx.link().callback(|_|Msg::SaveEdit)}>{t("Save message")}</button><button class="text-button" onclick={ctx.link().callback(|_|Msg::CancelEdit)}>{t("Cancel")}</button></div>}
             if self.removing_message.as_ref().is_some_and(|e|e.messageid==m.messageid){<div class="chat-edit"><span>{if m.role=="user"{t("Remove this message, its response, and generated results on all your devices?")}else{t("Remove this message and its generated results on all your devices?")}}</span><button class="danger-button" onclick={ctx.link().callback(|_|Msg::ConfirmMessage)}>{t("Confirm remove message")}</button><button class="text-button" onclick={ctx.link().callback(|_|Msg::CancelEdit)}>{t("Cancel")}</button></div>}
             if m.image_path.is_some(){<figure class="chat-image"><a href={format!("/api/memos/{}/image",m.memo_id)} target="_blank" rel="noopener" aria-label={t("Open full screenshot")}><img decoding="async" loading="lazy" src={format!("/api/memos/{}/thumbnail",m.memo_id)} alt={t("Captured screen")}/></a><figcaption>{if m.input_mode==InputMode::Text{t("Screenshot · Text mode")}else{t("Screenshot · Image mode")}}</figcaption></figure>}
@@ -1758,6 +1905,10 @@ fn copyable_markdown(text: &str, copy: Callback<String>) -> Html {
     })}>{output}</div>}
 }
 
+/// Fast enough for a hurried check, long enough to follow where it went.
+const FOCUS_MS: f64 = 560.0;
+/// How long a focused message glows: the scroll, then a soft settle.
+const GLOW_MS: u32 = 1500;
 pub(crate) fn guid() -> String {
     let mut b = [0u8; 16];
     web_sys::window()

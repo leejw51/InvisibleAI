@@ -23,8 +23,8 @@ start_server() {
   local build running_build bind="${BIND_ADDR:-0.0.0.0:3000}"
   # A network listener needs wallet sign-in or a token; otherwise stay on this Mac.
   if [[ "$bind" != 127.* && "$bind" != localhost:* && "$bind" != '[::1]:'* && -z "${CWBBOT_ADMIN:-}" && -z "${APP_TOKEN:-}" ]]; then
-    echo "Remote access needs CWBBOT_ADMIN or APP_TOKEN; listening on 127.0.0.1:3000 only." >&2
-    bind=127.0.0.1:3000
+    bind="127.0.0.1:${bind##*:}"
+    echo "Remote access needs CWBBOT_ADMIN or APP_TOKEN; listening on $bind only." >&2
   fi
   # The listen address is part of the build marker so a bind change restarts.
   build="$(cksum < "$ROOT/target/debug/causewaybay-server") $bind"
@@ -142,10 +142,12 @@ stop_one() {
 }
 # The backend stops its on-device workers itself; this sweeps any that an
 # earlier build or a hard kill left behind, matched by this repository's path
-# so another checkout's workers are untouched.
+# so another checkout's workers are untouched. Servers are never swept by
+# pattern: only the one this config directory's PID file names is ours, and a
+# pattern kill would also stop a developer's live backend or a test fixture.
 stop_workers() {
   local pattern found
-  for pattern in "$ROOT/bin/invisible-mlx" "$ROOT/bin/invisible-apple-ai" "$ROOT/target/debug/causewaybay-server" "$ROOT/target/release/causewaybay-server"; do
+  for pattern in "$ROOT/bin/invisible-mlx" "$ROOT/bin/invisible-apple-ai"; do
     found="$(pgrep -f -- "$pattern" || true)"
     [[ -z "$found" ]] && continue
     pkill -TERM -f -- "$pattern" 2>/dev/null || true

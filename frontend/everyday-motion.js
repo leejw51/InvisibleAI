@@ -4,6 +4,7 @@ import { animate } from 'motion';
 import './companion.js';
 import './waiting-companion.js';
 import './celebrate.js';
+import './capture-shine.js';
 
 const reduced = matchMedia('(prefers-reduced-motion: reduce)');
 const seen = new WeakSet();

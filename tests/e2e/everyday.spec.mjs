@@ -1,5 +1,6 @@
 import {test, expect} from '@playwright/test';
 import {isolatedBackend} from './invisible-fixture.mjs';
+import {openConversationOptions} from './workspace-controls.mjs';
 
 isolatedBackend(test, 3188);
 test.beforeEach(async ({request}) => {
@@ -26,6 +27,7 @@ test('everyday chat starts simple and keeps the answer above the phone composer'
   expect(bounds.top).toBeGreaterThanOrEqual(0);
   expect(bounds.bottom).toBeLessThanOrEqual(bounds.dock+2);
   await page.locator('.conversation-options > summary').click();
+  await openConversationOptions(page);
   await expect(page.getByRole('button',{name:'Multi Capture',exact:true})).toBeVisible();
   await page.screenshot({path:`test-results/everyday-${info.project.name}.png`,fullPage:true});
   expect(errors).toEqual([]);
@@ -191,8 +193,8 @@ test('three core actions keep text and files without a manual, and failed saves 
   await page.goto('/');
   if(await page.locator('.mobile-toggle').isVisible()) await page.locator('.mobile-toggle').click();
   const nav=page.getByRole('navigation',{name:'Main navigation',exact:true});
-  await expect(nav.getByRole('button')).toHaveCount(3);
-  await expect(nav.getByRole('button')).toHaveText(['Capture','Save anything','Ask anything']);
+  await expect(nav.getByRole('button')).toHaveCount(4);
+  await expect(nav.getByRole('button')).toHaveText(['Capture','Save anything','Ask anything','Wallet']);
   await nav.getByRole('button',{name:'Save anything',exact:true}).click();
   await expect(page).toHaveURL(/\/save$/);
   await expect(page.getByRole('button',{name:'Save it',exact:true})).toBeDisabled();
@@ -230,7 +232,7 @@ test('three core actions keep text and files without a manual, and failed saves 
   await expect(page).toHaveURL(/\/chat(\/|$)/);
   if(await page.locator('.mobile-toggle').isVisible()) await page.locator('.mobile-toggle').click();
   await nav.getByRole('button',{name:'Capture',exact:true}).click();
-  await expect(page.locator('.think-hero')).toBeVisible();
+  await expect(page.getByRole('main').getByRole('button',{name:'Capture',exact:true})).toBeVisible();
 });
 
 test('on-device 9B and 27B choices persist to the account and a fresh browser', async ({page,browser,request}) => {

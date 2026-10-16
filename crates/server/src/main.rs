@@ -155,24 +155,38 @@ async fn run(args: Serve) -> Result<()> {
     let addresses = startup::print_urls(listener.local_addr()?).await;
     let _ = state.addresses.set(addresses);
     let runtime = state.local_runtime.clone();
-    axum::serve(listener, app(state, assets))
-        .with_graceful_shutdown(async {
-            // Ctrl-C in a terminal, SIGTERM from `make stop` or launchd: both
-            // end the server cleanly so the on-device workers stop with it.
-            let terminate = async {
-                match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
-                    Ok(mut signal) => {
-                        signal.recv().await;
-                    }
-                    Err(_) => std::future::pending::<()>().await,
+    // Ctrl-C in a terminal, SIGTERM from `make stop` or launchd: both
+    // end the server cleanly so the on-device workers stop with it.
+    let (stopping, mut stop_serving) = tokio::sync::watch::channel(false);
+    tokio::spawn(async move {
+        let terminate = async {
+            match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+                Ok(mut signal) => {
+                    signal.recv().await;
                 }
-            };
-            tokio::select! {
-                _ = tokio::signal::ctrl_c() => {}
-                _ = terminate => {}
+                Err(_) => std::future::pending::<()>().await,
             }
-        })
-        .await?;
+        };
+        tokio::select! {
+            _ = tokio::signal::ctrl_c() => {}
+            _ = terminate => {}
+        }
+        let _ = stopping.send(true);
+    });
+    let mut grace = stop_serving.clone();
+    let serving = axum::serve(listener, app(state, assets)).with_graceful_shutdown(async move {
+        let _ = stop_serving.changed().await;
+    });
+    // A graceful stop waits for open connections, and a Mac client's websocket
+    // or a browser's event stream never ends on its own: give them a moment
+    // to finish in-flight requests, then stop regardless.
+    tokio::select! {
+        served = serving => served?,
+        _ = async {
+            let _ = grace.changed().await;
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+        } => {}
+    }
     runtime.mlx.shutdown();
     println!("Stopped; the on-device worker was shut down.");
     Ok(())

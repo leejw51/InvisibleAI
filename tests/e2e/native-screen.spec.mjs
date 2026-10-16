@@ -7,6 +7,7 @@ import http from 'node:http';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import {openConversationOptions} from './workspace-controls.mjs';
 
 const baseURL = 'http://127.0.0.1:3174';
 test.use({baseURL});
@@ -74,6 +75,7 @@ test.afterEach(async ({}, info) => {
 test('Capture button reads the actual Mac display, reports an invalid display, and recovers', async ({page,request}) => {
   await page.goto('/');
   await page.getByRole('combobox',{name:'Active capture device'}).selectOption('native-screen');
+  await openConversationOptions(page);
   await page.getByRole('button',{name:'Text mode',exact:true}).click();
   const capture = page.locator('.chat-dock').getByRole('button',{name:'Capture',exact:true});
   await showTestScreen();

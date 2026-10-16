@@ -1,12 +1,30 @@
 import { observeEvents } from './events.mjs';
 import { test, expect } from '@playwright/test';
-import { spawn } from 'node:child_process';
+import { spawn as spawnChild } from 'node:child_process';
 import { once } from 'node:events';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
 import net from 'node:net';
+
+// A test that times out skips its finally block, so every process this file
+// starts is also stopped after each test; a stray server would hold the port
+// for the next run.
+const children = new Set();
+function spawn(...args) { const child = spawnChild(...args); children.add(child); return child; }
+test.afterEach(async () => {
+  for (const child of children) {
+    if (child.exitCode === null && child.signalCode === null) {
+      const exited = once(child, 'exit');
+      child.kill('SIGTERM');
+      await Promise.race([exited, new Promise(resolve => setTimeout(resolve, 3000))]);
+      if (child.exitCode === null && child.signalCode === null) { child.kill('SIGKILL'); await exited; }
+    }
+  }
+  children.clear();
+});
+
 
 test('browser replays SSE deltas after a severed HTTP stream without duplicating an answer', async ({ page, request }) => {
   let interrupted=false, replayed=false, memoId, requests=0;
@@ -43,7 +61,7 @@ test('browser replays SSE deltas after a severed HTTP stream without duplicating
     page.on('websocket', ws=>ws.on('framesent', frame=>{const v=JSON.parse(frame.payload);if(v.path==='/api/think')requests++;}));
     await observeEvents(page,(_,id)=>{memoId=id;});
     await page.goto('http://127.0.0.1:3117/overview');
-    await page.getByRole('button',{name:'Capture',exact:true}).click();
+    await page.getByRole('main').getByRole('button',{name:'Capture',exact:true}).click();
     await expect(page.locator('.save-status')).toHaveText('Saved to your library');
     expect(interrupted).toBeTruthy();expect(replayed).toBeTruthy();expect(requests).toBe(1);
     const memo=await(await request.get(`/api/memos/${memoId}`)).json();

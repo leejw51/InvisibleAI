@@ -449,7 +449,10 @@ make frontend
 npm run test:e2e
 cargo test -p causewaybay-server --test semantic -- --ignored --nocapture
 RUN_LIVE_AI=1 npm run test:e2e
+make test-lifecycle   # `make start2`/`stop` round trip; rebuilds, so it runs alone
 ```
+
+Several e2e runs can share one checkout: `PW_PORT=3101 PW_OUTPUT=/tmp/pw-3101 npm run test:e2e -- tests/e2e/chat.spec.mjs` gives a run its own fixture server and results folder. Never rebuild (`make frontend`, `cargo build`) while a run is going; every fixture server serves the same `dist/` and binary.
 
 The live provider used for this refactor was Grok; OpenAI, Anthropic and Gemini search adapters were implemented against their official request/response contracts but were not live-tested. Release packaging and capture of the actual desktop were verified in the baseline below; the refactor's capture tests use known fixture images through the real Rust client and real Apple Vision. No production account data was migrated or erased during these tests.
 

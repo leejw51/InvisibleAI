@@ -7,6 +7,7 @@ pub mod artifacts;
 pub mod assistance;
 pub mod auth;
 pub mod capture;
+pub mod capture_choices;
 pub mod chat;
 pub mod cli_ai;
 pub mod client_package;
@@ -302,6 +303,11 @@ impl AppState {
         })
     }
     pub fn settings(&self) -> Result<Settings> {
+        // Snapshot the index status first: a guard created inside the struct
+        // literal below would live across the database reads that follow it,
+        // and a wiki request holding the database while it asks the same
+        // status would deadlock with this one.
+        let semantic_status = self.semantic.status.lock().unwrap().clone();
         let mut providers = vec![];
         for (id, name, model, _) in providers::PROVIDERS {
             providers.push(Provider {
@@ -332,11 +338,12 @@ impl AppState {
                 .unwrap_or(1),
             // Drafts belong to a browser wallet, never to shared server defaults.
             draft: String::new(),
-            semantic_status: self.semantic.status.lock().unwrap().clone(),
+            semantic_status,
             demo: self.demo,
             local_ai: self.local_ai()?,
             user_ai: ai_preferences::read(self)?,
             user_models: ai_preferences::models(self)?,
+            user_capture: capture_choices::read(self)?,
             default_ai: ai_preferences::default_policy(self)?,
         })
     }

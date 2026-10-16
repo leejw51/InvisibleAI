@@ -56,6 +56,10 @@ pub fn api_routes() -> Router<Arc<AppState>> {
             get(ai_preferences::get).patch(ai_preferences::update),
         )
         .route(
+            "/capture/choices",
+            get(capture_choices::get).patch(capture_choices::update),
+        )
+        .route(
             "/ai/models",
             axum::routing::patch(ai_preferences::update_model),
         )

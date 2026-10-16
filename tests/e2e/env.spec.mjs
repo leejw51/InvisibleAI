@@ -1,10 +1,28 @@
 import {openConversationOptions} from './workspace-controls.mjs';
 import { test, expect } from '@playwright/test';
-import { spawn } from 'node:child_process';
+import { spawn as spawnChild } from 'node:child_process';
 import { once } from 'node:events';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
+// A test that times out skips its finally block, so every process this file
+// starts is also stopped after each test; a stray server would hold the port
+// for the next run.
+const children = new Set();
+function spawn(...args) { const child = spawnChild(...args); children.add(child); return child; }
+test.afterEach(async () => {
+  for (const child of children) {
+    if (child.exitCode === null && child.signalCode === null) {
+      const exited = once(child, 'exit');
+      child.kill('SIGTERM');
+      await Promise.race([exited, new Promise(resolve => setTimeout(resolve, 3000))]);
+      if (child.exitCode === null && child.signalCode === null) { child.kill('SIGKILL'); await exited; }
+    }
+  }
+  children.clear();
+});
+
 
 const binary = path.resolve('target/debug/causewaybay-server');
 const assets = path.resolve('dist');
@@ -56,7 +74,7 @@ test('backend loads working-directory .env; browser needs no key setup', async (
     await openConversationOptions(page); await page.locator('.chat-options > summary').click();
     await expect(page.getByRole('combobox', { name: 'Chat AI provider', exact: true })).toHaveValue('grok');
     await expect(page.getByLabel('Capture setup')).toContainText('Connect a computer');
-    await expect(page.getByRole('button', {name:'Capture', exact:true})).toBeDisabled();
+    await expect(page.getByRole('main').getByRole('button',{name:'Capture',exact:true})).toBeDisabled();
     await page.getByRole('button', {name:'Connect a device', exact:true}).click();
     await expect(page.getByLabel('Capture client command')).toHaveText(`./bin/client ${base}`);
     await page.getByRole('link', {name:'Return to New thought'}).click();

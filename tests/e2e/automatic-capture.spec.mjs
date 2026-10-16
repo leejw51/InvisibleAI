@@ -51,17 +51,19 @@ for (const scenario of cases) {
       cli=spawn('./target/debug/rust-cli',['client','--backend','http://127.0.0.1:3100','--name',scenario.name,'--client-id',id,'--fixture-image',screenshot],{env:{...process.env,APP_TOKEN:'',CAUSEWAYBAY_CLIENT_CONFIG_DIR:dir},stdio:'ignore'});
       await expect.poll(async()=> (await (await request.get('/api/clients')).json()).some(c=>c.id===id&&c.online)).toBe(true);
       await page.goto('/');
+      await openConversationOptions(page);
       await expect(page.getByRole('combobox',{name:'Chat room'})).not.toHaveValue('');
       // Isolate the captured task from preceding cases in the fixed thought room.
       await page.getByRole('button',{name:'New chat',exact:true}).click();
       await expect(page).toHaveURL(/\/chat$/);
       await expect(page.getByRole('textbox',{name:'Chat message',exact:true})).toHaveValue('');
+      await openConversationOptions(page);
       await expect(page.getByRole('button',{name:'Image mode',exact:true})).toHaveAttribute('aria-pressed','true');
       await page.getByRole('combobox',{name:'Active capture device'}).selectOption(id);
       await openConversationOptions(page); await page.locator('.chat-options > summary').click();
       await page.getByLabel('Chat AI provider').selectOption('grok');
       await openConversationOptions(page); await page.locator('.chat-options > summary').click();
-      await page.getByRole('button',{name:'Capture',exact:true}).click();
+      await page.getByRole('main').getByRole('button',{name:'Capture',exact:true}).click();
       await expect.poll(()=>calls.length).toBe(1);
       expect(calls[0]).toMatchObject({prompt:'',capture:true,input_mode:'image',client_id:id,agent:false});
       const room=calls[0].room_id;
@@ -105,6 +107,7 @@ test('follow-up photos and comments use the original images from earlier message
   const calls=[];
   page.on('websocket',ws=>ws.on('framesent',frame=>{const v=JSON.parse(String(frame.payload));if(v.path==='/api/think')calls.push(v.body);}));
   await page.goto('/');
+  await openConversationOptions(page);
   await expect(page.getByRole('combobox',{name:'Chat room'})).not.toHaveValue('');
   await page.getByRole('button',{name:'New chat',exact:true}).click();
   await openConversationOptions(page); await page.locator('.chat-options > summary').click();

@@ -1,4 +1,4 @@
-import {expectProcessingMode, openProcessingSettings, openWorkspace, openConversationOptions} from './workspace-controls.mjs';
+import {expectProcessingMode, openProcessingSettings, openWorkspace, openConversationOptions, openActivity, openNav} from './workspace-controls.mjs';
 import {isolatedBackend} from './invisible-fixture.mjs';
 import {test,expect} from '@playwright/test';
 import {randomUUID} from 'node:crypto';
@@ -86,27 +86,35 @@ test('Capture, TextEdit Auto and processing location have separate actions and c
   await expect(auto).toHaveAccessibleName('Start autonomous AI');
   await expect(auto).toHaveAttribute('aria-pressed','false');
   await expect(page.locator('.notes-target')).toHaveText('TextEdit on My MacBook');
+  await openConversationOptions(page);
   await expect(page.getByRole('combobox',{name:'Invisible AI session'})).toHaveValue(await page.getByLabel('Chat room',{exact:true}).inputValue());
   await expect(page.getByText('This session is stopped. Start it to resume replies in TextEdit.')).toBeVisible();
-  const capture=page.getByRole('button',{name:'Capture',exact:true});
+  const capture=page.getByRole('main').getByRole('button',{name:'Capture',exact:true});
   await expect(capture).toHaveCount(1);
+  await openConversationOptions(page);
   await expect(page.getByRole('button',{name:'Image mode',exact:true})).toBeDisabled();
+  await openConversationOptions(page);
   await expect(page.getByRole('button',{name:'Text mode',exact:true})).toHaveAttribute('aria-pressed','true');
   await expect(page.locator('#local-ocr-hint')).toHaveText('Local AI reads captured text with OCR.');
-  await expect(capture).toHaveAccessibleDescription('Capture saves a screenshot to this chat.');
+  // The Capture page adds the Enter shortcut to the same hint.
+  await expect(capture).toHaveAccessibleDescription(/^Capture saves a screenshot to this chat\./);
   let modes=await openProcessingSettings(page);
   await modes.getByRole('button',{name:/Cloud AI/}).click();
   await expect(modes.getByRole('button',{name:/Cloud AI/})).toHaveAttribute('aria-pressed','true');
   await page.goBack();
   await expectProcessingMode(page,'Cloud AI');
+  await openConversationOptions(page);
   await page.getByRole('button',{name:'Image mode',exact:true}).click();
+  await openConversationOptions(page);
   await expect(page.getByRole('button',{name:'Image mode',exact:true})).toHaveAttribute('aria-pressed','true');
   modes=await openProcessingSettings(page);
   await modes.getByRole('button',{name:/Hybrid/}).click();
   await expect(modes.getByRole('button',{name:/Hybrid/})).toHaveAttribute('aria-pressed','true');
   await page.goBack();
   await expectProcessingMode(page,'Hybrid');
+  await openConversationOptions(page);
   await expect(page.getByRole('button',{name:'Image mode',exact:true})).toBeDisabled();
+  await openConversationOptions(page);
   await expect(page.getByRole('button',{name:'Text mode',exact:true})).toHaveAttribute('aria-pressed','true');
   expect((await(await request.get('/api/ai/preferences')).json()).mode).toBe('hybrid');
   expect((await(await request.get('/api/invisible/sessions')).json())[0].status.active).toBe(false);
@@ -116,6 +124,7 @@ test('Capture, TextEdit Auto and processing location have separate actions and c
   await modes.getByRole('button',{name:/On-device/}).click();
   await expect(modes.getByRole('button',{name:/On-device/})).toHaveAttribute('aria-pressed','true');
   await page.goBack();
+  await openWorkspace(page);
   await expectProcessingMode(page,'On-device');
   await page.getByTestId('language-select').selectOption('ko');
   await expect(auto).toHaveAccessibleName('자율 AI 실행 시작');
@@ -209,6 +218,7 @@ test('Auto answers ordinary note text once, stops explicitly, and stays off afte
   await expect(page.locator('.from-ai .chat-message-meta').last()).toContainText('Local AI · apple ·');
   await expect(page.locator('.from-ai [data-testid="chat-llm-log"]').last()).toHaveText(/Answered by Local LLM · apple · system/);
   await expect(page.locator('.from-ai [data-testid="chat-usage"]').last()).toContainText('No cloud cost');
+  await openConversationOptions(page);
   await expect(page.getByLabel('Chat room',{exact:true})).toHaveValue(await page.getByLabel('Invisible AI session',{exact:true}).inputValue());
   await auto.click();await expect(auto).toHaveAttribute('aria-pressed','false');
   expect(mac.commands.filter(v=>v.operation==='append')).toHaveLength(1);
@@ -262,6 +272,7 @@ test('headless sessions continue with no UI and can be managed from another brow
   expect((await request.post(`/api/invisible/sessions/${id}/start`)).ok()).toBeTruthy();
   await expect.poll(()=>mac.text).toContain('[End Invisible AI]');
   await page.goto('/');
+  await openWorkspace(page);
   const picker=page.getByRole('combobox',{name:'Invisible AI session'});
   await expect(picker.locator(`option[value="${id}"]`)).toHaveCount(1);
   await picker.selectOption(id);
@@ -289,19 +300,20 @@ test('new session is created by the backend and remains paused until explicitly 
   await page.goto('/');
   await openWorkspace(page); await page.getByRole('combobox',{name:'Active capture device',exact:true}).selectOption(mac.id);
   await page.getByRole('link',{name:'Manage sessions',exact:true}).click();
-  await page.getByRole('button',{name:'New session',exact:true}).click();
-  await page.getByRole('textbox',{name:'Session name'}).fill('Created in Cloud');
-  await page.getByRole('combobox',{name:'Capture computer (optional)'}).selectOption(mac.id);
-  await page.getByRole('button',{name:'Create session',exact:true}).click();
+  await page.getByRole('button',{name:'Add a helper',exact:true}).click();
+  await page.getByRole('textbox',{name:'Name your helper'}).fill('Created in Cloud');
+  await page.getByRole('combobox',{name:'Which Mac?'}).selectOption(mac.id);
+  await page.getByRole('button',{name:'Save for later',exact:true}).click();
   const card=page.getByRole('article',{name:'Created in Cloud',exact:true});
   await expect(card).toBeVisible();id=await card.getAttribute('data-session-id');
   await page.goto('/');
+  await openWorkspace(page);
   const picker=page.getByRole('combobox',{name:'Invisible AI session'});
   await picker.selectOption(id);await expect(picker).toHaveValue(id);
   const session=await(await request.get(`/api/invisible/sessions/${id}`)).json();
   expect(session.client_id).toBe(mac.id);expect(session.status.active).toBe(false);
   expect(mac.commands).toHaveLength(0);
-  await page.reload();await expect(picker).toHaveValue(id);
+  await page.reload();await openWorkspace(page);await expect(picker).toHaveValue(id);
   await expect(page.getByTestId('textedit-auto-toggle')).toHaveAttribute('aria-pressed','false');
  }finally{mac.close();}
 });
@@ -315,14 +327,18 @@ test('New thought starts separate context and the original session remains selec
   await auto.click();await expect(auto).toHaveAttribute('aria-pressed','true');
   id=await page.getByRole('combobox',{name:'Invisible AI session'}).inputValue();
   await expect.poll(()=>mac.text).toContain('[End Invisible AI]');
+  await openConversationOptions(page);
   const previous=await page.getByLabel('Chat room',{exact:true}).inputValue();
   const navigation=page.getByRole('button',{name:'Open navigation',exact:true});
-  if(await navigation.isVisible())await navigation.click();
-  await page.getByRole('button',{name:'New thought',exact:true}).click();
+  // "New chat" now opens a conversation on Ask anything; a fresh thought on the Capture page comes from the API.
+  await request.post('/api/rooms/thought',{data:{fresh:true}}); await page.goto('/');
+  await openConversationOptions(page);
   await expect(page.getByLabel('Chat room',{exact:true})).not.toHaveValue(previous);
+  await openWorkspace(page);
   await expect(page.getByRole('combobox',{name:'Invisible AI session'})).not.toHaveValue(id);
   await expect(auto).toHaveAttribute('aria-pressed','false');
   await openWorkspace(page); await page.getByRole('combobox',{name:'Invisible AI session'}).selectOption(id);
+  await openConversationOptions(page);
   await expect(page.getByLabel('Chat room',{exact:true})).toHaveValue(id);
   await expect(auto).toHaveAttribute('aria-pressed','true');
   await auto.click();await expect(auto).toHaveAttribute('aria-pressed','false');
@@ -344,13 +360,17 @@ test('clearing the session chatroom stops Auto and revokes its Hybrid approval',
   id=await page.getByRole('combobox',{name:'Invisible AI session'}).inputValue();
   const before=await(await request.get(`/api/invisible/sessions/${id}`)).json();
   // The session and current chatroom share the same history.
+  await openConversationOptions(page);
   await page.getByLabel('Chat room',{exact:true}).selectOption(id);
+  await openConversationOptions(page);
   await page.getByRole('button',{name:'Clear chatroom',exact:true}).click();
+  await openConversationOptions(page);
   await page.getByRole('button',{name:'Confirm clear chatroom',exact:true}).click();
   await expect.poll(async()=>(await(await request.get(`/api/rooms/${id}/notes`)).json()).active).toBe(false);
   const navigation=page.getByRole('button',{name:'Open navigation',exact:true});
-  if(await navigation.isVisible())await navigation.click();
-  await page.getByRole('button',{name:'New thought',exact:true}).click();
+  // "New chat" now opens a conversation on Ask anything; a fresh thought on the Capture page comes from the API.
+  await request.post('/api/rooms/thought',{data:{fresh:true}}); await page.goto('/');
+  await openWorkspace(page);
   await expect(page.getByTestId('textedit-auto-toggle')).toHaveAttribute('aria-pressed','false');
   await expect(approval).toHaveCount(0);
   const replay=await request.post(`/api/rooms/${id}/notes/approval`,{data:{id:before.status.approval.id,approve:true}});
@@ -409,12 +429,12 @@ test('quick Auto uses the saved session Mac and explains offline, busy and missi
   await expect(page.locator('.notes-start-hint')).toContainText('Another session is running on this Mac. Stop it first.');
   await request.post(`/api/invisible/sessions/${second.id}/stop`);
   await expect(auto).toBeEnabled();
-  aiMissing=true;await page.reload();await select.selectOption(first.id);
+  aiMissing=true;await page.reload();await openWorkspace(page);await select.selectOption(first.id);
   await expect(auto).toBeDisabled();
   await expect(page.locator('.notes-start-hint')).toContainText('Enable the selected AI provider in Backend settings before starting.');
-  aiMissing=false;await page.reload();await select.selectOption(first.id);await auto.click();
+  aiMissing=false;await page.reload();await openWorkspace(page);await select.selectOption(first.id);await auto.click();
   await expect(auto).toHaveAttribute('aria-pressed','true');
-  aiMissing=true;await page.reload();
+  aiMissing=true;await page.reload();await openWorkspace(page);
   await expect(auto).toHaveAttribute('aria-pressed','true');
   await expect(auto).toBeEnabled();await auto.click();
   await expect(auto).toHaveAttribute('aria-pressed','false');
@@ -441,6 +461,7 @@ test('Cloud shows which LLM ran, where it ran, how long it waited, and every ste
   await expect(progress.locator('.cloud-timeline')).toContainText('Answer added. Keep writing below it.');
   await expect(progress.locator('.cloud-timeline .ai-location.is-local').first()).toHaveText('Local LLM');
   await expect(progress.locator('.cloud-timeline .cloud-llm').first()).toContainText('Apple local');
+  await openActivity(page);
   const table=progress.getByRole('table',{name:'Recent AI requests'});
   await expect(table.locator('tbody tr')).toHaveCount(1);
   await expect(table.locator('tbody tr').first()).toContainText('Apple local');
@@ -463,7 +484,7 @@ test('Cloud shows which LLM ran, where it ran, how long it waited, and every ste
   expect(api.activity.entries.map(e=>e.stage)).toEqual(expect.arrayContaining(['Connecting to TextEdit, Notes or Terminal…','Thinking about your note…','Answer added. Keep writing below it.']));
   expect(api.activity.entries.find(e=>e.stage==='Thinking about your note…')).toMatchObject({provider:'apple',model:'system',location:'local',source:'textedit'});
   expect(api.status.provider).toBe('apple');
-  await card.getByRole('button',{name:'Stop autonomous AI',exact:true}).click();
+  await card.getByRole('button',{name:'Stop helping',exact:true}).click();
   await expect(progress.locator('.cloud-now')).not.toHaveClass(/is-running/);
   await expect(progress.locator('.cloud-now')).toContainText('Last reply took');
  }finally{if(id)await request.post(`/api/invisible/sessions/${id}/stop`).catch(()=>{});mac.close();}
@@ -473,14 +494,14 @@ test('Create and start suggests a name and begins TextEdit replies immediately',
  const mac=await fakeMac(undefined,'Instant Mac');let id;
  try{
   await page.goto('/autonomous');
-  await page.getByRole('button',{name:'New session',exact:true}).click();
-  const name=page.getByRole('textbox',{name:'Session name'});
+  await page.getByRole('button',{name:'Add a helper',exact:true}).click();
+  const name=page.getByRole('textbox',{name:'Name your helper'});
   const suggested=await name.inputValue();
   expect(suggested).toMatch(/^[A-Z][a-z]+ [A-Z][a-z]+ \d{2}$/);
   await page.getByRole('button',{name:'Suggest a name',exact:true}).click();
   await expect.poll(()=>name.inputValue()).toMatch(/^[A-Z][a-z]+ [A-Z][a-z]+ \d{2}$/);
-  await page.getByRole('combobox',{name:'Capture computer (optional)'}).selectOption(mac.id);
-  const start=page.getByRole('button',{name:'Create and start',exact:true});
+  await page.getByRole('combobox',{name:'Which Mac?'}).selectOption(mac.id);
+  const start=page.getByRole('button',{name:'Start helping',exact:true});
   await expect(start).toBeEnabled();
   const title=await name.inputValue();
   await start.click();
@@ -491,9 +512,9 @@ test('Create and start suggests a name and begins TextEdit replies immediately',
   await expect(card.getByTestId('session-progress').locator('.cloud-timeline')).toContainText('Answer added. Keep writing below it.');
   expect((await(await request.get(`/api/invisible/sessions/${id}`)).json()).status.active).toBe(true);
   // A second session for the same Mac cannot start while the first runs.
-  await page.getByRole('button',{name:'New session',exact:true}).click();
-  await page.getByRole('combobox',{name:'Capture computer (optional)'}).selectOption(mac.id);
-  await expect(page.getByRole('button',{name:'Create and start',exact:true})).toBeDisabled();
-  await expect(page.getByRole('button',{name:'Create session',exact:true})).toBeEnabled();
+  await page.getByRole('button',{name:'Add a helper',exact:true}).click();
+  await page.getByRole('combobox',{name:'Which Mac?'}).selectOption(mac.id);
+  await expect(page.getByRole('button',{name:'Start helping',exact:true})).toBeDisabled();
+  await expect(page.getByRole('button',{name:'Save for later',exact:true})).toBeEnabled();
  }finally{if(id)await request.post(`/api/invisible/sessions/${id}/stop`).catch(()=>{});mac.close();}
 });

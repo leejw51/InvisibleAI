@@ -324,12 +324,14 @@ async fn timeout_and_cancellation_kill_the_worker() -> anyhow::Result<()> {
                 &executable,
                 &[],
                 request,
-                Duration::from_millis(if abort { 10000 } else { 500 }),
+                // Long enough that a slow Python start under a parallel build
+                // still writes the pid file before the timeout fires.
+                Duration::from_millis(if abort { 10000 } else { 2500 }),
                 |_| Ok(()),
             )
             .await
         });
-        tokio::time::timeout(Duration::from_secs(3), async {
+        tokio::time::timeout(Duration::from_secs(15), async {
             while !pid_file.is_file() {
                 tokio::time::sleep(Duration::from_millis(10)).await;
             }
@@ -342,7 +344,7 @@ async fn timeout_and_cancellation_kill_the_worker() -> anyhow::Result<()> {
             assert!(task.await?.is_err());
         }
         let pid = std::fs::read_to_string(pid_file)?;
-        tokio::time::timeout(Duration::from_secs(3), async {
+        tokio::time::timeout(Duration::from_secs(15), async {
             loop {
                 if !std::process::Command::new("/bin/kill")
                     .args(["-0", pid.trim()])

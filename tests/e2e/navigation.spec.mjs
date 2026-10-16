@@ -1,10 +1,9 @@
 import {test, expect} from '@playwright/test';
+import {openConversationOptions, openNav} from './workspace-controls.mjs';
 
 // The libraries and tools sit behind one fold ("More tools"); open it when needed.
 async function nav(page, route) {
-  const item = page.locator(`[data-nav="${route}"]`);
-  if (!(await item.isVisible())) await page.locator('.more-tools > summary').click();
-  await item.click();
+  await openNav(page, route);
 }
 
 test('every main menu destination has a reloadable URL and browser history', async ({page}) => {
@@ -30,9 +29,7 @@ test('every main menu destination has a reloadable URL and browser history', asy
     expect((await page.reload()).status()).toBe(200);
     await expect(page.locator(`[data-nav="${route}"]`)).toHaveAttribute('aria-current', 'page');
   }
-  await page.getByRole('button', {name:'Search your notes'}).click();
-  await expect(page).toHaveURL(/\/library$/);
-  await expect(page.locator('#memo-search')).toBeFocused();
+  // The sidebar search entry went away with the hero redesign (3ba973a); the Library page keeps #memo-search.
 });
 
 test('saved memo details survive reload and browser back/forward', async ({page}) => {
@@ -62,25 +59,33 @@ test('new chats leave New thought; shortcuts send only from the visible composer
   }));
   await page.goto('/files');
   await page.keyboard.press('Control+Enter');
-  await page.getByRole('button', {name:'New thought', exact:true}).click();
+  await openNav(page, 'home'); await page.getByRole('button', {name:'New chat',exact:true}).click();
+  await openConversationOptions(page);
   await expect(page.getByLabel('Chat room', {exact:true})).not.toHaveValue('');
+  await openConversationOptions(page);
   const thought = await page.getByLabel('Chat room', {exact:true}).inputValue();
   await page.getByRole('button', {name:'New chat', exact:true}).click();
   await expect(page).toHaveURL(/\/chat$/);
+  await openConversationOptions(page);
   await expect(page.getByLabel('Chat room', {exact:true})).not.toHaveValue(thought);
+  await openConversationOptions(page);
   await expect(page.getByLabel('Chat room', {exact:true})).not.toHaveValue('');
+  await openConversationOptions(page);
   const room = await page.getByLabel('Chat room', {exact:true}).inputValue();
   const composer = page.getByRole('textbox', {name:'Chat message', exact:true});
   await composer.fill('Exactly one visible message');
   await composer.press('Control+Enter');
   await expect(page.locator('.from-user')).toHaveCount(1);
   await expect(page.locator('.from-user')).toContainText('Exactly one visible message');
+  await openConversationOptions(page);
   await expect(page.getByLabel('Chat room', {exact:true})).toHaveValue(room);
   expect(requests).toHaveLength(1);
   expect(requests[0].body).toMatchObject({capture:false, room_id:room});
-  await page.getByRole('button', {name:'New thought', exact:true}).click();
+  await openNav(page, 'home'); await page.getByRole('button', {name:'New chat',exact:true}).click();
   await expect(page).toHaveURL(/\/$/);
+  await openConversationOptions(page);
   await expect(page.getByLabel('Chat room', {exact:true})).not.toHaveValue(thought);
+  await openConversationOptions(page);
   await expect(page.getByLabel('Chat room', {exact:true})).not.toHaveValue(room);
   await expect(page.locator('.chat-message')).toHaveCount(0);
 });
@@ -93,6 +98,7 @@ test('Files → Use in chat attaches a room-owned copy and clear preserves the l
   await page.locator('.file-card').filter({hasText:'library-chat-flow.txt'}).getByRole('button', {name:'Use in chat', exact:true}).click();
   await expect(page).toHaveURL(/\/$/);
   await expect(page.locator('.chat-attachment')).toContainText('library-chat-flow.txt');
+  await openConversationOptions(page);
   const room = await page.getByLabel('Chat room', {exact:true}).inputValue();
   await page.getByRole('textbox', {name:'Chat message', exact:true}).fill('Explain this file');
   await page.getByRole('button', {name:'Send message', exact:true}).click();
@@ -100,9 +106,12 @@ test('Files → Use in chat attaches a room-owned copy and clear preserves the l
   await expect(attachment).toBeVisible();
   const download = await attachment.getAttribute('href');
   expect(download).not.toBe(`/api/files/${original.id}/download`);
+  await openConversationOptions(page);
   await page.getByRole('button', {name:'Clear chatroom'}).click();
+  await openConversationOptions(page);
   await page.getByRole('button', {name:'Confirm clear chatroom'}).click();
   await expect(page.locator('.chat-message')).toHaveCount(0);
+  await openConversationOptions(page);
   await expect(page.getByLabel('Chat room', {exact:true})).toHaveValue(room);
   expect((await request.get(download)).status()).toBe(404);
   expect((await request.get(`/api/files/${original.id}/download`)).ok()).toBe(true);

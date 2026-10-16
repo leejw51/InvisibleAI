@@ -407,7 +407,6 @@ mod tests {
         std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755))?;
         let mut lane = spawn(&script)?;
         let pid = lane.pid.expect("pid");
-        tokio::time::sleep(Duration::from_millis(300)).await;
         let group_members = |pid: u32| {
             std::process::Command::new("/usr/bin/pgrep")
                 .args(["-g", &pid.to_string()])
@@ -419,6 +418,13 @@ mod tests {
                 })
                 .unwrap_or(0)
         };
+        // Under a parallel build the shell may take a while to fork its helper.
+        for _ in 0..100 {
+            if group_members(pid) >= 2 {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
         assert!(
             group_members(pid) >= 2,
             "the worker and its helper share a group"

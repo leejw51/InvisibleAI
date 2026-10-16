@@ -1,4 +1,4 @@
-import {openConversationOptions} from './workspace-controls.mjs';
+import {openConversationOptions, openNav} from './workspace-controls.mjs';
 import {test, expect} from '@playwright/test';
 import {spawn} from 'node:child_process';
 import {once} from 'node:events';
@@ -11,11 +11,8 @@ async function openNavigation(page) {
   if (await menu.isVisible() && await menu.getAttribute('aria-expanded') !== 'true') await menu.click();
 }
 async function navigate(page, destination) {
-  await openNavigation(page);
-  const item = page.locator(`[data-nav="${destination}"]`);
-  // The libraries and tools sit behind one fold; open it when needed.
-  if (!(await item.isVisible())) await page.locator(['ai','assistance','admin'].includes(destination) ? '.everyday-settings > summary' : '.more-tools > summary').click();
-  await item.click();
+  // openNav opens the drawer and whichever fold holds the item, without toggling an open fold shut.
+  await openNav(page, destination);
   await expect(page.locator('.sidebar-backdrop')).toHaveCount(0);
 }
 async function fits(page) {

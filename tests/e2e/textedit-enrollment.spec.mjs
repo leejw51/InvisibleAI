@@ -109,12 +109,12 @@ test('shared Mac keeps screen capture but explains enrollment before Auto or Clo
     await expect(page.locator('.device-enrollment-help')).toContainText('다음 실행에도 계정 연결이 유지됩니다.');
     await page.getByTestId('language-select').selectOption('en');
     await page.goto('/autonomous');
-    await page.getByRole('button',{name:'New session',exact:true}).click();
-    const picker = page.getByRole('combobox',{name:'Capture computer (optional)',exact:true});
+    await page.getByRole('button',{name:'Add a helper',exact:true}).click();
+    const picker = page.getByRole('combobox',{name:'Which Mac?',exact:true});
     await expect(picker.locator(`option[value="${shared.id}"]`)).toHaveJSProperty("disabled",true);
     await expect(picker.locator(`option[value="${shared.id}"]`)).toContainText('Account setup required');
-    await page.getByRole('textbox',{name:'Session name'}).fill('Shared Mac');
-    await expect(page.getByRole('button',{name:'Create session',exact:true})).toBeDisabled();
+    await page.getByRole('textbox',{name:'Name your helper'}).fill('Shared Mac');
+    await expect(page.getByRole('button',{name:'Save for later',exact:true})).toBeDisabled();
     await expect(page.getByRole('form',{name:'New session',exact:true}).getByRole('link',{name:'Set up this Mac'})).toBeVisible();
     await page.screenshot({path:info.outputPath('enrollment-required.png'),fullPage:true});
     expect(shared.commands).toEqual([]);
@@ -142,14 +142,14 @@ test('enrolling the same Mac enables Auto without reload, writes a reply, and st
     await page.goto('/autonomous');
     const card = page.locator(`[data-session-id="${sessions[0].id}"]`);
     await expect(card.locator('.cloud-session-state')).toHaveText('Running');
-    await card.getByRole('button',{name:'Stop autonomous AI',exact:true}).click();
+    await card.getByRole('button',{name:'Stop helping',exact:true}).click();
     await expect(card.locator('.cloud-session-state')).toHaveText('Stopped');
     await page.reload();
-    await expect(card.getByRole('button',{name:'Start autonomous AI',exact:true})).toBeEnabled();
+    await expect(card.getByRole('button',{name:'Start helping',exact:true})).toBeEnabled();
     await page.screenshot({path:info.outputPath('enrolled-session.png'),fullPage:true});
     // Losing account enrollment cannot restart an existing session through the API.
     client.close(); client = await mac({id});
-    await expect(card.getByRole('button',{name:'Start autonomous AI',exact:true})).toBeDisabled();
+    await expect(card.getByRole('button',{name:'Start helping',exact:true})).toBeDisabled();
     await expect(card.locator('.cloud-start-hint')).toContainText('shared for screen capture');
     expect((await page.request.post(`/api/invisible/sessions/${sessions[0].id}/start`)).status()).toBe(400);
   } finally {await stopSessions(page);client.close();}

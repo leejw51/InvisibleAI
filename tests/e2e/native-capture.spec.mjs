@@ -57,7 +57,7 @@ for (const mode of ['Text', 'Image']) {
     await page.getByRole('button', { name: `${mode} mode`, exact: true }).click();
     await page.getByRole('textbox', { name: 'Ask a question' }).fill('Answer the arithmetic question on the captured screen.');
     await displayPage.bringToFront();
-    await page.getByRole('button', { name: 'Capture', exact: true }).click();
+    await page.getByRole('main').getByRole('button',{name:'Capture',exact:true}).click();
     await expect(page.getByTestId('capture-preview').locator('img')).toBeVisible({ timeout: 30000 });
     expect(await page.getByTestId('capture-preview').locator('img').evaluate(img => img.complete && img.naturalWidth > 500)).toBeTruthy();
     if (mode === 'Text') {
@@ -95,7 +95,7 @@ test('capture failures surface the client error without claiming delivery', asyn
   expect(settings.at(-1).config.display).toBe(16);
   await page.getByRole('button', { name: 'Close dialog' }).click();
   const delivered=(clientLog.match(/Screenshot received by backend/g)||[]).length;
-  await page.getByRole('button', { name: 'Capture', exact: true }).click();
+  await page.getByRole('main').getByRole('button',{name:'Capture',exact:true}).click();
   await expect(page.getByRole('alert')).toContainText('Display 16 is unavailable on the capture Mac', { timeout:30000 });
   await expect(page.getByTestId('capture-preview')).toHaveCount(0);
   expect((clientLog.match(/Screenshot received by backend/g)||[]).length).toBe(delivered);

@@ -130,6 +130,7 @@ enum Msg {
     ThemeStorage,
     DeviceStorage(Option<String>),
     CaptureDevice(String),
+    DevicesSaved(Result<Value, String>),
     DefaultCaptureDevice(String),
     CopyText(String),
     Notification(Value),
@@ -403,6 +404,7 @@ impl Component for App {
                 }
                 self.devices.active = id;
                 self.persist_devices();
+                self.save_devices(ctx);
             }
             Msg::DefaultCaptureDevice(id) => {
                 if !self.clients.iter().any(|c| c.id == id && c.can_capture) {
@@ -411,6 +413,14 @@ impl Component for App {
                 self.devices.default = id.clone();
                 self.devices.active = id;
                 self.persist_devices();
+                self.save_devices(ctx);
+            }
+            Msg::DevicesSaved(result) => {
+                if let Err(e) = result {
+                    self.error = e;
+                } else {
+                    return false;
+                }
             }
 
             Msg::CopyText(text) => {
@@ -679,6 +689,12 @@ impl Component for App {
                     self.prompt = s.draft.clone();
                     self.capture_mode = s.capture_mode.clone();
                     self.display = s.display;
+                    // The account's saved device wins over this browser's copy,
+                    // so a new login or browser needs no new choice.
+                    if let Some(saved) = s.user_capture.clone().filter(|c| !c.active.is_empty()) {
+                        self.devices = saved.into();
+                        self.persist_devices();
+                    }
                     self.settings = s;
                     self.booted = true;
                     ctx.link().send_future(async {
@@ -1705,6 +1721,14 @@ impl App {
         </article>})}</div></section>}
     }
 
+    /// Explicit choices go to the account; automatic first picks stay local
+    /// so they never overwrite a choice made on another browser.
+    fn save_devices(&self, ctx: &Context<Self>) {
+        let body = json!(CaptureChoices::from(&self.devices));
+        ctx.link().send_future(async move {
+            Msg::DevicesSaved(api("PATCH", "/api/capture/choices", Some(body)).await)
+        });
+    }
     fn persist_devices(&mut self) {
         if !devices::save(
             self.session["address"].as_str().unwrap_or("local"),

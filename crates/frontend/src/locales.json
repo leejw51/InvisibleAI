@@ -1,4 +1,28 @@
 {
+  "Enter on an empty message captures too.": [
+    "빈 메시지에서 Enter를 눌러도 캡처됩니다.",
+    "喺空白訊息撳 Enter 都會擷取。",
+    "在空消息上按 Enter 也会截图。",
+    "空のメッセージで Enter を押してもキャプチャします。",
+    "Con el mensaje vacío, Enter también captura.",
+    "Enter v prázdné zprávě také pořídí snímek."
+  ],
+  "Device": [
+    "기기",
+    "裝置",
+    "设备",
+    "デバイス",
+    "Dispositivo",
+    "Zařízení"
+  ],
+  "Capture shortcuts": [
+    "캡처 바로가기",
+    "擷取捷徑",
+    "截图快捷方式",
+    "キャプチャのショートカット",
+    "Atajos de captura",
+    "Zkratky pro snímání"
+  ],
   "Start TextEdit replies": [
     "TextEdit 답변 시작",
     "啟動 TextEdit 回覆",

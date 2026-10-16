@@ -3,6 +3,16 @@
 // its media and usage, read the original, and come back to the same node.
 import {test,expect} from '@playwright/test';
 import fs from 'node:fs';
+import {openConversationOptions} from './workspace-controls.mjs';
+
+// The Autonomous page keeps the cost banner and the processing-mode cards in a
+// closed fold (the shared openProcessingSettings reaches it only from Home).
+async function openAiSettings(page) {
+  const details = page.locator('.simple-ai-settings');
+  const summary = details.locator(':scope > summary');
+  await expect(summary).toBeVisible();
+  if ((await details.getAttribute('open')) === null) await summary.click();
+}
 
 test('a user uploads files in chat and finds everything organized, costed, and navigable',async({page,request},info)=>{
   await request.patch('/api/assistance/preferences',{data:{wiki_enabled:true}});
@@ -12,10 +22,16 @@ test('a user uploads files in chat and finds everything organized, costed, and n
   // 1. Chat: attach markdown, HTML, a picture and a short video, then ask.
   await page.goto('/chat');
   await expect(page.getByRole('heading',{name:'Keep the thought going.'})).toBeVisible();
-  const rooms=page.getByRole('combobox',{name:'Chat room',exact:true});
+  await openConversationOptions(page);
+  // New chat unmounts the conversation-options fold while the room is created
+  // and remounts it closed: a label query still reads the hidden picker.
+  const rooms=page.getByLabel('Chat room',{exact:true});
   const before=await rooms.inputValue();
   await page.getByRole('button',{name:'New chat',exact:true}).click();
   await expect(rooms).not.toHaveValue(before);
+  await expect(rooms).toHaveValue(/^[a-f\d-]{36}$/);
+  // The file input lives inside the fold too.
+  await openConversationOptions(page);
   await page.getByLabel('Attach to chat',{exact:true}).setInputFiles([
     {name:'brief.md',mimeType:'text/markdown',buffer:Buffer.from('# Brief\nShip the harbour page by Friday.')},
     {name:'page.html',mimeType:'text/html',buffer:Buffer.from('<html><head><title>Harbour</title><style>p{}</style></head><body><h1>Harbour plan</h1><p>Open at dawn &amp; close at dusk.</p></body></html>')},
@@ -38,6 +54,8 @@ test('a user uploads files in chat and finds everything organized, costed, and n
   expect(memo.input).not.toContain('<h1>');
   // 2. Autonomous AI: the cost banner and mode cards are there for this account.
   await page.goto('/autonomous');
+  // The cost banner and mode cards fold under "AI settings & usage".
+  await openAiSettings(page);
   await expect(page.getByTestId('cost-banner')).toBeVisible();
   await expect(page.getByTestId('cost-today')).toContainText('cloud calls');
   await expect(page.getByRole('group',{name:'AI processing mode'}).getByRole('button')).toHaveCount(5);

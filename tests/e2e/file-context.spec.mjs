@@ -80,7 +80,9 @@ test('Add files uses Markdown, audio, and arbitrary files as context, then clear
   await page.getByRole('button', {name:'Send message', exact:true}).click();
   await expect(page.locator('.from-ai')).toHaveCount(2);
   await expect(page.getByRole('button', {name:'Stop answer', exact:true})).toHaveCount(0);
+  await openConversationOptions(page);
   await page.getByRole('button', {name:'Clear chatroom', exact:true}).click();
+  await openConversationOptions(page);
   await page.getByRole('button', {name:'Confirm clear chatroom', exact:true}).click();
   await expect(page.locator('.chat-file, .chat-attachment, .chat-ocr')).toHaveCount(0);
   for (const id of submissions[0].file_ids) expect((await request.get(`/api/files/${id}/download`)).status()).toBe(404);
@@ -135,7 +137,9 @@ test('Any file accepts PDF, Office, OpenDocument, ZIP, dotfiles, and extensionle
   await page.reload(); await openConversationOptions(page);
   await rooms.selectOption(room);
   await expect(page.locator('.from-user .chat-file')).toHaveCount(8);
+  await openConversationOptions(page);
   await page.getByRole('button', {name:'Clear chatroom', exact:true}).click();
+  await openConversationOptions(page);
   await page.getByRole('button', {name:'Confirm clear chatroom', exact:true}).click();
   await expect(page.locator('.chat-file, .chat-attachment')).toHaveCount(0);
   for (const file of message.attachments) expect((await request.get(`/api/files/${file.id}/download`)).status()).toBe(404);

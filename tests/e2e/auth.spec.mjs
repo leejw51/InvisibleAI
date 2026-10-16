@@ -3,6 +3,7 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import {openNav, openConversationOptions, openSettings} from './workspace-controls.mjs';
 const base = 'http://127.0.0.1:3123';
 // Public BIP-39 test vectors; never use these wallets for assets.
 const rootPhrase = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
@@ -40,25 +41,25 @@ test('mnemonic login, waiting list, admin approval and promotion, revocation, an
   for(const p of [admin,member]) {p.on('request',r=>{if(r.postData())payloads.push(r.postData());});p.on('pageerror',e=>errors.push(e.message));}
   expect((await request.get(base+'/api/files')).status()).toBe(401);
   await login(admin,rootPhrase);
-  await expect(admin.getByRole('button',{name:'Admin',exact:true})).toBeVisible();
+  await openSettings(admin);await expect(admin.locator('[data-nav="admin"]')).toBeVisible();
   await login(member,memberPhrase);
   await expect(member.getByRole('heading',{name:'You’re on the waiting list.'})).toBeVisible();
   expect((await memberCtx.request.get(base+'/api/rooms')).status()).toBe(403);
-  await expect(member.getByRole('button',{name:'Admin',exact:true})).toHaveCount(0);
+  await expect(member.locator('[data-nav="admin"]')).toHaveCount(0);
   const name=await member.getByLabel('Your name',{exact:true}).textContent();
   await expect(member.getByRole('heading',{name:'You’re on the waiting list.'})).toBeVisible();
   await member.reload();
   await expect(member.getByRole('heading',{name:'You’re on the waiting list.'})).toBeVisible();
-  await admin.getByRole('button',{name:'Admin',exact:true}).click();
+  await openNav(admin,'admin');
   const row=admin.locator(`[data-address="${memberAddress}"]`);
   await expect(row).toContainText(name);
   await expect(admin.getByRole('heading',{name:'Waiting for approval · 1'})).toBeVisible();
   await admin.screenshot({path:'test-results/admin-waiting.png',fullPage:true});
   await row.getByRole('button',{name:'Approve user',exact:true}).click();
   await expect(member.getByRole('heading',{name:'Hey, what’s on your mind?',exact:true})).toBeVisible();
-  await expect(member.getByRole('button',{name:'Admin',exact:true})).toHaveCount(0);
+  await expect(member.locator('[data-nav="admin"]')).toHaveCount(0);
   await expect(member.getByRole('button',{name:'Open settings'})).toHaveCount(0);
-  await member.getByRole('button',{name:'Devices',exact:true}).click();
+  await openNav(member,'devices');
   await expect(member.getByLabel('Capture client command')).toHaveText(`./bin/client ${base} ${memberAddress}`);
   await expect(member.getByRole('group',{name:'Tailscale DNS',exact:true})).toHaveCount(0);
   await member.getByRole('link',{name:'Return to New thought'}).click();
@@ -67,16 +68,17 @@ test('mnemonic login, waiting list, admin approval and promotion, revocation, an
   expect((await wsCall(member,'PATCH','/api/settings',{display:2})).status).toBe(403);
   expect((await wsCall(member,'GET','/api/admin/users',null)).status).toBe(403);
   await row.getByRole('button',{name:'Make admin'}).click();
-  await expect(member.getByRole('button',{name:'Admin',exact:true})).toBeVisible();
+  await openSettings(member);await expect(member.locator('[data-nav="admin"]')).toBeVisible();
   expect((await wsCall(member,'PATCH','/api/settings',{display:1})).status).toBe(200);
   expect((await memberCtx.request.patch(base+`/api/admin/users/${rootAddress}`,{data:{role:'blocked'}})).status()).toBe(403);
   await row.getByRole('button',{name:'Make user'}).click();
-  await expect(member.getByRole('button',{name:'Admin',exact:true})).toHaveCount(0);
+  await expect(member.locator('[data-nav="admin"]')).toHaveCount(0);
   await row.getByRole('button',{name:'Block access'}).click();
   await expect(member.getByRole('heading',{name:'Access is unavailable.'})).toBeVisible();
   expect((await memberCtx.request.get(base+'/api/files')).status()).toBe(403);
   for(const p of [admin,member]) {
-    const local=await p.evaluate(()=>JSON.stringify(localStorage));
+    // A phrase sign-in keeps the phrase only inside the wallet entry (a6be17f); it must appear nowhere else.
+    const local=await p.evaluate(()=>JSON.stringify(Object.fromEntries(Object.entries(localStorage).filter(([k])=>k!=='invisible-ai.wallet.key'))));
     expect(local).not.toContain(rootPhrase);expect(local).not.toContain(memberPhrase);
     expect(await p.evaluate(()=>document.cookie)).not.toContain('cwb_session');
   }
@@ -94,7 +96,7 @@ test('mnemonic login, waiting list, admin approval and promotion, revocation, an
 test('CLI URL plus owner wallet persists ownership; shared URL permits other approved users',async({browser,request})=>{
   const adminCtx=await browser.newContext(), memberCtx=await browser.newContext();
   const admin=await adminCtx.newPage(),member=await memberCtx.newPage();
-  await login(admin,rootPhrase);await expect(admin.getByRole('button',{name:'Admin',exact:true})).toBeVisible();
+  await login(admin,rootPhrase);await openSettings(admin);await expect(admin.locator('[data-nav="admin"]')).toBeVisible();
   await login(member,memberPhrase);
   // This test also works on its own, before the workflow test has registered the wallet.
   await memberCtx.request.post(base+'/api/auth/apply',{data:{name:'MacBook owner'}});
@@ -119,7 +121,7 @@ test('CLI URL plus owner wallet persists ownership; shared URL permits other app
     // An ordinary user can designate their own capture node without admin rights.
     await member.goto(base+'/devices');
     await member.locator(`[data-client-id="${privateNode.id}"]`).getByRole('button',{name:`Use ${privateNode.name} as default`,exact:true}).click();
-    await member.getByRole('button',{name:'New thought',exact:true}).click();
+    await openNav(member,'home'); await member.getByRole('button',{name:'New chat',exact:true}).click();
     await expect(member.getByRole('combobox',{name:'Active capture device'})).toHaveValue(privateNode.id);
     const ownerKey=`causewaybay.capture.v1:${memberAddress}`;
     expect(await member.evaluate(key=>JSON.parse(localStorage.getItem(key)).default,ownerKey)).toBe(privateNode.id);
@@ -143,8 +145,8 @@ test('language is available before wallet login and remains selected after logou
   await page.getByTestId('language-select').selectOption('ja');
   await expect(page.getByLabel('リカバリーフレーズ',{exact:true})).toHaveValue(rootPhrase);
   await page.getByRole('button',{name:'ログイン',exact:true}).click();
-  await expect(page.getByRole('heading',{name:'新しいアイデア',exact:true})).toBeVisible();
-  await page.locator('[data-nav="admin"]').click();
+  await expect(page.getByRole('heading',{name:'ねえ、何を考えてる？',exact:true})).toBeVisible();
+  await openNav(page,'admin');
   await expect(page.getByRole('heading',{name:'スペースへのアクセス管理。'})).toBeVisible();
   await page.reload();
   await expect(page.getByTestId('language-select')).toHaveValue('ja');
@@ -176,7 +178,7 @@ for (const action of ['clear','delete','message','all']) {
       await login(active,rootPhrase);await login(later,rootPhrase);
       const room=await(await active.request.post(base+'/api/rooms',{data:{title:secret}})).json();
       await send(room.roomid,secret);
-      await later.goto(base+'/chat');await later.getByLabel('Chat room',{exact:true}).selectOption(room.roomid);
+      await later.goto(base+'/chat');await openConversationOptions(later);await later.getByLabel('Chat room',{exact:true}).selectOption(room.roomid);
       await expect(later.locator('.from-user')).toContainText(secret);
       await expect.poll(async()=>(await cached()).some(m=>m.text===secret)).toBe(true);
       await later.getByRole('button',{name:'Sign out',exact:true}).click();
@@ -196,11 +198,15 @@ for (const action of ['clear','delete','message','all']) {
       await login(later,rootPhrase);
       await expect.poll(async()=>(await cached()).some(m=>m.text===secret)).toBe(false);
       await later.goto(base+'/chat');
+      await openConversationOptions(later);
       await expect(later.getByLabel('Chat room',{exact:true}).locator(`option[value="${fresh.roomid}"]`)).toHaveCount(1);
       if(action==='clear'||action==='message') {
+        await openConversationOptions(later);
         await later.getByLabel('Chat room',{exact:true}).selectOption(room.roomid);
         await expect(later.locator('.chat-messages')).not.toContainText(secret);
+      await openConversationOptions(later);
       } else await expect(later.getByLabel('Chat room',{exact:true}).locator(`option[value="${room.roomid}"]`)).toHaveCount(0);
+      await openConversationOptions(later);
       await later.getByLabel('Chat room',{exact:true}).selectOption(fresh.roomid);
       await expect(later.locator('.from-user')).toContainText(`Fresh sync ${action}`);
     } finally {await activeContext.close();await laterContext.close();}
@@ -231,7 +237,7 @@ test('indexed wallet names, copy-only recovery, reload and approval', async ({br
     expect(info.address).toBe('0x70997970c51812dc3a010c7d01b50e0d17dc79c8');
     expect(info.wallet_index).toBe(1);expect(info.name).toBe('My indexed wallet');
     expect((await context.request.get(base+'/api/rooms')).status()).toBe(403);
-    await page.getByRole('button',{name:'Account details',exact:true}).click();
+    await openSettings(page); await page.getByRole('button',{name:'Account details',exact:true}).click();
     const dialog=page.getByRole('dialog',{name:'Account details'});
     // Secrets are never displayed: no reveal, only a confirmation-gated Copy.
     // Hardhat account 1 (public test vector) is "test … junk" at index 1.
@@ -254,15 +260,15 @@ test('indexed wallet names, copy-only recovery, reload and approval', async ({br
     await expect(page.getByLabel('Your name',{exact:true})).toHaveText('Saved across logins');
     // The key survives a reload in local storage; the phrase was never kept.
     await page.reload();
-    await page.getByRole('button',{name:'Account details',exact:true}).click();
+    await openSettings(page); await page.getByRole('button',{name:'Account details',exact:true}).click();
     await expect(dialog.getByLabel('Wallet index',{exact:true})).toHaveText('1');
     await expect(dialog.getByRole('button',{name:'Copy private key'})).toBeVisible();
-    expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('invisible-ai.wallet.key')))).toEqual({key:indexedKey,index:1});
+    expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('invisible-ai.wallet.key')))).toEqual({key:indexedKey,index:1,mnemonic:memberPhrase});
     await dialog.getByRole('button',{name:'Close account details'}).click();
     await login(admin,rootPhrase);
     expect((await adminContext.request.patch(base+`/api/admin/users/${info.address}`,{data:{role:'user'}})).status()).toBe(200);
     await expect(page.getByRole('heading',{name:'Hey, what’s on your mind?',exact:true})).toBeVisible();
-    await page.getByRole('button',{name:'Account details',exact:true}).click();
+    await openSettings(page); await page.getByRole('button',{name:'Account details',exact:true}).click();
     await expect(dialog.getByLabel('User name',{exact:true})).toHaveValue('Saved across logins');
     await expect(dialog.getByLabel('Recovery phrase words')).toHaveCount(0);
     await page.screenshot({path:'test-results/wallet-account.png',fullPage:true});
@@ -275,7 +281,8 @@ test('indexed wallet names, copy-only recovery, reload and approval', async ({br
     await expect(page.getByRole('heading',{name:'Hey, what’s on your mind?',exact:true})).toBeVisible();
     expect((await(await context.request.get(base+'/api/auth/info')).json()).name).toBe('Saved across logins');
     expect(payloads.join('\n')).not.toContain(memberPhrase);expect(payloads.join('\n')).not.toContain(rootPhrase);
-    expect(await page.evaluate(()=>JSON.stringify({local:localStorage,session:sessionStorage}))).not.toContain(memberPhrase);
+    // The phrase may live only in the wallet entry (a6be17f); nothing else in either storage holds it.
+    expect(await page.evaluate(()=>JSON.stringify({local:Object.fromEntries(Object.entries(localStorage).filter(([k])=>k!=='invisible-ai.wallet.key')),session:sessionStorage}))).not.toContain(memberPhrase);
   } finally {await context.close();await adminContext.close();}
 });
 
@@ -325,7 +332,7 @@ test('new recovery phrase requires confirmation and a copied backup before regis
   const info=await(await page.request.get(base+'/api/auth/info')).json();
   expect(info.wallet_index).toBe(3);expect(info.approved).toBe(false);
   expect((await page.request.post(base+'/api/think',{data:{prompt:'Not approved'}})).status()).toBe(403);
-  await page.getByRole('button',{name:'Account details',exact:true}).click();
+  await openSettings(page); await page.getByRole('button',{name:'Account details',exact:true}).click();
   await expect(page.getByRole('button',{name:'Copy private key'})).toBeVisible();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   await page.screenshot({path:'test-results/wallet-mobile.png',fullPage:true});
