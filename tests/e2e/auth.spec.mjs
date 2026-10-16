@@ -87,6 +87,7 @@ test('mnemonic login, waiting list, admin approval and promotion, revocation, an
   expect(records.at(-1).config.users[0].role).toBe('blocked');
   expect(records.at(-1).config.actor).toBe(rootAddress);
   await admin.getByRole('button',{name:'Sign out',exact:true}).click();
+await admin.getByRole('button',{name:'Confirm sign out',exact:true}).click();
   await expect(admin.getByLabel('Recovery phrase')).toBeVisible();
   expect((await adminCtx.request.get(base+'/api/settings')).status()).toBe(401);
   expect(errors).toEqual([]);
@@ -127,6 +128,7 @@ test('CLI URL plus owner wallet persists ownership; shared URL permits other app
     expect(await member.evaluate(key=>JSON.parse(localStorage.getItem(key)).default,ownerKey)).toBe(privateNode.id);
     await member.evaluate(({key,id})=>localStorage.setItem(key,JSON.stringify({active:id,default:id})),{key:`causewaybay.capture.v1:${rootAddress}`,id:publicNode.id});
     await member.getByRole('button',{name:'Sign out',exact:true}).click();
+await member.getByRole('button',{name:'Confirm sign out',exact:true}).click();
     await expect(member.getByLabel('Recovery phrase')).toBeVisible();
     await login(member,rootPhrase);
     await expect(member.getByRole('combobox',{name:'Active capture device'})).toHaveValue(publicNode.id);
@@ -151,6 +153,8 @@ test('language is available before wallet login and remains selected after logou
   await page.reload();
   await expect(page.getByTestId('language-select')).toHaveValue('ja');
   await page.getByRole('button',{name:'ログアウト',exact:true}).click();
+  // The confirmation follows the language too.
+  await page.getByRole('button',{name:'ログアウトを確認',exact:true}).click();
   await expect(page.getByLabel('リカバリーフレーズ',{exact:true})).toBeVisible();
   expect(await page.evaluate(()=>localStorage.getItem('causewaybay.language.v1'))).toBe('ja');
   await expect(page.locator('html')).toHaveAttribute('data-theme','dark');
@@ -182,6 +186,7 @@ for (const action of ['clear','delete','message','all']) {
       await expect(later.locator('.from-user')).toContainText(secret);
       await expect.poll(async()=>(await cached()).some(m=>m.text===secret)).toBe(true);
       await later.getByRole('button',{name:'Sign out',exact:true}).click();
+await later.getByRole('button',{name:'Confirm sign out',exact:true}).click();
       await expect(later.getByLabel('Recovery phrase')).toBeVisible();
       let response;
       if(action==='clear')response=await active.request.post(base+`/api/rooms/${room.roomid}/clear`);
@@ -274,6 +279,7 @@ test('indexed wallet names, copy-only recovery, reload and approval', async ({br
     await page.screenshot({path:'test-results/wallet-account.png',fullPage:true});
     await dialog.getByRole('button',{name:'Close account details'}).click();
     await page.getByRole('button',{name:'Sign out',exact:true}).click();
+await page.getByRole('button',{name:'Confirm sign out',exact:true}).click();
     await expect(page.getByLabel('Recovery phrase',{exact:true})).toBeVisible();
     await page.getByLabel('Recovery phrase',{exact:true}).fill(memberPhrase);
     await page.getByLabel('Wallet index',{exact:true}).fill('1');

@@ -168,6 +168,7 @@ test('two main buttons, one search box for every chain, EVM sends, choices kept 
 
     await page.getByText('Settings', { exact: true }).click();
     await page.getByRole('button', { name: 'Sign out' }).click();
+    await page.getByRole('button', { name: 'Confirm sign out' }).click();
     await expect(page.getByLabel('Recovery phrase', { exact: true })).toBeVisible();
     await page.evaluate(() => localStorage.clear());
     // Back with only the private key: no phrase here, yet every address is known.
