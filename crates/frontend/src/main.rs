@@ -102,6 +102,8 @@ struct App {
     session: Value,
     token: String,
     mobile_menu: bool,
+    /// What is typed into the sidebar's menu finder; empty shows the folds.
+    nav_query: String,
     delete_confirm: bool,
     delete_file: String,
     stream_id: Option<String>,
@@ -148,6 +150,9 @@ enum Msg {
     ProcessFile,
     Processed(u64, Result<ProcessedFile, String>),
     Navigate(String),
+    NavQuery(String),
+    /// Enter in the menu finder opens its first match.
+    NavPick,
     History,
     Query(String),
     Filter(String),
@@ -334,6 +339,7 @@ impl Component for App {
             session: Value::Null,
             token: String::new(),
             mobile_menu: false,
+            nav_query: String::new(),
             delete_confirm: false,
             delete_file: String::new(),
             stream_id: None,
@@ -523,8 +529,11 @@ impl Component for App {
                         self.busy = false;
                         self.modal.clear();
                         self.browser["draft"] = json!("");
+                        self.browser["capture_ids"] = json!([]);
+                        self.capture_ids.clear();
                         self.browser["erased"] = json!(cutoff.to_string());
                         self.persist_browser();
+                        forget_browser_data(self.session["address"].as_str().unwrap_or("local"));
                     }
                     self.reload(ctx);
                 }
@@ -773,6 +782,21 @@ impl Component for App {
                 if let Some(id) = location_memo() {
                     ctx.link().send_message(Msg::Select(id));
                 }
+            }
+            Msg::NavQuery(q) => self.nav_query = q,
+            Msg::NavPick => {
+                if let Some(item) = menu_matches(
+                    &self.nav_query,
+                    self.is_admin(),
+                    self.session["required"] == true,
+                    self.session["address"].is_string(),
+                )
+                .into_iter()
+                .next()
+                {
+                    ctx.link().send_message(MenuItem::message_for(item.nav));
+                }
+                return false;
             }
             Msg::Query(q) => {
                 self.query = q;
@@ -1213,6 +1237,9 @@ impl Component for App {
             }
             Msg::Modal(modal) => {
                 self.mobile_menu = false;
+                if !modal.is_empty() {
+                    self.nav_query.clear();
+                }
                 if matches!(modal.as_str(), "settings" | "rename") && !self.is_admin() {
                     return false;
                 }
@@ -1613,6 +1640,7 @@ impl Component for App {
                     <ai_activity::Indicator language={self.language} key={self.session["address"].as_str().unwrap_or("local").to_string()}/>
                     if self.page == "dashboard" {<invisible::Usage language={self.language} key={self.session["address"].as_str().unwrap_or("local").to_string()}/> }
                     <main>
+                        if self.page=="home" {{self.connect_strip(ctx)}}
                         if !matches!(self.page.as_str(), "home" | "chat") {{companion::page(&self.page, self.busy || self.loading)}}
                         if self.settings.demo{<div class="demo-banner">{icon("info")}<span>{t("Demo workspace · Responses use fixtures. Your files and memos are really saved.")}</span></div>}
                         if !self.error.is_empty(){<div class="error-banner" role="alert"><span>{t(&self.error)}</span><button aria-label={t("Dismiss error")} onclick={ctx.link().callback(|_|Msg::ClearError)}>{icon("close")}</button></div>}
@@ -1665,6 +1693,7 @@ impl App {
         self.selected = None;
         self.page = page;
         self.mobile_menu = false;
+        self.nav_query.clear();
         self.modal.clear();
         self.query.clear();
         self.filter = if self.page == "notes" { "notes" } else { "all" }.into();
@@ -1860,16 +1889,69 @@ impl App {
             Err(e) => self.error = e,
         }
     }
-    fn nav(
-        &self,
-        ctx: &Context<Self>,
-        page: &str,
-        label: &str,
-        ico: &str,
-        count: Option<usize>,
-    ) -> Html {
-        let p = page.to_string();
-        html! {<button class={classes!("nav-item",(self.page==page&&self.selected.is_none()).then_some("active"))} aria-current={(self.page==page&&self.selected.is_none()).then_some("page")} data-nav={page.to_string()} onclick={ctx.link().callback(move |_|Msg::Navigate(p.clone()))}>{icon(ico)}<span>{t(label)}</span>{count.map(|n|html!{<span class="nav-count">{n}</span>}).unwrap_or_default()}</button>}
+    /// One sidebar entry. Tags appear only in finder results, where the user
+    /// learns the words that find each menu without widening the sidebar.
+    fn menu_button(&self, ctx: &Context<Self>, item: &MenuItem, with_tags: bool) -> Html {
+        let active = item
+            .page()
+            .is_some_and(|page| self.page == page && self.selected.is_none());
+        let count = (item.nav == "files").then_some(self.files.len());
+        let nav = item.nav;
+        let class = if item.settings_action() {
+            classes!("settings-nav", item.danger.then_some("danger-nav"))
+        } else {
+            classes!(
+                "nav-item",
+                item.danger.then_some("danger-nav"),
+                active.then_some("active")
+            )
+        };
+        html! {<button class={class} aria-current={active.then_some("page")} data-nav={item.nav} title={t(item.tags)} onclick={ctx.link().callback(move |_|MenuItem::message_for(nav))}>{icon(item.icon)}<span>{t(item.label)}if with_tags{<small class="nav-tags">{t(item.tags)}</small>}</span>{count.map(|n|html!{<span class="nav-count">{n}</span>}).unwrap_or_default()}</button>}
+    }
+    fn nav(&self, ctx: &Context<Self>, nav: &str) -> Html {
+        MENU.iter()
+            .find(|item| item.nav == nav)
+            .map(|item| self.menu_button(ctx, item, false))
+            .unwrap_or_default()
+    }
+    /// The top of Capture: the one command that connects a Mac over Tailscale,
+    /// with this wallet filled in, so a new Mac is one paste away.
+    fn connect_strip(&self, ctx: &Context<Self>) -> Html {
+        let base = web_sys::window()
+            .and_then(|w| w.location().origin().ok())
+            .unwrap_or_default();
+        let addresses = self
+            .dashboard
+            .as_ref()
+            .map(|d| d.addresses.as_slice())
+            .unwrap_or(&[]);
+        let owner = self.session["address"].as_str();
+        let Some((label, command)) = dashboard::capture_commands(addresses, &base, owner)
+            .into_iter()
+            .next()
+        else {
+            return Html::default();
+        };
+        html! {<section class="connect-strip" role="group" aria-label={t("Connect a Mac")} data-testid="connect-strip"><div class="connect-strip-text"><strong>{icon("screen")}{t("Connect a Mac")}<span class="connect-strip-label">{t(&label)}</span></strong><p>{t("Paste this in Terminal on the Mac to capture. Then press Capture here.")}</p></div><div class="copyable-command"><code aria-label={t("Connect command")}>{&command}</code>{dashboard::copy_button("Copy connect command",&command,&ctx.link().callback(Msg::CopyText))}</div><a class="text-button" href="/devices#device-setup">{t("No client yet?")}{icon("arrow")}</a></section>}
+    }
+    fn menu_finder(&self, ctx: &Context<Self>) -> Html {
+        let oninput = ctx.link().callback(|e: InputEvent| {
+            Msg::NavQuery(e.target_unchecked_into::<HtmlInputElement>().value())
+        });
+        let onkeydown = ctx
+            .link()
+            .batch_callback(|e: KeyboardEvent| match e.key().as_str() {
+                "Enter" => {
+                    e.prevent_default();
+                    Some(Msg::NavPick)
+                }
+                "Escape" => {
+                    e.stop_propagation();
+                    Some(Msg::NavQuery(String::new()))
+                }
+                _ => None,
+            });
+        html! {<label class="sidebar-search menu-finder">{icon("search")}<input type="search" data-testid="nav-search" aria-label={t("Find a menu")} placeholder={format!("{}…", t("Find a menu"))} autocomplete="off" value={self.nav_query.clone()} {oninput} {onkeydown}/></label>}
     }
     fn sidebar(&self, ctx: &Context<Self>) -> Html {
         // Three everyday actions: capture the screen, save anything, ask anything.
@@ -1892,37 +1974,36 @@ impl App {
         );
         html! {<aside class={classes!("sidebar",self.mobile_menu.then_some("open"))}>
             <button class="brand" onclick={ctx.link().callback(|_|Msg::Navigate("home".into()))}><span class="brand-mark">{brand()}</span><span>{"Invisible AI"}<small>{t("A LITTLE EVERYDAY MAGIC")}</small></span></button>
+            {self.menu_finder(ctx)}
+            if !self.nav_query.trim().is_empty() {
+                // One flat list across every fold, so a name or tag finds it in one go.
+                <div class="nav-label">{t("MENU MATCHES")}</div>
+                <nav aria-label={t("Menu matches")} class="nav-results" data-testid="nav-results">
+                    {for menu_matches(&self.nav_query, self.is_admin(), self.session["required"]==true, self.session["address"].is_string()).into_iter().map(|item| self.menu_button(ctx, item, true))}
+                    if menu_matches(&self.nav_query, self.is_admin(), self.session["required"]==true, self.session["address"].is_string()).is_empty() { <p class="nav-empty">{t("No menu matches. Try another word.")}</p> }
+                </nav>
+            } else {
             <div class="nav-label">{t("YOUR LITTLE CORNER")}</div>
             <nav aria-label={t("Main navigation")}>
-                {self.nav(ctx,"home","Capture","screen",None)}
-                {self.nav(ctx,"save","Save anything","plus",None)}
-                {self.nav(ctx,"chat","Ask anything","message",None)}
-                {self.nav(ctx,"wallet","Wallet","wallet",None)}
+                {self.nav(ctx,"home")}
+                {self.nav(ctx,"save")}
+                {self.nav(ctx,"chat")}
+                {self.nav(ctx,"wallet")}
                 // Signing out is an everyday action, not a setting.
-                if self.session["required"]==true { <button class="nav-item" data-nav="sign-out" onclick={ctx.link().callback(|_|Msg::Logout)}>{icon("logout")}<span>{t("Sign out")}</span></button> }
+                if self.session["required"]==true { {self.nav(ctx,"sign-out")} }
+                // Erasing everything is a privacy action the user should always see.
+                {self.nav(ctx,"delete-all")}
             </nav>
             <details class="more-tools" open={library}><summary>{icon("book")}{t("More tools")}</summary><nav aria-label={t("Additional tools")}>
-                {self.nav(ctx,"notes","Notes","file",None)}
-                {self.nav(ctx,"wiki","Find anything","search",None)}
-                {self.nav(ctx,"autonomous","Autonomous AI","bolt",None)}
-                {self.nav(ctx,"library","Library","book",None)}
-                {self.nav(ctx,"files","Files","folder",Some(self.files.len()))}
-                {self.nav(ctx,"images","Images","image",None)}
-                {self.nav(ctx,"videos","Videos","film",None)}
-                {self.nav(ctx,"code","Code","code",None)}
-                {self.nav(ctx,"coding","Coding","play",None)}
-                {self.nav(ctx,"skills","Skills","spark",None)}
-                {self.nav(ctx,"dashboard","Dashboard","dashboard",None)}
-                {self.nav(ctx,"overview","Multi-device capture","screen",None)}
-                {self.nav(ctx,"quiz","Quiz playground","quiz",None)}
+                {for ["notes","wiki","autonomous","library","files","images","videos","code","coding","skills","dashboard","overview","quiz"].iter().map(|nav| self.nav(ctx,nav))}
             </nav></details>
+            }
             <div class="sidebar-bottom"><details class="everyday-settings" open={matches!(self.page.as_str(), "ai" | "assistance" | "admin")}><summary>{icon("settings")}{t("Settings")}</summary>
-                {self.nav(ctx,"devices","Devices","monitor",None)}
-                {self.nav(ctx,"ai","AI settings","spark",None)}
-                {self.nav(ctx,"assistance","Assistance settings","settings",None)}
-                if self.is_admin(){ {self.nav(ctx,"admin","Admin","shield",None)} }
-                if self.session["address"].is_string() { <button class="settings-nav" onclick={ctx.link().callback(|_|Msg::Modal("account".into()))}>{icon("user")}<span>{t("Account details")}</span></button> }
-                <button class="settings-nav danger-nav" data-nav="delete-all" onclick={ctx.link().callback(|_|Msg::Modal("delete-all".into()))}>{icon("trash")}<span>{t("Delete all")}</span></button>
+                {self.nav(ctx,"devices")}
+                {self.nav(ctx,"ai")}
+                {self.nav(ctx,"assistance")}
+                if self.is_admin(){ {self.nav(ctx,"admin")} }
+                if self.session["address"].is_string() { {self.nav(ctx,"account")} }
                 </details><div class="profile"><span class="avatar">{"Y"}</span><span><strong>{self.session["name"].as_str().map(str::to_owned).unwrap_or_else(||t("Your workspace"))}</strong><small>{t("Personal · Invisible AI")}</small></span><span class="profile-dot"/></div>
             </div>
         </aside>}
@@ -2113,7 +2194,7 @@ impl App {
         html! {<div class="modal-backdrop" onclick={ctx.link().callback(|_|Msg::Modal(String::new()))}><section class={classes!("modal",(self.modal=="preview").then_some("wide"))} role="dialog" aria-modal="true" aria-labelledby="modal-title" onclick={Callback::from(|e:MouseEvent|e.stop_propagation())}><div class="modal-heading"><div><div class="eyebrow">{if self.modal=="settings"{t("YOUR WORKSPACE SETTINGS")}else if self.modal=="note"{t("NEW MEMO")}else if self.modal=="rename"{t("CAPTURE COMPUTER")}else if self.modal=="delete-all"{t("RIGHT TO BE FORGOTTEN")}else{t("FILE PREVIEW")}}</div><h2 id="modal-title">{t(title)}</h2></div><button class="icon-button" aria-label={t("Close dialog")} onclick={ctx.link().callback(|_|Msg::Modal(String::new()))}>{icon("close")}</button></div>
             if !self.error.is_empty(){<div class="error-banner" role="alert">{t(&self.error)}</div>}
             if self.modal=="settings"{{self.settings_view(ctx)}}
-            else if self.modal=="delete-all"{<div class="note-form delete-all-form" data-testid="delete-all-dialog"><p>{t("Permanently delete all your chats, notes, captures, images, files, and results on every session? This cannot be undone. Your login remains active.")}</p><p class="small-muted">{icon("shield")}{t("Everything you added goes: messages, memos, pictures, videos, files, Wiki tags and documents, projects, published skills, code notes, and cached thumbnails on this backend.")}</p><div class="modal-footer"><button class="text-button" disabled={self.busy} onclick={ctx.link().callback(|_|Msg::Modal(String::new()))}>{t("Cancel")}</button><button class="danger-button delete-all-confirm" data-testid="delete-all-confirm" disabled={self.busy} onclick={ctx.link().callback(|_|Msg::DeleteEverything)}>{icon("trash")}{if self.busy{t("Deleting…")}else{t("Confirm delete all")}}</button></div></div>}
+            else if self.modal=="delete-all"{<div class="note-form delete-all-form" data-testid="delete-all-dialog"><p>{t("Permanently delete all your chats, notes, captures, images, files, and results on every session? This cannot be undone. Your login remains active.")}</p><p class="small-muted">{icon("shield")}{t("Everything you added goes: messages, memos, pictures, videos, files, Wiki tags and documents, projects, published skills, code notes, and cached thumbnails on this backend.")}</p><p class="small-muted">{icon("monitor")}{t("Every connected browser and capture client clears its saved copies too. Only your wallet key stays in this browser, so you can sign in again.")}</p><div class="modal-footer"><button class="text-button" disabled={self.busy} onclick={ctx.link().callback(|_|Msg::Modal(String::new()))}>{t("Cancel")}</button><button class="danger-button delete-all-confirm" data-testid="delete-all-confirm" disabled={self.busy} onclick={ctx.link().callback(|_|Msg::DeleteEverything)}>{icon("trash")}{if self.busy{t("Deleting…")}else{t("Confirm delete all")}}</button></div></div>}
             else if self.modal=="rename"{<div class="note-form"><label>{t("Computer name")}<input aria-label={t("Computer name")} value={self.node_name.clone()} maxlength="120" oninput={ctx.link().callback(|e:InputEvent|Msg::NodeName(e.target_unchecked_into::<HtmlInputElement>().value()))}/></label><p class="small-muted">{t("Saved on the backend and synced to the Rust client when it connects.")}</p><div class="modal-footer"><button class="primary-button" disabled={self.node_name.trim().is_empty()} onclick={ctx.link().callback(|_|Msg::SaveNodeName)}>{t("Save computer name")}</button></div></div>}
             else if self.modal=="note"{<div class="note-form"><label>{t("Give it a title")}<input aria-label={t("Memo title")} placeholder={t("A thought worth keeping")} value={self.note_title.clone()} oninput={ctx.link().callback(|e:InputEvent|Msg::NoteTitle(e.target_unchecked_into::<HtmlInputElement>().value()))}/></label><label>{t("Your memo")}<textarea aria-label={t("Memo content")} placeholder={t("Write freely. Add #hashtags to find it later.")} value={self.note_body.clone()} oninput={ctx.link().callback(|e:InputEvent|Msg::NoteBody(e.target_unchecked_into::<HtmlTextAreaElement>().value()))}/></label><div class="modal-footer"><span>{icon("shield")}{t("Saved only in your workspace")}</span><button class="primary-button" disabled={self.note_body.trim().is_empty()} onclick={ctx.link().callback(|_|Msg::SaveNote)}>{icon("check")}{t("Save memo")}</button></div></div>}
             else if let Some(f)=&self.preview{<div class="preview-body"><h3>{&f.name}</h3>if f.mime.starts_with("image/"){<a href={format!("/api/files/{}/image",f.id)} target="_blank" rel="noopener"><img decoding="async" loading="lazy" src={format!("/api/files/{}/thumbnail",f.id)} alt={f.name.clone()}/></a>}else if f.mime.starts_with("audio/"){<audio controls=true src={format!("/api/files/{}/download",f.id)}/>}<pre class="file-code">{&self.preview_text}</pre>if !self.compile_output.is_empty(){<pre class="compile-output" role="status">{&self.compile_output}</pre>}<div class="modal-footer"><button class="secondary-button" onclick={ctx.link().callback(|_|Msg::ProcessFile)}>{if f.mime.starts_with("audio/"){t("Transcribe audio")}else if f.mime.starts_with("image/"){t("Extract text")}else{t("Process file")}}</button><a class="secondary-button" href={format!("/api/files/{}/download",f.id)}>{icon("download")}{t("Download")}</a>if f.name.ends_with(".rs"){<button class="primary-button" disabled={self.compile_output=="Compiling…"} onclick={ctx.link().callback(|_|Msg::Compile)}>{icon("code")}{t("Compile Rust")}</button>}</div></div>}
@@ -2319,6 +2400,251 @@ fn file_size(size: usize) -> String {
     }
 }
 
+/// Every sidebar destination with the words that find it. Labels and tags are
+/// translated at render time, and the finder matches both languages.
+struct MenuItem {
+    nav: &'static str,
+    label: &'static str,
+    icon: &'static str,
+    tags: &'static str,
+    danger: bool,
+}
+impl MenuItem {
+    fn page(&self) -> Option<&'static str> {
+        match self.nav {
+            "sign-out" | "account" | "delete-all" => None,
+            page => Some(page),
+        }
+    }
+    fn settings_action(&self) -> bool {
+        matches!(self.nav, "account")
+    }
+    fn message_for(nav: &str) -> Msg {
+        match nav {
+            "sign-out" => Msg::Logout,
+            "account" => Msg::Modal("account".into()),
+            "delete-all" => Msg::Modal("delete-all".into()),
+            page => Msg::Navigate(page.into()),
+        }
+    }
+}
+const fn menu(
+    nav: &'static str,
+    label: &'static str,
+    icon: &'static str,
+    tags: &'static str,
+) -> MenuItem {
+    MenuItem {
+        nav,
+        label,
+        icon,
+        tags,
+        danger: false,
+    }
+}
+const MENU: &[MenuItem] = &[
+    menu(
+        "home",
+        "Capture",
+        "screen",
+        "screen, screenshot, OCR, new thought, home",
+    ),
+    menu(
+        "save",
+        "Save anything",
+        "plus",
+        "memo, note, photo, file, upload, keep",
+    ),
+    menu(
+        "chat",
+        "Ask anything",
+        "message",
+        "chat, question, conversation, AI, talk",
+    ),
+    menu(
+        "wallet",
+        "Wallet",
+        "wallet",
+        "crypto, balance, send, receive, Cronos, USDC",
+    ),
+    menu(
+        "sign-out",
+        "Sign out",
+        "logout",
+        "log out, leave, switch account",
+    ),
+    MenuItem {
+        nav: "delete-all",
+        label: "Delete all",
+        icon: "trash",
+        tags: "erase, wipe, privacy, remove everything, forget",
+        danger: true,
+    },
+    menu("notes", "Notes", "file", "memo, text, writing, journal"),
+    menu(
+        "wiki",
+        "Find anything",
+        "search",
+        "search, wiki, tags, documents, knowledge",
+    ),
+    menu(
+        "autonomous",
+        "Autonomous AI",
+        "bolt",
+        "TextEdit, Apple Notes, helper, automatic, watch, iPhone, iPad",
+    ),
+    menu(
+        "library",
+        "Library",
+        "book",
+        "pinned, memos, collection, browse",
+    ),
+    menu(
+        "files",
+        "Files",
+        "folder",
+        "documents, uploads, attachments, PDF",
+    ),
+    menu(
+        "images",
+        "Images",
+        "image",
+        "photos, pictures, captures, gallery",
+    ),
+    menu("videos", "Videos", "film", "movies, clips, recordings"),
+    menu(
+        "code",
+        "Code",
+        "code",
+        "snippets, Rust, compile, programming",
+    ),
+    menu(
+        "coding",
+        "Coding",
+        "play",
+        "projects, agent, build, run, Codex, Claude Code",
+    ),
+    menu(
+        "skills",
+        "Skills",
+        "spark",
+        "tools, commands, programs, publish",
+    ),
+    menu(
+        "dashboard",
+        "Dashboard",
+        "dashboard",
+        "status, statistics, usage, client.zip, download",
+    ),
+    menu(
+        "overview",
+        "Multi-device capture",
+        "screen",
+        "all Macs, every screen, batch, overview",
+    ),
+    menu(
+        "quiz",
+        "Quiz playground",
+        "quiz",
+        "practice, math, game, test",
+    ),
+    menu(
+        "devices",
+        "Devices",
+        "monitor",
+        "capture computer, Mac, connect, Tailscale, install client",
+    ),
+    menu(
+        "ai",
+        "AI settings",
+        "spark",
+        "model, on-device, cloud, provider, Qwen, Anthropic, OpenAI",
+    ),
+    menu(
+        "assistance",
+        "Assistance settings",
+        "settings",
+        "preferences, wiki, TextEdit, cloud confirmation",
+    ),
+    menu(
+        "admin",
+        "Admin",
+        "shield",
+        "approvals, wallets, roles, server",
+    ),
+    menu(
+        "account",
+        "Account details",
+        "user",
+        "wallet address, profile, recovery phrase, sign-in",
+    ),
+];
+/// Menus whose translated or English name or tags contain every word typed.
+fn menu_matches(
+    query: &str,
+    admin: bool,
+    signed_in: bool,
+    has_wallet: bool,
+) -> Vec<&'static MenuItem> {
+    let words: Vec<String> = query.split_whitespace().map(str::to_lowercase).collect();
+    if words.is_empty() {
+        return vec![];
+    }
+    MENU.iter()
+        .filter(|item| match item.nav {
+            "admin" => admin,
+            "sign-out" => signed_in,
+            "account" => has_wallet,
+            _ => true,
+        })
+        .filter(|item| {
+            let haystack = [
+                t(item.label),
+                item.label.into(),
+                t(item.tags),
+                item.tags.into(),
+            ]
+            .join(" ")
+            .to_lowercase();
+            words.iter().all(|word| haystack.contains(word.as_str()))
+        })
+        .collect()
+}
+/// Delete all sweeps this browser too: capture choices, coding prompts, upload
+/// resumptions, Wiki views and the history stamp. The wallet key, the language,
+/// the theme, the AI choice and the browser record (it carries the erasure
+/// cursor) stay, so the user can sign in again and is not shown stale data.
+fn forget_browser_data(owner: &str) {
+    let Some(window) = web_sys::window() else {
+        return;
+    };
+    let keep = |key: &str| {
+        key == account::KEY
+            || key == i18n::STORAGE_KEY
+            || key == theme::STORAGE_KEY
+            || key.starts_with("causewaybay.settings.")
+            || key.starts_with("causewaybay.chat.")
+            // Another wallet's device choices on a shared browser are not ours to drop.
+            || (key.starts_with("causewaybay.capture.v1:") && key != devices::key(owner))
+    };
+    for storage in [
+        window.local_storage().ok().flatten(),
+        window.session_storage().ok().flatten(),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        let keys: Vec<String> = (0..storage.length().unwrap_or(0))
+            .filter_map(|i| storage.key(i).ok().flatten())
+            .collect();
+        for key in keys {
+            if (key.starts_with("causewaybay.") || key.starts_with("invisible-ai.")) && !keep(&key)
+            {
+                let _ = storage.remove_item(&key);
+            }
+        }
+    }
+}
 fn browser_key(owner: &str) -> String {
     if owner == "local" {
         "causewaybay.settings.v1".into()

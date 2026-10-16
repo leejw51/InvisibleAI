@@ -4592,7 +4592,7 @@
     "Rozsah přehledu"
   ],
   "Delete all": [
-    "모두 삭제",
+    "다 지워",
     "全部刪除",
     "全部删除",
     "すべて削除",
@@ -12142,5 +12142,341 @@
     "新しい送金",
     "Nueva transferencia",
     "Nový převod"
+  ],
+  "Backend {url} · Wallet {wallet}": [
+    "서버 {url} · 지갑 {wallet}",
+    "伺服器 {url} · 錢包 {wallet}",
+    "服务器 {url} · 钱包 {wallet}",
+    "サーバー {url} · ウォレット {wallet}",
+    "Servidor {url} · Billetera {wallet}",
+    "Server {url} · Peněženka {wallet}"
+  ],
+  "Backend {url} · Shared capture (sign in with a wallet to enroll this Mac)": [
+    "서버 {url} · 공유 캡처 (이 Mac을 등록하려면 지갑으로 로그인하세요)",
+    "伺服器 {url} · 共享擷取（用錢包登入先可以登記呢部 Mac）",
+    "服务器 {url} · 共享截图（用钱包登录后可登记这台 Mac）",
+    "サーバー {url} · 共有キャプチャ（この Mac を登録するにはウォレットでサインイン）",
+    "Servidor {url} · Captura compartida (inicia sesión con una billetera para inscribir este Mac)",
+    "Server {url} · Sdílené snímání (pro zápis tohoto Macu se přihlaste peněženkou)"
+  ],
+  "Install and run from source": [
+    "소스에서 설치하고 실행",
+    "由原始碼安裝並執行",
+    "从源码安装并运行",
+    "ソースからインストールして実行",
+    "Instalar y ejecutar desde el código fuente",
+    "Instalovat a spustit ze zdrojového kódu"
+  ],
+  "No client yet? One paste installs Rust, builds the client from source, and connects it.": [
+    "클라이언트가 아직 없나요? 한 번 붙여넣으면 Rust 설치, 소스 빌드, 연결까지 끝납니다.",
+    "仲未有客戶端？貼一次就會安裝 Rust、由原始碼建置客戶端並連線。",
+    "还没有客户端？粘贴一次即可安装 Rust、从源码构建客户端并连接。",
+    "クライアントがまだ？一度貼り付けるだけで Rust のインストール、ソースからのビルド、接続まで完了します。",
+    "¿Aún sin cliente? Un solo pegado instala Rust, compila el cliente desde el código fuente y lo conecta.",
+    "Ještě nemáte klienta? Jedno vložení nainstaluje Rust, sestaví klienta ze zdrojového kódu a připojí ho."
+  ],
+  "Install and run command": [
+    "설치 및 실행 명령",
+    "安裝同執行命令",
+    "安装并运行命令",
+    "インストールと実行コマンド",
+    "Comando de instalación y ejecución",
+    "Příkaz pro instalaci a spuštění"
+  ],
+  "Copy install command": [
+    "설치 명령 복사",
+    "複製安裝命令",
+    "复制安装命令",
+    "インストールコマンドをコピー",
+    "Copiar comando de instalación",
+    "Kopírovat instalační příkaz"
+  ],
+  "Paste it into Terminal on the Mac you want to capture. It needs Xcode Command Line Tools (macOS offers them on the first git run) and takes a few minutes the first time. If the backend requires a node token, put APP_TOKEN=… in front of the last line. Next time, run only the last line.": [
+    "캡처할 Mac의 터미널에 붙여넣으세요. Xcode Command Line Tools가 필요하고(처음 git 실행 시 macOS가 설치를 제안합니다) 처음에는 몇 분 걸립니다. 서버가 노드 토큰을 요구하면 마지막 줄 앞에 APP_TOKEN=… 을 붙이세요. 다음부터는 마지막 줄만 실행하면 됩니다.",
+    "喺要擷取嘅 Mac 嘅終端機貼上。需要 Xcode Command Line Tools（第一次執行 git 時 macOS 會提示安裝），第一次要幾分鐘。如果伺服器需要節點權杖，喺最後一行前面加 APP_TOKEN=…。下次只需執行最後一行。",
+    "粘贴到要截图的 Mac 的终端里。需要 Xcode Command Line Tools（首次运行 git 时 macOS 会提示安装），第一次需要几分钟。若服务器要求节点令牌，在最后一行前加 APP_TOKEN=…。下次只需运行最后一行。",
+    "キャプチャしたい Mac のターミナルに貼り付けてください。Xcode Command Line Tools が必要で（初回の git 実行時に macOS が案内します）、初回は数分かかります。サーバーがノードトークンを要求する場合は最後の行の前に APP_TOKEN=… を付けてください。次回からは最後の行だけ実行します。",
+    "Pégalo en Terminal en el Mac que quieres capturar. Necesita Xcode Command Line Tools (macOS los ofrece en la primera ejecución de git) y la primera vez tarda unos minutos. Si el servidor exige un token de nodo, antepón APP_TOKEN=… a la última línea. La próxima vez ejecuta solo la última línea.",
+    "Vložte to do Terminálu na Macu, který chcete snímat. Vyžaduje Xcode Command Line Tools (macOS je nabídne při prvním spuštění gitu) a poprvé to trvá pár minut. Pokud server vyžaduje token uzlu, dejte před poslední řádek APP_TOKEN=…. Příště spusťte jen poslední řádek."
+  ],
+  "Prefer a download? Dashboard has client.zip": [
+    "다운로드가 편하면 대시보드에 client.zip이 있어요",
+    "想直接下載？儀表板有 client.zip",
+    "想直接下载？仪表板有 client.zip",
+    "ダウンロード派？ダッシュボードに client.zip があります",
+    "¿Prefieres descargar? El panel tiene client.zip",
+    "Raději stáhnout? Na nástěnce je client.zip"
+  ],
+  "Find a menu": [
+    "메뉴 찾기",
+    "搵選單",
+    "查找菜单",
+    "メニューを探す",
+    "Buscar un menú",
+    "Najít nabídku"
+  ],
+  "MENU MATCHES": [
+    "메뉴 검색 결과",
+    "選單結果",
+    "菜单结果",
+    "メニューの候補",
+    "MENÚS ENCONTRADOS",
+    "NALEZENÉ NABÍDKY"
+  ],
+  "Menu matches": [
+    "메뉴 검색 결과",
+    "選單結果",
+    "菜单结果",
+    "メニューの候補",
+    "Menús encontrados",
+    "Nalezené nabídky"
+  ],
+  "No menu matches. Try another word.": [
+    "일치하는 메뉴가 없어요. 다른 단어로 찾아보세요.",
+    "搵唔到選單。試吓另一個字。",
+    "没有匹配的菜单。换个词试试。",
+    "一致するメニューがありません。別の言葉で試してください。",
+    "Ningún menú coincide. Prueba otra palabra.",
+    "Žádná nabídka neodpovídá. Zkuste jiné slovo."
+  ],
+  "Every connected browser and capture client clears its saved copies too. Only your wallet key stays in this browser, so you can sign in again.": [
+    "연결된 모든 브라우저와 캡처 클라이언트의 저장된 사본도 지워집니다. 다시 로그인할 수 있도록 지갑 키만 이 브라우저에 남습니다.",
+    "所有連接嘅瀏覽器同擷取客戶端都會清除保存嘅副本。只有錢包金鑰會留喺呢個瀏覽器，等你可以再登入。",
+    "所有已连接的浏览器和截图客户端也会清除保存的副本。只有钱包密钥留在此浏览器中，以便你再次登录。",
+    "接続中のすべてのブラウザとキャプチャクライアントも保存済みのコピーを消去します。再度サインインできるよう、ウォレットの鍵だけがこのブラウザに残ります。",
+    "Todos los navegadores y clientes de captura conectados también borran sus copias guardadas. Solo la clave de tu billetera permanece en este navegador para que puedas volver a iniciar sesión.",
+    "Všechny připojené prohlížeče a snímací klienti také smažou své uložené kopie. V tomto prohlížeči zůstane jen klíč peněženky, abyste se mohli znovu přihlásit."
+  ],
+  "screen, screenshot, OCR, new thought, home": [
+    "화면, 스크린샷, OCR, 새 생각, 홈",
+    "螢幕, 截圖, OCR, 新諗法, 主頁",
+    "屏幕, 截图, OCR, 新想法, 主页",
+    "画面, スクリーンショット, OCR, 新しい思考, ホーム",
+    "pantalla, captura, OCR, nuevo pensamiento, inicio",
+    "obrazovka, snímek, OCR, nová myšlenka, domů"
+  ],
+  "memo, note, photo, file, upload, keep": [
+    "메모, 노트, 사진, 파일, 업로드, 보관",
+    "備忘, 筆記, 相片, 檔案, 上載, 保存",
+    "备忘, 笔记, 照片, 文件, 上传, 保存",
+    "メモ, ノート, 写真, ファイル, アップロード, 保存",
+    "memo, nota, foto, archivo, subir, guardar",
+    "poznámka, zápisek, fotka, soubor, nahrát, uchovat"
+  ],
+  "chat, question, conversation, AI, talk": [
+    "채팅, 질문, 대화, AI, 이야기",
+    "聊天, 問題, 對話, AI, 傾偈",
+    "聊天, 问题, 对话, AI, 交谈",
+    "チャット, 質問, 会話, AI, 話す",
+    "chat, pregunta, conversación, IA, hablar",
+    "chat, otázka, konverzace, AI, mluvit"
+  ],
+  "crypto, balance, send, receive, Cronos, USDC": [
+    "암호화폐, 잔액, 보내기, 받기, Cronos, USDC",
+    "加密貨幣, 餘額, 傳送, 接收, Cronos, USDC",
+    "加密货币, 余额, 发送, 接收, Cronos, USDC",
+    "暗号資産, 残高, 送る, 受け取る, Cronos, USDC",
+    "cripto, saldo, enviar, recibir, Cronos, USDC",
+    "krypto, zůstatek, odeslat, přijmout, Cronos, USDC"
+  ],
+  "log out, leave, switch account": [
+    "로그아웃, 나가기, 계정 전환",
+    "登出, 離開, 轉換帳戶",
+    "登出, 离开, 切换账户",
+    "ログアウト, 退出, アカウント切替",
+    "cerrar sesión, salir, cambiar de cuenta",
+    "odhlásit, odejít, změnit účet"
+  ],
+  "erase, wipe, privacy, remove everything, forget": [
+    "지우기, 삭제, 개인정보, 전부 제거, 잊기",
+    "清除, 抹走, 私隱, 全部移除, 忘記",
+    "清除, 抹除, 隐私, 全部移除, 忘记",
+    "消去, 抹消, プライバシー, すべて削除, 忘れる",
+    "borrar, limpiar, privacidad, quitar todo, olvidar",
+    "vymazat, smazat, soukromí, odstranit vše, zapomenout"
+  ],
+  "memo, text, writing, journal": [
+    "메모, 텍스트, 글쓰기, 일기",
+    "備忘, 文字, 寫作, 日記",
+    "备忘, 文本, 写作, 日记",
+    "メモ, テキスト, 執筆, 日記",
+    "memo, texto, escritura, diario",
+    "poznámka, text, psaní, deník"
+  ],
+  "search, wiki, tags, documents, knowledge": [
+    "검색, 위키, 태그, 문서, 지식",
+    "搜尋, 維基, 標籤, 文件, 知識",
+    "搜索, 维基, 标签, 文档, 知识",
+    "検索, ウィキ, タグ, 文書, 知識",
+    "buscar, wiki, etiquetas, documentos, conocimiento",
+    "hledat, wiki, štítky, dokumenty, znalosti"
+  ],
+  "TextEdit, Apple Notes, helper, automatic, watch, iPhone, iPad": [
+    "TextEdit, Apple 메모, 도우미, 자동, 지켜보기, iPhone, iPad",
+    "TextEdit, Apple 備忘錄, 助手, 自動, 監看, iPhone, iPad",
+    "TextEdit, Apple 备忘录, 助手, 自动, 监看, iPhone, iPad",
+    "TextEdit, Apple メモ, ヘルパー, 自動, 見守り, iPhone, iPad",
+    "TextEdit, Notas de Apple, ayudante, automático, vigilar, iPhone, iPad",
+    "TextEdit, Apple Poznámky, pomocník, automaticky, sledovat, iPhone, iPad"
+  ],
+  "pinned, memos, collection, browse": [
+    "고정, 메모, 모음, 둘러보기",
+    "釘選, 備忘, 收藏, 瀏覽",
+    "置顶, 备忘, 收藏, 浏览",
+    "ピン留め, メモ, コレクション, 閲覧",
+    "fijados, memos, colección, explorar",
+    "připnuté, poznámky, sbírka, procházet"
+  ],
+  "documents, uploads, attachments, PDF": [
+    "문서, 업로드, 첨부, PDF",
+    "文件, 上載, 附件, PDF",
+    "文档, 上传, 附件, PDF",
+    "文書, アップロード, 添付, PDF",
+    "documentos, subidas, adjuntos, PDF",
+    "dokumenty, nahrané, přílohy, PDF"
+  ],
+  "photos, pictures, captures, gallery": [
+    "사진, 그림, 캡처, 갤러리",
+    "相片, 圖片, 擷取, 相簿",
+    "照片, 图片, 截图, 图库",
+    "写真, 画像, キャプチャ, ギャラリー",
+    "fotos, imágenes, capturas, galería",
+    "fotky, obrázky, snímky, galerie"
+  ],
+  "movies, clips, recordings": [
+    "영상, 클립, 녹화",
+    "影片, 片段, 錄影",
+    "影片, 片段, 录像",
+    "動画, クリップ, 録画",
+    "películas, clips, grabaciones",
+    "filmy, klipy, nahrávky"
+  ],
+  "snippets, Rust, compile, programming": [
+    "스니펫, Rust, 컴파일, 프로그래밍",
+    "片段, Rust, 編譯, 程式設計",
+    "代码片段, Rust, 编译, 编程",
+    "スニペット, Rust, コンパイル, プログラミング",
+    "fragmentos, Rust, compilar, programación",
+    "úryvky, Rust, kompilace, programování"
+  ],
+  "projects, agent, build, run, Codex, Claude Code": [
+    "프로젝트, 에이전트, 빌드, 실행, Codex, Claude Code",
+    "專案, 代理, 建置, 執行, Codex, Claude Code",
+    "项目, 代理, 构建, 运行, Codex, Claude Code",
+    "プロジェクト, エージェント, ビルド, 実行, Codex, Claude Code",
+    "proyectos, agente, compilar, ejecutar, Codex, Claude Code",
+    "projekty, agent, sestavit, spustit, Codex, Claude Code"
+  ],
+  "tools, commands, programs, publish": [
+    "도구, 명령, 프로그램, 게시",
+    "工具, 命令, 程式, 發佈",
+    "工具, 命令, 程序, 发布",
+    "ツール, コマンド, プログラム, 公開",
+    "herramientas, comandos, programas, publicar",
+    "nástroje, příkazy, programy, publikovat"
+  ],
+  "status, statistics, usage, client.zip, download": [
+    "상태, 통계, 사용량, client.zip, 다운로드",
+    "狀態, 統計, 用量, client.zip, 下載",
+    "状态, 统计, 用量, client.zip, 下载",
+    "状態, 統計, 使用量, client.zip, ダウンロード",
+    "estado, estadísticas, uso, client.zip, descarga",
+    "stav, statistiky, využití, client.zip, stažení"
+  ],
+  "all Macs, every screen, batch, overview": [
+    "모든 Mac, 모든 화면, 일괄, 한눈에",
+    "所有 Mac, 每個螢幕, 批次, 總覽",
+    "所有 Mac, 每个屏幕, 批量, 总览",
+    "すべての Mac, すべての画面, 一括, 概要",
+    "todos los Mac, cada pantalla, lote, resumen",
+    "všechny Macy, každá obrazovka, dávka, přehled"
+  ],
+  "practice, math, game, test": [
+    "연습, 수학, 게임, 테스트",
+    "練習, 數學, 遊戲, 測試",
+    "练习, 数学, 游戏, 测试",
+    "練習, 数学, ゲーム, テスト",
+    "práctica, matemáticas, juego, prueba",
+    "cvičení, matematika, hra, test"
+  ],
+  "capture computer, Mac, connect, Tailscale, install client": [
+    "캡처 컴퓨터, Mac, 연결, Tailscale, 클라이언트 설치",
+    "擷取電腦, Mac, 連接, Tailscale, 安裝客戶端",
+    "截图电脑, Mac, 连接, Tailscale, 安装客户端",
+    "キャプチャ用コンピュータ, Mac, 接続, Tailscale, クライアントのインストール",
+    "ordenador de captura, Mac, conectar, Tailscale, instalar cliente",
+    "snímací počítač, Mac, připojit, Tailscale, instalovat klienta"
+  ],
+  "model, on-device, cloud, provider, Qwen, Anthropic, OpenAI": [
+    "모델, 온디바이스, 클라우드, 제공자, Qwen, Anthropic, OpenAI",
+    "模型, 裝置上, 雲端, 供應商, Qwen, Anthropic, OpenAI",
+    "模型, 端上, 云端, 提供商, Qwen, Anthropic, OpenAI",
+    "モデル, オンデバイス, クラウド, プロバイダ, Qwen, Anthropic, OpenAI",
+    "modelo, en el dispositivo, nube, proveedor, Qwen, Anthropic, OpenAI",
+    "model, v zařízení, cloud, poskytovatel, Qwen, Anthropic, OpenAI"
+  ],
+  "preferences, wiki, TextEdit, cloud confirmation": [
+    "환경설정, 위키, TextEdit, 클라우드 확인",
+    "偏好, 維基, TextEdit, 雲端確認",
+    "偏好, 维基, TextEdit, 云端确认",
+    "環境設定, ウィキ, TextEdit, クラウド確認",
+    "preferencias, wiki, TextEdit, confirmación de nube",
+    "předvolby, wiki, TextEdit, potvrzení cloudu"
+  ],
+  "approvals, wallets, roles, server": [
+    "승인, 지갑, 역할, 서버",
+    "批核, 錢包, 角色, 伺服器",
+    "审批, 钱包, 角色, 服务器",
+    "承認, ウォレット, 役割, サーバー",
+    "aprobaciones, billeteras, roles, servidor",
+    "schválení, peněženky, role, server"
+  ],
+  "wallet address, profile, recovery phrase, sign-in": [
+    "지갑 주소, 프로필, 복구 구문, 로그인",
+    "錢包地址, 個人資料, 復原助記詞, 登入",
+    "钱包地址, 个人资料, 恢复助记词, 登录",
+    "ウォレットアドレス, プロフィール, リカバリーフレーズ, サインイン",
+    "dirección de billetera, perfil, frase de recuperación, inicio de sesión",
+    "adresa peněženky, profil, obnovovací fráze, přihlášení"
+  ],
+  "Connect a Mac": [
+    "Mac 연결",
+    "連接 Mac",
+    "连接 Mac",
+    "Mac を接続",
+    "Conectar un Mac",
+    "Připojit Mac"
+  ],
+  "Paste this in Terminal on the Mac to capture. Then press Capture here.": [
+    "캡처할 Mac의 터미널에 붙여넣으세요. 그런 다음 여기서 캡처를 누르세요.",
+    "喺要擷取嘅 Mac 嘅終端機貼上，然後喺呢度撳擷取。",
+    "粘贴到要截图的 Mac 的终端里，然后在这里按截屏。",
+    "キャプチャする Mac のターミナルに貼り付け、ここでキャプチャを押してください。",
+    "Pégalo en Terminal en el Mac que quieres capturar y luego pulsa Capturar aquí.",
+    "Vložte to do Terminálu na Macu, který chcete snímat, a pak zde stiskněte Zachytit."
+  ],
+  "Connect command": [
+    "연결 명령",
+    "連接命令",
+    "连接命令",
+    "接続コマンド",
+    "Comando de conexión",
+    "Příkaz pro připojení"
+  ],
+  "Copy connect command": [
+    "연결 명령 복사",
+    "複製連接命令",
+    "复制连接命令",
+    "接続コマンドをコピー",
+    "Copiar comando de conexión",
+    "Kopírovat příkaz pro připojení"
+  ],
+  "No client yet?": [
+    "클라이언트가 아직 없나요?",
+    "仲未有客戶端？",
+    "还没有客户端？",
+    "クライアントがまだ？",
+    "¿Aún sin cliente?",
+    "Ještě nemáte klienta?"
   ]
 }

@@ -193,8 +193,8 @@ test('three core actions keep text and files without a manual, and failed saves 
   await page.goto('/');
   if(await page.locator('.mobile-toggle').isVisible()) await page.locator('.mobile-toggle').click();
   const nav=page.getByRole('navigation',{name:'Main navigation',exact:true});
-  await expect(nav.getByRole('button')).toHaveCount(4);
-  await expect(nav.getByRole('button')).toHaveText(['Capture','Save anything','Ask anything','Wallet']);
+  await expect(nav.getByRole('button')).toHaveCount(5);
+  await expect(nav.getByRole('button')).toHaveText(['Capture','Save anything','Ask anything','Wallet','Delete all']);
   await nav.getByRole('button',{name:'Save anything',exact:true}).click();
   await expect(page).toHaveURL(/\/save$/);
   await expect(page.getByRole('button',{name:'Save it',exact:true})).toBeDisabled();
