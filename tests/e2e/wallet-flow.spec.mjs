@@ -155,6 +155,8 @@ test('new wallet → approval → receive → send → network switch → sign o
     await noSecretOnScreen(page, [privateKey, phrase]);
     await page.getByRole('button', { name: 'Close account details' }).click();
     await page.getByRole('button', { name: 'Sign out' }).click();
+    // Signing out asks once more before the browser forgets the key.
+    await page.getByTestId('sign-out-confirm').click();
     await expect(page.getByLabel('Recovery phrase', { exact: true })).toBeVisible();
     expect(await saved(page)).toBeNull();
     await expect(page.getByTestId('saved-wallet')).toHaveCount(0);

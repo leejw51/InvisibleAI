@@ -1700,6 +1700,14 @@ impl Chat {
             if !m.text.is_empty(){if user && !m.text.contains("```") && !m.text.contains("~~~"){<p class="chat-user-text">{&m.text}</p>}else{<div class="answer-content">{copyable_markdown(&m.text, ctx.props().copy.clone())}</div>}}
             if let Some(s)=&solved{<p class="chat-solved" data-testid="chat-solved">{icon("spark")}<strong>{t("Solved")}</strong><span>{format!("{} = {}",s.problem,s.result)}</span></p>}
             if !m.sources.is_empty(){<div class="chat-sources" aria-label={t("Web sources")}><strong>{t("Sources")}</strong>{for m.sources.iter().filter(|s|s.url.starts_with("https://")).map(|source|html!{<a href={source.url.clone()} target="_blank" rel="noopener noreferrer">{&source.title}</a>})}</div>}
+            // A transfer the AI prepared: confirmed in Wallet, never from here.
+            if let Some(r)=&m.wallet_request {<div class={classes!("chat-transfer",format!("is-{}",r.status))} data-testid="chat-transfer" data-status={r.status.clone()} role="note">
+                {icon("wallet")}
+                <div class="chat-transfer-text"><strong>{&r.amount}{" "}{&r.symbol}</strong><span>{t("to")}{" "}<code title={r.to.clone()}>{r.to.chars().take(8).collect::<String>()}{"…"}{r.to.chars().skip(r.to.chars().count().saturating_sub(6)).collect::<String>()}</code>{" · "}{registry::net_of(&r.network).map(|n|n.name).unwrap_or_default()}</span>
+                    <small>{t(match r.status.as_str(){"sent"=>"Sent from your wallet","cancelled"=>"Cancelled in your wallet",_=>"Waiting for your confirmation in Wallet"})}</small></div>
+                if r.status=="pending" {<button type="button" class="secondary-button" data-testid="review-in-wallet" onclick={ctx.props().navigate.reform(|_|"wallet".to_string())}>{t("Review in Wallet")}{icon("arrow")}</button>}
+                else if r.status=="sent" && !r.hash.is_empty() {<a class="text-button" href={registry::net_of(&r.network).map(|n|n.tx_url(&r.hash)).unwrap_or_default()} target="_blank" rel="noopener noreferrer">{t("Explorer")}{icon("arrow")}</a>}
+            </div>}
             if !m.ocr_text.is_empty(){<details class="chat-ocr"><summary>{t("Extracted text · Apple Vision")}</summary><pre>{&m.ocr_text}</pre></details>}
             if !m.transcript.is_empty(){<div class="chat-ocr"><strong>{t("Audio transcript")}</strong><pre>{&m.transcript}</pre></div>}
             {for m.attachments.iter().map(|f|html!{<div class="chat-file" key={f.id.clone()}>if f.mime.starts_with("image/"){<a href={format!("/api/files/{}/image",f.id)} target="_blank" rel="noopener"><img decoding="async" loading="lazy" class="chat-photo" src={format!("/api/files/{}/thumbnail",f.id)} alt={f.name.clone()}/></a>}if f.mime.starts_with("audio/"){<audio controls=true preload="none" src={format!("/api/files/{}/download",f.id)}/>}<a href={format!("/api/files/{}/download",f.id)}>{icon("file")}{&f.name}</a></div>})}

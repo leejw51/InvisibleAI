@@ -378,6 +378,8 @@ pub fn page(
         <div class="ai-page-card">
             <AiPicker language={language} owner={owner} settings={settings.clone()} prefix="Settings" full=true changed={Callback::from(|_|())} ai_saved={ai_saved}/>
         </div>
+        // What the AI may move from the wallet, per transfer; the same panel as the Wallet page's.
+        <div class="ai-page-card" data-testid="ai-wallet-limits"><crate::wallet::WalletLimits/></div>
         <dl class="ai-page-modes">
             <div class={classes!((mode=="ondevice").then_some("is-active"))}><dt>{icon("shield")}{t("On-device")}</dt><dd>{t("Apple's model or a Qwen model on the backend Mac. Nothing leaves your network.")}</dd></div>
             <div class={classes!((mode=="hybrid").then_some("is-active"))}><dt>{icon("hybrid")}{t("Hybrid")}</dt><dd>{t(HYBRID_HELP)}</dd></div>

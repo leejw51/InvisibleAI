@@ -12622,5 +12622,117 @@
     "何を出力する？",
     "¿Qué imprime?",
     "Co vypíše?"
+  ],
+  "Prepared by your AI from chat:": [
+    "채팅에서 AI가 준비한 전송:",
+    "AI 喺聊天準備好嘅轉帳：",
+    "AI 在聊天中准备的转账：",
+    "チャットで AI が準備した送金：",
+    "Preparado por tu IA desde el chat:",
+    "Připraveno vaší AI z chatu:"
+  ],
+  "Review it below and confirm; nothing is sent until you do.": [
+    "아래에서 검토하고 확인하세요. 확인 전에는 아무것도 전송되지 않습니다.",
+    "請喺下面檢視並確認；你確認之前唔會送出任何東西。",
+    "请在下方检查并确认；在你确认前不会发送任何东西。",
+    "下で内容を確認して承認してください。承認するまで何も送金されません。",
+    "Revísalo abajo y confirma; no se envía nada hasta que lo hagas.",
+    "Zkontrolujte níže a potvrďte; dokud to neuděláte, nic se neodešle."
+  ],
+  "Dismiss": [
+    "닫기",
+    "略過",
+    "忽略",
+    "閉じる",
+    "Descartar",
+    "Zavřít"
+  ],
+  "This wallet's hard limit for {symbol} is {limit} {symbol} per transfer. Change it under Hard limits per transfer.": [
+    "이 지갑의 {symbol} 한도는 전송당 {limit} {symbol}입니다. '전송당 한도'에서 변경하세요.",
+    "呢個錢包 {symbol} 嘅上限係每次轉帳 {limit} {symbol}。可以喺「每次轉帳上限」更改。",
+    "此钱包 {symbol} 的硬性上限为每次转账 {limit} {symbol}。可在“每次转账上限”中更改。",
+    "このウォレットの {symbol} の上限は 1 回の送金につき {limit} {symbol} です。「送金ごとの上限」で変更できます。",
+    "El límite de esta cartera para {symbol} es {limit} {symbol} por transferencia. Cámbialo en Límites por transferencia.",
+    "Limit této peněženky pro {symbol} je {limit} {symbol} na převod. Změňte ho v části Limity na převod."
+  ],
+  "Hard limits per transfer": [
+    "전송당 한도",
+    "每次轉帳上限",
+    "每次转账上限",
+    "送金ごとの上限",
+    "Límites por transferencia",
+    "Limity na převod"
+  ],
+  "The most one transfer can move, for you and for the AI. The AI prepares transfers of these coins only; you confirm each one in the wallet.": [
+    "한 번의 전송으로 보낼 수 있는 최대 금액입니다. 사용자와 AI 모두에게 적용됩니다. AI는 이 코인들의 전송만 준비하며, 각 전송은 지갑에서 직접 확인합니다.",
+    "一次轉帳最多可以轉走嘅金額，你同 AI 都受限。AI 只會準備呢幾種幣嘅轉帳；每一筆都要你喺錢包確認。",
+    "一次转账最多可转出的金额，对你和 AI 都适用。AI 只准备这些币种的转账；每一笔都由你在钱包中确认。",
+    "1 回の送金で動かせる上限です。あなたにも AI にも適用されます。AI が準備できるのはこれらのコインの送金だけで、1 件ずつウォレットで承認します。",
+    "Lo máximo que puede mover una transferencia, para ti y para la IA. La IA solo prepara transferencias de estas monedas; tú confirmas cada una en la cartera.",
+    "Nejvíc, co může jeden převod přesunout, pro vás i pro AI. AI připravuje převody jen těchto mincí; každý potvrdíte v peněžence."
+  ],
+  "Loading limits…": [
+    "한도 불러오는 중…",
+    "正在載入上限…",
+    "正在加载上限…",
+    "上限を読み込み中…",
+    "Cargando límites…",
+    "Načítání limitů…"
+  ],
+  "{symbol} limit on {network}": [
+    "{network}의 {symbol} 한도",
+    "{network} 上 {symbol} 嘅上限",
+    "{network} 上 {symbol} 的上限",
+    "{network} の {symbol} の上限",
+    "Límite de {symbol} en {network}",
+    "Limit {symbol} na síti {network}"
+  ],
+  "Save limits": [
+    "한도 저장",
+    "儲存上限",
+    "保存上限",
+    "上限を保存",
+    "Guardar límites",
+    "Uložit limity"
+  ],
+  "Limits saved.": [
+    "한도를 저장했습니다.",
+    "上限已儲存。",
+    "上限已保存。",
+    "上限を保存しました。",
+    "Límites guardados.",
+    "Limity uloženy."
+  ],
+  "Sent from your wallet": [
+    "지갑에서 전송됨",
+    "已從你嘅錢包送出",
+    "已从你的钱包发送",
+    "ウォレットから送金済み",
+    "Enviado desde tu cartera",
+    "Odesláno z vaší peněženky"
+  ],
+  "Cancelled in your wallet": [
+    "지갑에서 취소됨",
+    "已喺你嘅錢包取消",
+    "已在你的钱包中取消",
+    "ウォレットでキャンセル済み",
+    "Cancelado en tu cartera",
+    "Zrušeno ve vaší peněžence"
+  ],
+  "Waiting for your confirmation in Wallet": [
+    "지갑에서 확인을 기다리는 중",
+    "等待你喺錢包確認",
+    "等待你在钱包中确认",
+    "ウォレットでの承認を待っています",
+    "Esperando tu confirmación en Cartera",
+    "Čeká na vaše potvrzení v Peněžence"
+  ],
+  "Review in Wallet": [
+    "지갑에서 검토",
+    "喺錢包檢視",
+    "在钱包中检查",
+    "ウォレットで確認",
+    "Revisar en Cartera",
+    "Zkontrolovat v Peněžence"
   ]
 }

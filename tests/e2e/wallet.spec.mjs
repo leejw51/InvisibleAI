@@ -236,6 +236,8 @@ test('private key login, saved wallet on return, and copy-only secrets', async (
   // Signing out forgets the key.
   await page.getByText('Settings', { exact: true }).click();
   await page.getByRole('button', { name: 'Sign out' }).click();
+  // Signing out asks once more before the browser forgets the key.
+  await page.getByTestId('sign-out-confirm').click();
   await expect(page.getByLabel('Recovery phrase', { exact: true })).toBeVisible();
   expect(await saved(page)).toBeNull();
 

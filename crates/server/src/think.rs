@@ -605,7 +605,14 @@ pub(crate) async fn pipeline(
         // Local and CLI answers use supplied/retrieved context, with no backend tools.
         vec![]
     } else {
-        agent::definitions_with_skills(req.agent, s.compiler, &coding::skill_catalogue(s))
+        // A signed-in wallet can have transfers prepared, under its own limits.
+        let wallet = wallet_settings(s)?;
+        agent::definitions_with_skills(
+            req.agent,
+            s.compiler,
+            &coding::skill_catalogue(s),
+            wallet.as_ref(),
+        )
     };
     let mut total_calls = 0usize;
     let mut spent = 0usize;
@@ -711,8 +718,89 @@ pub(crate) async fn pipeline(
     unreachable!()
 }
 
+/// The wallet choices and limits of a signed-in wallet; none for the local
+/// account, which has no wallet to send from.
+fn wallet_settings(
+    s: &Arc<AppState>,
+) -> Result<Option<causewaybay_shared::registry::WalletSettings>> {
+    if !s.db.owner().starts_with("0x") {
+        return Ok(None);
+    }
+    let conn = s.db.0.lock().unwrap();
+    Ok(Some(crate::wallet::read(&conn, s.db.owner())?))
+}
+/// "send 5 TCRO to 0x…", as the demo fixture reads it: the amount, the coin
+/// (CRO and TCRO mean Cronos testnet unless "mainnet" is said; USDC is on
+/// mainnet only) and the recipient. None when the prompt is not a send.
+pub(crate) fn demo_send_request(prompt: &str) -> Option<(String, String, String)> {
+    let words: Vec<&str> = prompt
+        .split(|c: char| c.is_whitespace() || c == ',')
+        .filter(|w| !w.is_empty())
+        .collect();
+    let at = words.iter().position(|w| w.eq_ignore_ascii_case("send"))?;
+    let amount = words
+        .get(at + 1)?
+        .trim_matches(|c: char| !(c.is_ascii_digit() || c == '.'));
+    if amount.is_empty() || !amount.chars().all(|c| c.is_ascii_digit() || c == '.') {
+        return None;
+    }
+    let symbol = words.get(at + 2)?.to_ascii_lowercase();
+    let mainnet = words.iter().any(|w| w.eq_ignore_ascii_case("mainnet"));
+    let coin = match symbol.as_str() {
+        "usdc" => "usdc-cronos-mainnet",
+        "cro" | "tcro" if mainnet => "cro-cronos-mainnet",
+        "cro" | "tcro" => "tcro-cronos-testnet",
+        _ => return None,
+    };
+    let to = words
+        .iter()
+        .map(|w| w.trim_end_matches(['.', '!', '?', ';', ':']))
+        .find(|w| w.starts_with("0x") && w.len() == 42)?;
+    Some((coin.into(), to.to_string(), amount.to_string()))
+}
+
 pub(crate) async fn demo_answer(s: &Arc<AppState>, id: &str, req: &ThinkRequest) -> Result<()> {
-    let answer = if req.agent {
+    let send = (!req.agent && !req.note && !req.library && !req.capture)
+        .then(|| demo_send_request(&req.prompt))
+        .flatten()
+        .zip(wallet_settings(s)?);
+    let answer = if let Some(((coin, to, amount), settings)) = send {
+        // The real tool runs, so the limit check, the request and the chat card
+        // are the ones a model would produce; only the words around it are fixed.
+        let tools = vec![agent::wallet_tool(&settings)];
+        let call = providers::ToolCall {
+            id: "demo-wallet".into(),
+            name: "wallet_send".into(),
+            arguments: json!({"coin":coin,"to":to,"amount":amount}).to_string(),
+        };
+        s.db.event(id, "tool_start", &serde_json::to_string(&call)?)?;
+        let result = match agent::execute(s, id, &call, &tools).await {
+            Ok(v) => v,
+            Err(e) => json!({"error":e.to_string()}).to_string(),
+        };
+        s.db.event(
+            id,
+            "tool_result",
+            &json!({"name":"wallet_send","output":result}).to_string(),
+        )?;
+        let v: Value = serde_json::from_str(&result)?;
+        if let Some(error) = v["error"].as_str() {
+            format!(
+                "<!--kind:question-->\n### Transfer not prepared\n\n{error}\n\n*Demo response: the wallet tool ran for real; only these words are fixed.*"
+            )
+        } else {
+            format!(
+                "<!--kind:question-->\n### Transfer prepared, waiting for you\n\nI prepared **{} {}** to `{}` on {}. Nothing is sent yet: open **Wallet** and confirm it there. Your hard limit for {} is {} {} per transfer.\n\n*Demo response: the wallet tool ran for real; only these words are fixed.*",
+                v["amount"].as_str().unwrap_or(""),
+                v["symbol"].as_str().unwrap_or(""),
+                v["to"].as_str().unwrap_or(""),
+                v["network"].as_str().unwrap_or(""),
+                v["symbol"].as_str().unwrap_or(""),
+                v["limit"].as_str().unwrap_or(""),
+                v["symbol"].as_str().unwrap_or("")
+            )
+        }
+    } else if req.agent {
         let call=providers::ToolCall{id:"demo-write".into(),name:"write_file".into(),arguments:json!({"name":"answer.rs","content":"pub fn add(a: i32, b: i32) -> i32 {\n    a + b\n}\n"}).to_string()};
         let tools = agent::definitions();
         s.db.event(id, "tool_start", &serde_json::to_string(&call)?)?;
@@ -996,4 +1084,33 @@ pub(crate) async fn answer_messages(
         messages.push(providers::Message::User(input));
     }
     Ok((messages, vec![]))
+}
+
+#[cfg(test)]
+mod demo_send_tests {
+    use super::demo_send_request;
+    #[test]
+    fn the_demo_reads_send_requests_with_testnet_as_the_default() {
+        let to = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
+        let parsed = |p: &str| demo_send_request(p);
+        assert_eq!(
+            parsed(&format!("Please send 5 TCRO to {to}")),
+            Some(("tcro-cronos-testnet".into(), to.into(), "5".into()))
+        );
+        assert_eq!(
+            parsed(&format!("send 2.5 cro to {to}.")),
+            Some(("tcro-cronos-testnet".into(), to.into(), "2.5".into()))
+        );
+        assert_eq!(
+            parsed(&format!("send 2 CRO on mainnet to {to}")),
+            Some(("cro-cronos-mainnet".into(), to.into(), "2".into()))
+        );
+        assert_eq!(
+            parsed(&format!("send 10 USDC to {to}")),
+            Some(("usdc-cronos-mainnet".into(), to.into(), "10".into()))
+        );
+        assert_eq!(parsed("send me the notes"), None);
+        assert_eq!(parsed(&format!("send 5 SOL to {to}")), None);
+        assert_eq!(parsed("send 5 TCRO to alice"), None);
+    }
 }

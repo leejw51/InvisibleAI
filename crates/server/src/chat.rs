@@ -108,6 +108,13 @@ pub fn refresh(tx: &Transaction<'_>, memo: &str, kind: &str, text: &str) -> Resu
                     m.skills.truncate(20);
                 }
             }
+            // A transfer the AI prepared, and later what became of it.
+            if kind == "wallet_request"
+                && let Ok(request) =
+                    serde_json::from_str::<causewaybay_shared::registry::PendingTransfer>(text)
+            {
+                m.wallet_request = Some(request);
+            }
             if kind == "tool_result"
                 && let Ok(event) = serde_json::from_str::<serde_json::Value>(text)
                 && event["name"] == "web_search"
