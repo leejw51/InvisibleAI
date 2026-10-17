@@ -321,6 +321,92 @@ async fn prepare(
     })
 }
 
+impl Prepared {
+    /// Both wallets' whole-coin balances before the transfer.
+    pub fn balances_before(&self) -> (String, String) {
+        (self.from_before.clone(), self.to_before.clone())
+    }
+}
+
+/// The hands-off path the chat uses for a transfer the AI prepared: the same
+/// checks and the same signing as the Send form, in order, without the form.
+/// Each step is one awaited call so the chat can report progress between them.
+pub mod hands_off {
+    use super::*;
+    use gloo_timers::future::TimeoutFuture;
+
+    fn evm(coin: &Coin) -> Result<(Network, Asset), String> {
+        coin.evm_asset()
+            .ok_or_else(|| "Sending is not available for this coin yet.".to_string())
+    }
+    /// Read both balances and build the transaction; nothing is signed.
+    pub async fn prepare(
+        coin: &Coin,
+        from: &str,
+        to: &str,
+        amount: &str,
+    ) -> Result<Prepared, String> {
+        let (network, asset) = evm(coin)?;
+        let have = evm_balances(network, asset, from.to_string()).await?;
+        super::prepare(
+            coin.clone(),
+            from.to_string(),
+            to.to_string(),
+            amount.to_string(),
+            have,
+        )
+        .await
+    }
+    /// Sign with this browser's saved key, which must be the sender's, and broadcast.
+    pub async fn send(coin: &Coin, from: &str, prepared: &Prepared) -> Result<String, String> {
+        let (network, _) = evm(coin)?;
+        let Some(identity) = account::identity().filter(|id| id.address() == from) else {
+            return Err("This browser has no saved key for this wallet.".into());
+        };
+        let signed = prepared.tx.sign(identity.signing_key())?;
+        drop(identity);
+        let hash = rpc(
+            &network,
+            "eth_sendRawTransaction",
+            json!([signed.raw_hex()]),
+        )
+        .await?;
+        let hash = hash.as_str().unwrap_or_default().to_string();
+        if !hash.eq_ignore_ascii_case(&signed.hash_hex()) {
+            return Err("The network reported a different transaction hash. Check the explorer before retrying.".into());
+        }
+        Ok(hash.to_ascii_lowercase())
+    }
+    /// Wait for the receipt, a second at a time: `true` once it succeeded,
+    /// `false` if the chain reverted it, an error if it never came.
+    pub async fn arrival(coin: &Coin, hash: &str) -> Result<bool, String> {
+        let (network, _) = evm(coin)?;
+        for _ in 0..45 {
+            TimeoutFuture::new(1000).await;
+            let receipt = rpc(&network, "eth_getTransactionReceipt", json!([hash])).await?;
+            if receipt.is_object() {
+                return Ok(receipt["status"] == "0x1");
+            }
+        }
+        Err("The network has not confirmed the transfer yet. Check the explorer.".into())
+    }
+    /// Both balances after the transfer, whole coins.
+    pub async fn balances_after(
+        coin: &Coin,
+        from: &str,
+        to: &str,
+    ) -> Result<(String, String), String> {
+        let (network, asset) = evm(coin)?;
+        let decimals = asset.decimals(&network);
+        let from = holder_balance(&network, &asset, from).await?;
+        let to = holder_balance(&network, &asset, to).await?;
+        Ok((
+            evm::format_units(from, decimals),
+            evm::format_units(to, decimals),
+        ))
+    }
+}
+
 /// The send stage beside the form: one transfer, from review to arrival.
 #[derive(Clone, PartialEq)]
 struct Stage {
@@ -435,7 +521,7 @@ pub enum Msg {
     Arrived(String, Result<(String, String), String>),
     NewTransfer,
 }
-fn short(address: &str) -> String {
+pub fn short(address: &str) -> String {
     let chars: Vec<char> = address.chars().collect();
     if chars.len() < 14 {
         return address.into();

@@ -673,21 +673,36 @@ pub fn default_limit(coin_key: &str) -> Option<&'static str> {
 /// typo cannot store something the odometer cannot show.
 pub const MAX_LIMIT: &str = "1000000000";
 
-/// A transfer the AI prepared from a chat, waiting for the user to confirm it
-/// in the wallet. Nothing is signed until then; the request is just the
-/// coin, the recipient and the amount, as the tool call named them.
+/// A transfer the AI prepared from a chat. The backend never signs: the
+/// browser that asked sends it from the user's own key and reports back, and
+/// a request it could not send stays `pending` for the Wallet page to finish.
+/// Both wallets' balances of the coin, as the browser read them, travel with
+/// the request so the chat can show the transfer's effect.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PendingTransfer {
     pub id: String,
     pub coin: String,
     pub symbol: String,
     pub network: String,
+    /// The sending wallet: the account that asked.
+    #[serde(default)]
+    pub from: String,
     pub to: String,
     pub amount: String,
     /// `pending`, `sent` or `cancelled`.
     pub status: String,
     #[serde(default)]
     pub hash: String,
+    /// Whole-coin balances before the transfer, once the browser read them.
+    #[serde(default)]
+    pub from_before: String,
+    #[serde(default)]
+    pub to_before: String,
+    /// Whole-coin balances once the transfer arrived.
+    #[serde(default)]
+    pub from_after: String,
+    #[serde(default)]
+    pub to_after: String,
     pub created_at: String,
 }
 

@@ -12734,5 +12734,61 @@
     "ウォレットで確認",
     "Revisar en Cartera",
     "Zkontrolovat v Peněžence"
+  ],
+  "Arrived": [
+    "도착했어요",
+    "已到達",
+    "已到达",
+    "到着しました",
+    "Llegó",
+    "Doručeno"
+  ],
+  "From": [
+    "보내는 지갑",
+    "由",
+    "从",
+    "送信元",
+    "De",
+    "Od"
+  ],
+  "Transaction": [
+    "트랜잭션",
+    "交易",
+    "交易",
+    "トランザクション",
+    "Transacción",
+    "Transakce"
+  ],
+  "Reading balances…": [
+    "잔액 읽는 중…",
+    "讀取緊結餘…",
+    "正在读取余额…",
+    "残高を読み込み中…",
+    "Leyendo saldos…",
+    "Načítám zůstatky…"
+  ],
+  "Not sent from this browser; finish it under Wallet.": [
+    "이 브라우저에서 보내지 못했어요. 지갑에서 마무리하세요.",
+    "呢個瀏覽器送唔到，請喺錢包完成。",
+    "此浏览器未能发送，请在钱包中完成。",
+    "このブラウザから送れませんでした。ウォレットで完了してください。",
+    "No se envió desde este navegador; termínalo en Billetera.",
+    "Z tohoto prohlížeče se neodeslalo; dokončete to v Peněžence."
+  ],
+  "The network rejected the transfer. Check the explorer.": [
+    "네트워크가 전송을 거부했어요. 탐색기를 확인하세요.",
+    "網絡拒絕咗呢次轉帳，請查看瀏覽器。",
+    "网络拒绝了此次转账，请查看浏览器。",
+    "ネットワークが送金を拒否しました。エクスプローラーを確認してください。",
+    "La red rechazó la transferencia. Revisa el explorador.",
+    "Síť převod odmítla. Zkontrolujte explorer."
+  ],
+  "The network has not confirmed the transfer yet. Check the explorer.": [
+    "네트워크가 아직 전송을 확인하지 않았어요. 탐색기를 확인하세요.",
+    "網絡仲未確認呢次轉帳，請查看瀏覽器。",
+    "网络尚未确认此次转账，请查看浏览器。",
+    "ネットワークはまだ送金を確認していません。エクスプローラーを確認してください。",
+    "La red aún no confirmó la transferencia. Revisa el explorador.",
+    "Síť převod zatím nepotvrdila. Zkontrolujte explorer."
   ]
 }

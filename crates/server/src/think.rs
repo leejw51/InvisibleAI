@@ -736,26 +736,33 @@ pub(crate) fn demo_send_request(prompt: &str) -> Option<(String, String, String)
     let words: Vec<&str> = prompt
         .split(|c: char| c.is_whitespace() || c == ',')
         .filter(|w| !w.is_empty())
+        .map(|w| w.trim_end_matches(['.', '!', '?', ';', ':']))
         .collect();
-    let at = words.iter().position(|w| w.eq_ignore_ascii_case("send"))?;
-    let amount = words
-        .get(at + 1)?
-        .trim_matches(|c: char| !(c.is_ascii_digit() || c == '.'));
-    if amount.is_empty() || !amount.chars().all(|c| c.is_ascii_digit() || c == '.') {
-        return None;
-    }
-    let symbol = words.get(at + 2)?.to_ascii_lowercase();
-    let mainnet = words.iter().any(|w| w.eq_ignore_ascii_case("mainnet"));
-    let coin = match symbol.as_str() {
-        "usdc" => "usdc-cronos-mainnet",
-        "cro" | "tcro" if mainnet => "cro-cronos-mainnet",
-        "cro" | "tcro" => "tcro-cronos-testnet",
-        _ => return None,
-    };
+    // "send 5 TCRO to 0x…", "send 0x… 0.1 tcro cronos testnet": the words
+    // may come in any order, so each part is found on its own.
+    words
+        .iter()
+        .any(|w| w.eq_ignore_ascii_case("send") || w.eq_ignore_ascii_case("transfer"))
+        .then_some(())?;
     let to = words
         .iter()
-        .map(|w| w.trim_end_matches(['.', '!', '?', ';', ':']))
         .find(|w| w.starts_with("0x") && w.len() == 42)?;
+    let amount = words
+        .iter()
+        .filter(|w| !w.starts_with("0x"))
+        .map(|w| w.trim_matches(|c: char| !(c.is_ascii_digit() || c == '.')))
+        .find(|w| {
+            !w.is_empty() && w.chars().all(|c| c.is_ascii_digit() || c == '.') && *w != "."
+        })?;
+    let mainnet = words.iter().any(|w| w.eq_ignore_ascii_case("mainnet"));
+    let coin = words
+        .iter()
+        .find_map(|w| match w.to_ascii_lowercase().as_str() {
+            "usdc" => Some("usdc-cronos-mainnet"),
+            "cro" | "tcro" if mainnet => Some("cro-cronos-mainnet"),
+            "cro" | "tcro" => Some("tcro-cronos-testnet"),
+            _ => None,
+        })?;
     Some((coin.into(), to.to_string(), amount.to_string()))
 }
 
@@ -790,7 +797,7 @@ pub(crate) async fn demo_answer(s: &Arc<AppState>, id: &str, req: &ThinkRequest)
             )
         } else {
             format!(
-                "<!--kind:question-->\n### Transfer prepared, waiting for you\n\nI prepared **{} {}** to `{}` on {}. Nothing is sent yet: open **Wallet** and confirm it there. Your hard limit for {} is {} {} per transfer.\n\n*Demo response: the wallet tool ran for real; only these words are fixed.*",
+                "<!--kind:question-->\n### Transfer prepared\n\nSending **{} {}** to `{}` on {} from your wallet now. The card below shows both balances before and after, and the transaction hash, as the network answers; if this browser cannot send it, finish it under **Wallet**. Your hard limit for {} is {} {} per transfer.\n\n*Demo response: the wallet tool ran for real; only these words are fixed.*",
                 v["amount"].as_str().unwrap_or(""),
                 v["symbol"].as_str().unwrap_or(""),
                 v["to"].as_str().unwrap_or(""),
@@ -1109,8 +1116,18 @@ mod demo_send_tests {
             parsed(&format!("send 10 USDC to {to}")),
             Some(("usdc-cronos-mainnet".into(), to.into(), "10".into()))
         );
+        // The order the screenshot used: address first, then amount and coin.
+        assert_eq!(
+            parsed(&format!("send {to} 0.1 tcro cronos testnet")),
+            Some(("tcro-cronos-testnet".into(), to.into(), "0.1".into()))
+        );
+        assert_eq!(
+            parsed(&format!("transfer {to} 3 USDC.")),
+            Some(("usdc-cronos-mainnet".into(), to.into(), "3".into()))
+        );
         assert_eq!(parsed("send me the notes"), None);
         assert_eq!(parsed(&format!("send 5 SOL to {to}")), None);
         assert_eq!(parsed("send 5 TCRO to alice"), None);
+        assert_eq!(parsed(&format!("send tcro to {to}")), None);
     }
 }

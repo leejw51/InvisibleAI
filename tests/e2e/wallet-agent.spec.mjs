@@ -1,14 +1,16 @@
 // The AI's wallet function call: `wallet_send` prepares a transfer of CRO or
-// USDC on Cronos under the account's hard limits; the user confirms it on the
-// Wallet page, where the key is. The limits (100 CRO, 10 USDC to start) live
-// on the backend per account, editable on the Wallet page and in AI settings,
-// and the Send form obeys them too. The demo fixture runs the real tool.
+// USDC on Cronos under the account's hard limits, and the chat tab that asked
+// sends it at once with the browser's own key, reporting both balances before
+// and after and the transaction hash on the card. One the browser cannot send
+// stays pending for the Wallet page. The limits (100 CRO, 10 USDC to start)
+// live on the backend per account, editable on the Wallet page and in AI
+// settings, and the Send form obeys them too. The demo fixture runs the real tool.
 import { test, expect } from '@playwright/test';
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fakeCronos, confirmSend } from './evm-fixture.mjs';
+import { fakeCronos } from './evm-fixture.mjs';
 import { openConversationOptions } from './workspace-controls.mjs';
 
 const base = 'http://127.0.0.1:3131';
@@ -46,7 +48,7 @@ async function ask(page, prompt) {
   return reply;
 }
 
-test('hard limits are per account and editable in two places; the AI prepares a transfer under them that the wallet confirms', async ({ browser }) => {
+test('hard limits are per account and editable in two places; the AI sends a transfer under them from the chat, or leaves it for the wallet', async ({ browser }) => {
   test.setTimeout(180000);
   const context = await browser.newContext({ viewport: { width: 1360, height: 960 } });
   const rpc = { native: 30n * CRO, usdc: 0n, mainnetUsdc: 50_000_000n, nativeOf: { 'cronos-mainnet': 3n * CRO }, nativeOfAddress: { [recipient.toLowerCase()]: 1n * CRO } };
@@ -108,57 +110,53 @@ test('hard limits are per account and editable in two places; the AI prepares a 
     expect((await wallet(page)).pending).toEqual([]);
   });
 
-  await test.step('a chat under the limit prepares the transfer: a card in the chat, the review on the Wallet page, confirmed there', async () => {
-    const reply = await ask(page, `Please send 5 TCRO to ${recipient}`);
+  await test.step('a chat under the limit is sent from this browser: both balances before, the hash, both balances after', async () => {
+    rpc.receiptAfter = 1;
+    rpc.onReceipt = () => { rpc.native = 24_895_000_000_000_000_000n; rpc.nativeOfAddress[recipient.toLowerCase()] = 6n * CRO; };
+    // The order the user typed it in: address, amount, coin, network.
+    const reply = await ask(page, `send ${recipient} 5 tcro cronos testnet`);
     await expect(reply).toContainText('Transfer prepared');
     const card = page.getByTestId('chat-transfer');
-    await expect(card).toHaveAttribute('data-status', 'pending');
     await expect(card).toContainText('5 TCRO');
     await expect(card).toContainText('Cronos Testnet');
-    const pending = (await wallet(page)).pending;
-    expect(pending).toHaveLength(1);
-    expect(pending[0]).toMatchObject({ coin: 'tcro-cronos-testnet', symbol: 'TCRO', to: recipient, amount: '5', status: 'pending' });
-    expect(rpc.sent).toHaveLength(0);
-    await page.screenshot({ path: 'test-results/wallet-agent-1-chat.png', fullPage: true });
-
-    await card.getByTestId('review-in-wallet').click();
-    await expect(page).toHaveURL(/\/wallet$/);
-    await expect(page.getByTestId('agent-request')).toContainText('5 TCRO');
-    // The form is filled in and the review opens by itself; the wallet's own
-    // checks run, and nothing is sent until Confirm.
-    await expect(page.getByLabel('Recipient address')).toHaveValue(recipient);
-    await expect(page.getByLabel('Amount', { exact: true })).toHaveValue('5');
-    const review = page.getByTestId('wallet-review');
-    await expect(review).toContainText('5');
-    await expect(review).toContainText(recipient);
-    expect(rpc.sent).toHaveLength(0);
-    await page.screenshot({ path: 'test-results/wallet-agent-2-review.png', fullPage: true });
-    rpc.receiptAfter = 1;
-    rpc.onReceipt = () => { rpc.native = 24_895_000_000_000_000_000n; };
-    await confirmSend(page);
-    await expect(page.getByTestId('wallet-activity')).toContainText('Confirmed', { timeout: 15000 });
+    await expect(card).toHaveAttribute('data-status', 'sent', { timeout: 15000 });
+    await expect(card.getByTestId('from-before')).toHaveText('30 TCRO');
+    await expect(card.getByTestId('to-before')).toHaveText('1 TCRO');
+    await expect(card.getByTestId('transfer-hash')).toHaveAttribute('href', /explorer\.cronos\.org\/testnet\/tx\/0x[0-9a-f]{64}$/);
+    await expect(card.getByTestId('from-after')).toHaveText('24.895 TCRO', { timeout: 15000 });
+    await expect(card.getByTestId('to-after')).toHaveText('6 TCRO');
+    await expect(card.getByTestId('transfer-state')).toHaveText('Arrived');
+    await expect(card.getByTestId('review-in-wallet')).toHaveCount(0);
     expect(rpc.sent).toHaveLength(1);
-    await expect(page.getByTestId('agent-request')).toHaveCount(0);
     await expect.poll(async () => (await wallet(page)).pending).toEqual([]);
+    await page.screenshot({ path: 'test-results/wallet-agent-1-sent.png', fullPage: true });
   });
 
-  await test.step('back in the chat the card says the transfer was sent and links the explorer', async () => {
-    await page.goto(base + '/chat');
+  await test.step('the card keeps the numbers after a reload: they live on the backend with the request', async () => {
+    await page.reload();
     await openConversationOptions(page);
     await page.getByRole('combobox', { name: 'Chat room' }).selectOption(room);
     const card = page.getByTestId('chat-transfer');
     await expect(card).toHaveAttribute('data-status', 'sent');
+    await expect(card.getByTestId('from-before')).toHaveText('30 TCRO');
+    await expect(card.getByTestId('to-after')).toHaveText('6 TCRO');
     await expect(card.getByRole('link', { name: /Explorer/ })).toHaveAttribute('href', /explorer\.cronos\.org\/testnet\/tx\/0x[0-9a-f]{64}$/);
-    await expect(card.getByTestId('review-in-wallet')).toHaveCount(0);
   });
 
-  await test.step('a mainnet USDC request is prepared under its own limit and can be dismissed in the wallet', async () => {
+  await test.step('a mainnet USDC request this browser cannot send stays pending for the Wallet page, where it can be dismissed', async () => {
     const refused = await ask(page, `Please send 6 USDC to ${recipient}`);
     await expect(refused).toContainText('hard limit of 5 USDC');
+    rpc.mainnetUsdc = 0n;
     const reply = await ask(page, `Please send 1 USDC to ${recipient}`);
     await expect(reply).toContainText('Cronos Mainnet');
     const card = page.getByTestId('chat-transfer').last();
     await expect(card).toContainText('1 USDC');
+    await expect(card.getByTestId('transfer-error')).toContainText('USDC', { timeout: 15000 });
+    await expect(card).toHaveAttribute('data-status', 'pending');
+    await expect(card.getByTestId('transfer-state')).toHaveText('Not sent from this browser; finish it under Wallet.');
+    expect(rpc.sent).toHaveLength(1);
+    expect((await wallet(page)).pending).toHaveLength(1);
+    await page.screenshot({ path: 'test-results/wallet-agent-2-fallback.png', fullPage: true });
     await card.getByTestId('review-in-wallet').click();
     await expect(page).toHaveURL(/\/wallet$/);
     await expect(page.getByTestId('asset-symbol')).toHaveText('USDC');

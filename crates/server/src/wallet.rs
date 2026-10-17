@@ -25,7 +25,7 @@ pub fn init(conn: &Connection) -> Result<()> {
          CREATE TABLE IF NOT EXISTS wallet_addresses(owner TEXT NOT NULL,network TEXT NOT NULL,address TEXT NOT NULL,PRIMARY KEY(owner,network));
          CREATE TABLE IF NOT EXISTS wallet_usage(owner TEXT NOT NULL,coin TEXT NOT NULL,uses INTEGER NOT NULL DEFAULT 0,last_used TEXT NOT NULL,PRIMARY KEY(owner,coin));
          CREATE TABLE IF NOT EXISTS wallet_limits(owner TEXT NOT NULL,coin TEXT NOT NULL,max_amount TEXT NOT NULL,updated_at TEXT NOT NULL,PRIMARY KEY(owner,coin));
-         CREATE TABLE IF NOT EXISTS wallet_requests(id TEXT PRIMARY KEY,owner TEXT NOT NULL,memo_id TEXT NOT NULL,coin TEXT NOT NULL,to_address TEXT NOT NULL,amount TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'pending',hash TEXT NOT NULL DEFAULT '',created_at TEXT NOT NULL,updated_at TEXT NOT NULL);
+         CREATE TABLE IF NOT EXISTS wallet_requests(id TEXT PRIMARY KEY,owner TEXT NOT NULL,memo_id TEXT NOT NULL,coin TEXT NOT NULL,to_address TEXT NOT NULL,amount TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'pending',hash TEXT NOT NULL DEFAULT '',from_before TEXT NOT NULL DEFAULT '',to_before TEXT NOT NULL DEFAULT '',from_after TEXT NOT NULL DEFAULT '',to_after TEXT NOT NULL DEFAULT '',created_at TEXT NOT NULL,updated_at TEXT NOT NULL);
          CREATE INDEX IF NOT EXISTS wallet_requests_owner ON wallet_requests(owner,status,created_at);",
     )
 }
@@ -141,69 +141,53 @@ pub fn requests(
     status: Option<&str>,
 ) -> Result<Vec<PendingTransfer>> {
     let cutoff = (chrono::Utc::now() - chrono::Duration::hours(PENDING_HOURS)).to_rfc3339();
-    let mut rows = conn.prepare(
-        "SELECT id,coin,to_address,amount,status,hash,created_at FROM wallet_requests WHERE owner=?1 AND (?2 IS NULL OR status=?2) AND (status!='pending' OR created_at>=?3) ORDER BY created_at DESC LIMIT 20",
-    )?;
+    let mut rows = conn.prepare(&format!(
+        "SELECT {REQUEST_COLUMNS} FROM wallet_requests WHERE owner=?1 AND (?2 IS NULL OR status=?2) AND (status!='pending' OR created_at>=?3) ORDER BY created_at DESC LIMIT 20"
+    ))?;
     let found = rows
-        .query_map(params![owner, status, cutoff], |r| {
-            Ok(PendingTransfer {
-                id: r.get(0)?,
-                coin: r.get(1)?,
-                to: r.get(2)?,
-                amount: r.get(3)?,
-                status: r.get(4)?,
-                hash: r.get(5)?,
-                created_at: r.get(6)?,
-                symbol: String::new(),
-                network: String::new(),
-            })
-        })?
+        .query_map(params![owner, status, cutoff], request_row)?
         .collect::<rusqlite::Result<Vec<_>>>()?;
-    Ok(found
-        .into_iter()
-        .filter_map(|mut p| {
-            let coin = registry::coin(&p.coin)?;
-            p.symbol = coin.symbol.clone();
-            p.network = coin.network.clone();
-            Some(p)
-        })
-        .collect())
+    Ok(found.into_iter().filter_map(with_coin).collect())
+}
+const REQUEST_COLUMNS: &str = "id,owner,coin,to_address,amount,status,hash,from_before,to_before,from_after,to_after,created_at";
+/// A row of `wallet_requests` in `REQUEST_COLUMNS` order; the coin's symbol
+/// and network are filled in by `with_coin`.
+fn request_row(r: &rusqlite::Row) -> rusqlite::Result<PendingTransfer> {
+    Ok(PendingTransfer {
+        id: r.get(0)?,
+        from: r.get(1)?,
+        coin: r.get(2)?,
+        to: r.get(3)?,
+        amount: r.get(4)?,
+        status: r.get(5)?,
+        hash: r.get(6)?,
+        from_before: r.get(7)?,
+        to_before: r.get(8)?,
+        from_after: r.get(9)?,
+        to_after: r.get(10)?,
+        created_at: r.get(11)?,
+        symbol: String::new(),
+        network: String::new(),
+    })
+}
+/// A request of a coin the registry no longer lists is not shown.
+fn with_coin(mut p: PendingTransfer) -> Option<PendingTransfer> {
+    let coin = registry::coin(&p.coin)?;
+    p.symbol = coin.symbol.clone();
+    p.network = coin.network.clone();
+    Some(p)
 }
 
 /// One request of this account by id, whatever its status or age.
 pub fn request_by_id(conn: &Connection, owner: &str, id: &str) -> Result<Option<PendingTransfer>> {
     let found = conn
         .query_row(
-            "SELECT coin,to_address,amount,status,hash,created_at FROM wallet_requests WHERE id=?1 AND owner=?2",
+            &format!("SELECT {REQUEST_COLUMNS} FROM wallet_requests WHERE id=?1 AND owner=?2"),
             params![id, owner],
-            |r| {
-                Ok((
-                    r.get::<_, String>(0)?,
-                    r.get::<_, String>(1)?,
-                    r.get::<_, String>(2)?,
-                    r.get::<_, String>(3)?,
-                    r.get::<_, String>(4)?,
-                    r.get::<_, String>(5)?,
-                ))
-            },
+            request_row,
         )
         .optional()?;
-    Ok(
-        found.and_then(|(coin_key, to, amount, status, hash, created_at)| {
-            let coin = registry::coin(&coin_key)?;
-            Some(PendingTransfer {
-                id: id.into(),
-                coin: coin_key,
-                symbol: coin.symbol.clone(),
-                network: coin.network.clone(),
-                to,
-                amount,
-                status,
-                hash,
-                created_at,
-            })
-        }),
-    )
+    Ok(found.and_then(with_coin))
 }
 
 /// Check a limit the user typed: a whole-coin decimal the coin can represent,
@@ -287,11 +271,12 @@ pub fn create_request(
         coin: coin.key.clone(),
         symbol: coin.symbol.clone(),
         network: coin.network.clone(),
+        from: owner.into(),
         to: to.into(),
         amount: amount.into(),
         status: "pending".into(),
-        hash: String::new(),
         created_at: db::now(),
+        ..Default::default()
     };
     conn.execute(
         "INSERT INTO wallet_requests(id,owner,memo_id,coin,to_address,amount,status,hash,created_at,updated_at) VALUES(?1,?2,?3,?4,?5,?6,'pending','',?7,?7)",
@@ -420,24 +405,52 @@ pub async fn update(
     Ok(Json(read(&conn, &owner)?))
 }
 
-#[derive(Deserialize)]
+#[derive(Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RequestOutcome {
-    /// `sent` (with the transaction hash) or `cancelled`.
+    /// `pending` (still, with the balances read before sending), `sent` (with
+    /// the transaction hash) or `cancelled`.
     status: String,
     #[serde(default)]
     hash: Option<String>,
+    /// Whole-coin balances the browser read: both before the transfer, and
+    /// both once it arrived. Each is kept as sent and shown as is.
+    #[serde(default)]
+    from_before: Option<String>,
+    #[serde(default)]
+    to_before: Option<String>,
+    #[serde(default)]
+    from_after: Option<String>,
+    #[serde(default)]
+    to_after: Option<String>,
 }
-/// The browser reports what became of a transfer the AI prepared: sent, with
-/// its hash, or cancelled. A request moves out of `pending` once only; the
-/// chat that asked for it is told through its memo's events.
+/// A balance the browser reports: a short decimal, or nothing.
+fn valid_balance(value: Option<&str>) -> Api<Option<String>> {
+    let Some(text) = value.map(str::trim).filter(|t| !t.is_empty()) else {
+        return Ok(None);
+    };
+    if text.len() > 48
+        || !text.chars().all(|c| c.is_ascii_digit() || c == '.')
+        || text.matches('.').count() > 1
+    {
+        return Err(bad("That is not a balance."));
+    }
+    Ok(Some(text.to_string()))
+}
+/// The browser reports on a transfer the AI prepared: the balances it read
+/// before sending (the request stays `pending`), then `sent` with the hash,
+/// then the balances after arrival; or `cancelled`. A request leaves
+/// `pending` once only, and only its own sender's report can add the after
+/// balances. The chat that asked is told through its memo's events.
 pub async fn resolve_request(
     PrivateState(s): PrivateState,
     Path(id): Path<String>,
     Json(v): Json<RequestOutcome>,
 ) -> Api<Json<PendingTransfer>> {
-    if !matches!(v.status.as_str(), "sent" | "cancelled") {
-        return Err(bad("A request ends as sent or cancelled."));
+    if !matches!(v.status.as_str(), "pending" | "sent" | "cancelled") {
+        return Err(bad(
+            "A request stays pending, or ends as sent or cancelled.",
+        ));
     }
     let hash = match (v.status.as_str(), v.hash.as_deref()) {
         ("sent", Some(h)) => {
@@ -453,14 +466,37 @@ pub async fn resolve_request(
         ("sent", None) => return Err(bad("A sent transfer names its transaction hash.")),
         _ => String::new(),
     };
+    let from_before = valid_balance(v.from_before.as_deref())?;
+    let to_before = valid_balance(v.to_before.as_deref())?;
+    let from_after = valid_balance(v.from_after.as_deref())?;
+    let to_after = valid_balance(v.to_after.as_deref())?;
     let owner = s.db.owner().to_string();
     let memo = {
         let conn = s.db.0.lock().unwrap();
         s.db.writable(&conn)?;
-        let changed = conn.execute(
-            "UPDATE wallet_requests SET status=?3,hash=?4,updated_at=?5 WHERE id=?1 AND owner=?2 AND status='pending'",
-            params![id, owner, v.status, hash, db::now()],
-        )?;
+        let now = db::now();
+        let changed = match v.status.as_str() {
+            // Still pending: only the balances read before sending are recorded.
+            "pending" => conn.execute(
+                "UPDATE wallet_requests SET from_before=coalesce(?3,from_before),to_before=coalesce(?4,to_before),updated_at=?5 WHERE id=?1 AND owner=?2 AND status='pending'",
+                params![id, owner, from_before, to_before, now],
+            )?,
+            status => {
+                let left = conn.execute(
+                    "UPDATE wallet_requests SET status=?3,hash=?4,from_before=coalesce(?5,from_before),to_before=coalesce(?6,to_before),from_after=coalesce(?7,from_after),to_after=coalesce(?8,to_after),updated_at=?9 WHERE id=?1 AND owner=?2 AND status='pending'",
+                    params![id, owner, status, hash, from_before, to_before, from_after, to_after, now],
+                )?;
+                if left == 0 && status == "sent" {
+                    // Already sent: the same transaction's arrival adds the balances after.
+                    conn.execute(
+                        "UPDATE wallet_requests SET from_after=coalesce(?4,from_after),to_after=coalesce(?5,to_after),updated_at=?6 WHERE id=?1 AND owner=?2 AND status='sent' AND hash=?3",
+                        params![id, owner, hash, from_after, to_after, now],
+                    )?
+                } else {
+                    left
+                }
+            }
+        };
         if changed == 0 {
             return Err(ApiError(
                 StatusCode::NOT_FOUND,
@@ -1035,6 +1071,7 @@ mod tests {
             Json(RequestOutcome {
                 status: status.into(),
                 hash: hash.map(str::to_owned),
+                ..Default::default()
             })
         };
         // Twenty-five newer requests push this one past the listing's cap;
@@ -1082,11 +1119,50 @@ mod tests {
                 resolve_request(
                     PrivateState(alice.clone()),
                     Path(request.id.clone()),
-                    outcome("pending", None)
+                    outcome("failed", None)
                 )
                 .await
             )
             .contains("sent or cancelled")
+        );
+        // Still pending: the browser reports the balances it read before sending.
+        let balances =
+            |status: &str, hash: Option<&str>, before: (&str, &str), after: (&str, &str)| {
+                Json(RequestOutcome {
+                    status: status.into(),
+                    hash: hash.map(str::to_owned),
+                    from_before: Some(before.0.into()).filter(|s: &String| !s.is_empty()),
+                    to_before: Some(before.1.into()).filter(|s: &String| !s.is_empty()),
+                    from_after: Some(after.0.into()).filter(|s: &String| !s.is_empty()),
+                    to_after: Some(after.1.into()).filter(|s: &String| !s.is_empty()),
+                })
+            };
+        assert!(
+            error(
+                resolve_request(
+                    PrivateState(alice.clone()),
+                    Path(request.id.clone()),
+                    balances("pending", None, ("12e3", ""), ("", ""))
+                )
+                .await
+            )
+            .contains("not a balance")
+        );
+        let Json(read) = resolve_request(
+            PrivateState(alice.clone()),
+            Path(request.id.clone()),
+            balances("pending", None, ("50", "0.5"), ("", "")),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            (
+                read.status.as_str(),
+                read.from.as_str(),
+                read.from_before.as_str(),
+                read.to_before.as_str()
+            ),
+            ("pending", ALICE, "50", "0.5")
         );
         let Json(done) = resolve_request(
             PrivateState(alice.clone()),
@@ -1096,10 +1172,15 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(
-            (done.status.as_str(), done.hash.as_str()),
-            ("sent", hash.as_str())
+            (
+                done.status.as_str(),
+                done.hash.as_str(),
+                done.from_before.as_str()
+            ),
+            ("sent", hash.as_str(), "50")
         );
-        // Resolved once: a second outcome finds no pending request.
+        // Resolved once: a second outcome finds no pending request, and the
+        // balances before cannot be rewritten.
         assert!(
             resolve_request(
                 PrivateState(alice.clone()),
@@ -1108,6 +1189,41 @@ mod tests {
             )
             .await
             .is_err()
+        );
+        assert!(
+            resolve_request(
+                PrivateState(alice.clone()),
+                Path(request.id.clone()),
+                balances("pending", None, ("1", "1"), ("", ""))
+            )
+            .await
+            .is_err()
+        );
+        // The same transaction's arrival adds the balances after; another hash cannot.
+        let other = format!("0x{}", "cd".repeat(32));
+        assert!(
+            resolve_request(
+                PrivateState(alice.clone()),
+                Path(request.id.clone()),
+                balances("sent", Some(&other), ("", ""), ("40", "10.5"))
+            )
+            .await
+            .is_err()
+        );
+        let Json(arrived) = resolve_request(
+            PrivateState(alice.clone()),
+            Path(request.id.clone()),
+            balances("sent", Some(&hash), ("", ""), ("40", "10.5")),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            (
+                arrived.from_before.as_str(),
+                arrived.from_after.as_str(),
+                arrived.to_after.as_str()
+            ),
+            ("50", "40", "10.5")
         );
         {
             let conn = alice.db.0.lock().unwrap();
@@ -1179,6 +1295,12 @@ mod tests {
             .query_map([], |r| r.get(1))?
             .collect::<rusqlite::Result<_>>()?;
         assert!(columns.iter().any(|c| c == "hash"), "{columns:?}");
+        for added in ["from_before", "to_before", "from_after", "to_after"] {
+            assert!(
+                columns.iter().any(|c| c == added),
+                "{added} missing: {columns:?}"
+            );
+        }
         let tables: Vec<String> = conn
             .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'wallet_%' ORDER BY name")?
             .query_map([], |r| r.get(0))?
