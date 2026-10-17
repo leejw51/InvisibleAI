@@ -128,7 +128,7 @@ test-scripts:
 test-wallet: build-debug
 	cargo test -p causewaybay-shared
 	node --test tests/scripts/wallet-format.test.mjs tests/scripts/wallet-chains.test.mjs
-	npx playwright test tests/e2e/wallet.spec.mjs tests/e2e/wallet-flow.spec.mjs tests/e2e/wallet-multichain.spec.mjs tests/e2e/wallet-look.spec.mjs tests/e2e/wallet-send-stage.spec.mjs tests/e2e/wallet-review-guards.spec.mjs --project=chromium
+	npx playwright test tests/e2e/wallet.spec.mjs tests/e2e/wallet-flow.spec.mjs tests/e2e/wallet-multichain.spec.mjs tests/e2e/wallet-look.spec.mjs tests/e2e/wallet-send-stage.spec.mjs tests/e2e/wallet-review-guards.spec.mjs tests/e2e/wallet-agent.spec.mjs --project=chromium
 # Live, read-only: chain ids, token metadata, a node-validated signature, and
 # the Wallet page reading real balances on every chain. Never broadcasts a funded transfer.
 test-wallet-live: build-debug

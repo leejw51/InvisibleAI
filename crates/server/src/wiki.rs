@@ -303,6 +303,9 @@ pub fn intent(text: &str) -> Intent {
         "check",
         "review",
         "please",
+        // A command to send from the wallet is a request, never a diary line.
+        "send",
+        "transfer",
     ];
     if OPENERS.contains(&first) {
         return Intent::Question;

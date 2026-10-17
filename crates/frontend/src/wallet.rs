@@ -5,11 +5,18 @@
 //! view and receive. The backend keeps only public choices — the active coin,
 //! recent picks, added ERC-20s and receive addresses — so a new sign-in opens
 //! the wallet as it was left. Keys and phrases stay in this browser.
-use crate::{account, api::api, i18n::t, icons::icon};
+use crate::{
+    account,
+    api::api,
+    i18n::{t, tf},
+    icons::icon,
+};
 use causewaybay_shared::chains;
 use causewaybay_shared::evm::{self, Asset, CustomToken, LegacyTransaction, Network, U256};
 use causewaybay_shared::identity::username;
-use causewaybay_shared::registry::{self, Chain, Coin, MAIN_COINS, Net, Standard, WalletSettings};
+use causewaybay_shared::registry::{
+    self, Chain, Coin, LIMITED_COINS, MAIN_COINS, Net, PendingTransfer, Standard, WalletSettings,
+};
 use gloo_timers::callback::Timeout;
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -314,6 +321,92 @@ async fn prepare(
     })
 }
 
+impl Prepared {
+    /// Both wallets' whole-coin balances before the transfer.
+    pub fn balances_before(&self) -> (String, String) {
+        (self.from_before.clone(), self.to_before.clone())
+    }
+}
+
+/// The hands-off path the chat uses for a transfer the AI prepared: the same
+/// checks and the same signing as the Send form, in order, without the form.
+/// Each step is one awaited call so the chat can report progress between them.
+pub mod hands_off {
+    use super::*;
+    use gloo_timers::future::TimeoutFuture;
+
+    fn evm(coin: &Coin) -> Result<(Network, Asset), String> {
+        coin.evm_asset()
+            .ok_or_else(|| "Sending is not available for this coin yet.".to_string())
+    }
+    /// Read both balances and build the transaction; nothing is signed.
+    pub async fn prepare(
+        coin: &Coin,
+        from: &str,
+        to: &str,
+        amount: &str,
+    ) -> Result<Prepared, String> {
+        let (network, asset) = evm(coin)?;
+        let have = evm_balances(network, asset, from.to_string()).await?;
+        super::prepare(
+            coin.clone(),
+            from.to_string(),
+            to.to_string(),
+            amount.to_string(),
+            have,
+        )
+        .await
+    }
+    /// Sign with this browser's saved key, which must be the sender's, and broadcast.
+    pub async fn send(coin: &Coin, from: &str, prepared: &Prepared) -> Result<String, String> {
+        let (network, _) = evm(coin)?;
+        let Some(identity) = account::identity().filter(|id| id.address() == from) else {
+            return Err("This browser has no saved key for this wallet.".into());
+        };
+        let signed = prepared.tx.sign(identity.signing_key())?;
+        drop(identity);
+        let hash = rpc(
+            &network,
+            "eth_sendRawTransaction",
+            json!([signed.raw_hex()]),
+        )
+        .await?;
+        let hash = hash.as_str().unwrap_or_default().to_string();
+        if !hash.eq_ignore_ascii_case(&signed.hash_hex()) {
+            return Err("The network reported a different transaction hash. Check the explorer before retrying.".into());
+        }
+        Ok(hash.to_ascii_lowercase())
+    }
+    /// Wait for the receipt, a second at a time: `true` once it succeeded,
+    /// `false` if the chain reverted it, an error if it never came.
+    pub async fn arrival(coin: &Coin, hash: &str) -> Result<bool, String> {
+        let (network, _) = evm(coin)?;
+        for _ in 0..45 {
+            TimeoutFuture::new(1000).await;
+            let receipt = rpc(&network, "eth_getTransactionReceipt", json!([hash])).await?;
+            if receipt.is_object() {
+                return Ok(receipt["status"] == "0x1");
+            }
+        }
+        Err("The network has not confirmed the transfer yet. Check the explorer.".into())
+    }
+    /// Both balances after the transfer, whole coins.
+    pub async fn balances_after(
+        coin: &Coin,
+        from: &str,
+        to: &str,
+    ) -> Result<(String, String), String> {
+        let (network, asset) = evm(coin)?;
+        let decimals = asset.decimals(&network);
+        let from = holder_balance(&network, &asset, from).await?;
+        let to = holder_balance(&network, &asset, to).await?;
+        Ok((
+            evm::format_units(from, decimals),
+            evm::format_units(to, decimals),
+        ))
+    }
+}
+
 /// The send stage beside the form: one transfer, from review to arrival.
 #[derive(Clone, PartialEq)]
 struct Stage {
@@ -387,9 +480,19 @@ pub struct Wallet {
     _fade: Option<Timeout>,
     _blur: Option<Timeout>,
     polls: HashMap<String, Timeout>,
+    /// A transfer the AI prepared from a chat, filled into the form: the user
+    /// reviews and confirms it like any other, and its outcome is reported.
+    request: Option<PendingTransfer>,
+    /// Open the review as soon as the balances of a prepared transfer load.
+    auto_review: bool,
 }
 pub enum Msg {
     Settings(Result<WalletSettings, String>),
+    /// The hard limits were saved (here or elsewhere): the review check follows.
+    LimitsSaved(WalletSettings),
+    /// The prepared transfer is not wanted after all.
+    Dismiss,
+    Resolved(Result<PendingTransfer, String>),
     Saved(u32, Result<WalletSettings, String>),
     Choose(String),
     Query(String),
@@ -418,7 +521,7 @@ pub enum Msg {
     Arrived(String, Result<(String, String), String>),
     NewTransfer,
 }
-fn short(address: &str) -> String {
+pub fn short(address: &str) -> String {
     let chars: Vec<char> = address.chars().collect();
     if chars.len() < 14 {
         return address.into();
@@ -468,6 +571,21 @@ impl Wallet {
     }
     fn receive_address(&self) -> Option<String> {
         self.addresses.get(&self.coin.network).cloned()
+    }
+    /// Tell the backend what became of the AI's prepared transfer, so the chat
+    /// that asked for it shows the outcome. Nothing to do without one.
+    fn resolve_request(&mut self, ctx: &Context<Self>, status: &str, hash: Option<&str>) {
+        let Some(request) = self.request.take() else {
+            return;
+        };
+        self.auto_review = false;
+        let mut body = json!({"status": status});
+        if let Some(hash) = hash {
+            body["hash"] = json!(hash);
+        }
+        let url = format!("/api/wallet/requests/{}", request.id);
+        ctx.link()
+            .send_future(async move { Msg::Resolved(api("PATCH", &url, Some(body)).await) });
     }
     fn close_review(&mut self, ctx: &Context<Self>) {
         if self.review.is_none() || self.review_leaving {
@@ -563,6 +681,8 @@ impl Component for Wallet {
             _fade: None,
             _blur: None,
             polls: HashMap::new(),
+            request: None,
+            auto_review: false,
         }
     }
     fn update(&mut self, ctx: &Context<Self>, msg: Msg) -> bool {
@@ -580,20 +700,55 @@ impl Component for Wallet {
                     .filter(|(k, v)| settings.addresses.get(*k) != Some(*v))
                     .map(|(k, v)| (k.clone(), v.clone()))
                     .collect();
+                let mut body = json!({});
                 if !fresh.is_empty() {
-                    self.save(
-                        ctx,
-                        "PATCH",
-                        "/api/wallet".into(),
-                        Some(json!({"addresses": fresh})),
-                    );
+                    body["addresses"] = json!(fresh);
                 }
                 self.coin = settings.active_coin();
+                // A transfer the AI prepared is filled in, on its own coin, and
+                // reviewed as soon as the balances are known; the user confirms.
+                let prepared = settings
+                    .pending
+                    .iter()
+                    .find(|p| p.status == "pending")
+                    .and_then(|p| {
+                        let coin = settings.all_coins().into_iter().find(|c| c.key == p.coin)?;
+                        coin.can_send().then_some((p.clone(), coin))
+                    });
+                if let Some((p, coin)) = prepared {
+                    if coin.key != self.coin.key {
+                        body["active"] = json!(coin.key);
+                    }
+                    self.coin = coin;
+                    self.tab = Tab::Send;
+                    self.to = p.to.clone();
+                    self.amount = p.amount.clone();
+                    self.auto_review = Self::unlocked(ctx);
+                    self.request = Some(p);
+                }
+                if body.as_object().is_some_and(|b| !b.is_empty()) {
+                    self.save(ctx, "PATCH", "/api/wallet".into(), Some(body));
+                }
                 if !self.coin.can_send() {
                     self.tab = Tab::Receive;
                 }
                 self.settings = Some(settings);
                 ctx.link().send_message(Msg::Refresh);
+            }
+            Msg::LimitsSaved(settings) => {
+                let coin = settings.active_coin();
+                self.settings = Some(settings);
+                self.show(ctx, coin);
+            }
+            Msg::Dismiss => {
+                self.resolve_request(ctx, "cancelled", None);
+                self.stage = None;
+                self.close_review(ctx);
+            }
+            Msg::Resolved(result) => {
+                if let Err(e) = result {
+                    self.error = e;
+                }
             }
             Msg::Saved(seq, _) if seq != self.saves => return false,
             Msg::Saved(_, result) => match result {
@@ -607,6 +762,11 @@ impl Component for Wallet {
             Msg::Choose(key) => {
                 if self.sending {
                     return false;
+                }
+                // Choosing another coin leaves the prepared transfer behind.
+                if self.request.as_ref().is_some_and(|p| p.coin != key) {
+                    self.request = None;
+                    self.auto_review = false;
                 }
                 let Some(coin) = self
                     .settings
@@ -759,7 +919,13 @@ impl Component for Wallet {
                 }
                 self.loading = false;
                 match result {
-                    Ok(b) => self.balances = Some(b),
+                    Ok(b) => {
+                        self.balances = Some(b);
+                        if self.auto_review {
+                            self.auto_review = false;
+                            ctx.link().send_message(Msg::Review);
+                        }
+                    }
                     Err(e) => {
                         // Nothing is signed on numbers the chain no longer
                         // confirms (a token's decimals changed, say).
@@ -816,6 +982,26 @@ impl Component for Wallet {
                         return true;
                     }
                 };
+                // The hard limit holds for every transfer of a limited coin,
+                // typed here or prepared by the AI.
+                if let Some(limit) = self.settings.as_ref().and_then(|s| s.limit_for(&self.coin))
+                    && evm::parse_units(&amount, self.coin.decimals).is_ok_and(|u| u > limit)
+                {
+                    self.error = tf(
+                        "This wallet's hard limit for {symbol} is {limit} {symbol} per transfer. Change it under Hard limits per transfer.",
+                        &[
+                            ("symbol", self.coin.symbol.clone()),
+                            (
+                                "limit",
+                                self.settings
+                                    .as_ref()
+                                    .and_then(|s| s.limit_text(&self.coin.key))
+                                    .unwrap_or_default(),
+                            ),
+                        ],
+                    );
+                    return true;
+                }
                 self.preparing = true;
                 self.error.clear();
                 let (generation, coin, from) =
@@ -853,6 +1039,8 @@ impl Component for Wallet {
                 }
             }
             Msg::Cancel => {
+                // Cancelling a prepared transfer's review is the answer to it.
+                self.resolve_request(ctx, "cancelled", None);
                 self.stage = None;
                 self.close_review(ctx);
             }
@@ -960,6 +1148,7 @@ impl Component for Wallet {
                                 status: "Pending",
                             },
                         );
+                        self.resolve_request(ctx, "sent", Some(&hash));
                         self.to.clear();
                         self.amount.clear();
                         self.confirm_text.clear();
@@ -1309,6 +1498,13 @@ impl Component for Wallet {
             {for preview}
             if !self.preview_error.is_empty() {<p class="login-error" role="alert">{t(&self.preview_error)}</p>}
             if !net.testnet && coin.can_send() {<p class="wallet-mainnet-note" role="note">{icon("info")}{t("Mainnet moves real funds. Double-check every address.")}</p>}
+            if let Some(p) = &self.request {
+                <div class="wallet-agent-request" role="note" data-testid="agent-request">
+                    {icon("spark")}
+                    <span>{t("Prepared by your AI from chat:")}{" "}<strong>{&p.amount}{" "}{&p.symbol}</strong>{" "}{t("to")}{" "}<code title={p.to.clone()}>{short(&p.to)}</code>{". "}{t("Review it below and confirm; nothing is sent until you do.")}</span>
+                    <button type="button" class="text-button" data-testid="dismiss-request" disabled={self.sending} onclick={link.callback(|_| Msg::Dismiss)}>{t("Dismiss")}</button>
+                </div>
+            }
             {identity}
             {balances}
             <div class="wallet-tabs filter-tabs" role="tablist" aria-label={t("Wallet actions")} data-glider=""><span class="glider" aria-hidden="true"></span>{tab(Tab::Send, "Send", coin.can_send())}{tab(Tab::Receive, "Receive", true)}</div>
@@ -1331,6 +1527,141 @@ impl Component for Wallet {
                     <li data-testid="wallet-activity"><span><strong>{&a.amount}{" "}{&a.symbol}</strong><small>{t("to")}{" "}{short(&a.to)}</small></span><span class={classes!("wallet-status", a.status.to_lowercase())}>{t(a.status)}</span><a href={registry::net_of(a.network.key).map(|n| n.tx_url(&a.hash)).unwrap_or_default()} target="_blank" rel="noopener noreferrer">{t("Explorer")}{icon("arrow")}</a></li>
                 })}</ul></div>
             }
+            <WalletLimits on_saved={link.callback(Msg::LimitsSaved)}/>
+        </section>}
+    }
+}
+
+/// The hard limit per transfer of each limited coin, editable in place. The
+/// same panel sits on the Wallet page and on AI settings; both write the
+/// account's limits, which the AI's `wallet_send` and the Send form obey.
+#[derive(Properties, PartialEq)]
+pub struct LimitsProps {
+    #[prop_or_default]
+    pub on_saved: Callback<WalletSettings>,
+}
+pub struct WalletLimits {
+    settings: Option<WalletSettings>,
+    drafts: BTreeMap<String, String>,
+    busy: bool,
+    error: String,
+    saved: bool,
+}
+pub enum LimitsMsg {
+    Loaded(Result<WalletSettings, String>),
+    Draft(String, String),
+    Save,
+    Saved(Result<WalletSettings, String>),
+}
+impl WalletLimits {
+    fn limited_coins() -> Vec<Coin> {
+        LIMITED_COINS
+            .iter()
+            .filter_map(|key| registry::coin(key))
+            .collect()
+    }
+    fn drafts_of(settings: &WalletSettings) -> BTreeMap<String, String> {
+        LIMITED_COINS
+            .iter()
+            .filter_map(|key| Some(((*key).to_string(), settings.limit_text(key)?)))
+            .collect()
+    }
+    fn dirty(&self) -> bool {
+        self.settings
+            .as_ref()
+            .is_some_and(|s| Self::drafts_of(s) != self.drafts)
+    }
+}
+impl Component for WalletLimits {
+    type Message = LimitsMsg;
+    type Properties = LimitsProps;
+    fn create(ctx: &Context<Self>) -> Self {
+        ctx.link()
+            .send_future(async { LimitsMsg::Loaded(api("GET", "/api/wallet", None).await) });
+        Self {
+            settings: None,
+            drafts: BTreeMap::new(),
+            busy: false,
+            error: String::new(),
+            saved: false,
+        }
+    }
+    fn update(&mut self, ctx: &Context<Self>, msg: LimitsMsg) -> bool {
+        match msg {
+            LimitsMsg::Loaded(Ok(settings)) => {
+                self.drafts = Self::drafts_of(&settings);
+                self.settings = Some(settings);
+            }
+            LimitsMsg::Loaded(Err(e)) => self.error = e,
+            LimitsMsg::Draft(key, value) => {
+                self.drafts.insert(key, value);
+                self.saved = false;
+                self.error.clear();
+            }
+            LimitsMsg::Save => {
+                if self.busy || !self.dirty() {
+                    return false;
+                }
+                self.busy = true;
+                self.error.clear();
+                // Only the coins that were changed are written: an untouched
+                // coin keeps following the default.
+                let saved = self
+                    .settings
+                    .as_ref()
+                    .map(Self::drafts_of)
+                    .unwrap_or_default();
+                let changed: BTreeMap<_, _> = self
+                    .drafts
+                    .iter()
+                    .filter(|(k, v)| saved.get(*k) != Some(*v))
+                    .map(|(k, v)| (k.clone(), v.clone()))
+                    .collect();
+                let body = json!({"limits": changed});
+                ctx.link().send_future(async move {
+                    LimitsMsg::Saved(api("PATCH", "/api/wallet", Some(body)).await)
+                });
+            }
+            LimitsMsg::Saved(result) => {
+                self.busy = false;
+                match result {
+                    Ok(settings) => {
+                        self.drafts = Self::drafts_of(&settings);
+                        self.settings = Some(settings.clone());
+                        self.saved = true;
+                        ctx.props().on_saved.emit(settings);
+                    }
+                    Err(e) => self.error = e,
+                }
+            }
+        }
+        true
+    }
+    fn view(&self, ctx: &Context<Self>) -> Html {
+        let link = ctx.link();
+        html! {<section class="wallet-limits" data-testid="wallet-limits" aria-label={t("Hard limits per transfer")}>
+            <h3>{icon("shield")}{t("Hard limits per transfer")}</h3>
+            <p class="small-muted">{t("The most one transfer can move, for you and for the AI. The AI prepares transfers of these coins only; you confirm each one in the wallet.")}</p>
+            if self.settings.is_none() && self.error.is_empty() {<p class="small-muted" role="status">{t("Loading limits…")}</p>}
+            else {
+                <div class="wallet-limit-rows">
+                    {for Self::limited_coins().into_iter().map(|coin| {
+                        let key = coin.key.clone();
+                        let net = coin.net();
+                        let value = self.drafts.get(&coin.key).cloned().unwrap_or_default();
+                        html! {<label class="form-label" key={coin.key.clone()}>
+                            <span class="wallet-limit-name"><strong>{&coin.symbol}</strong><small>{net.name}{if net.testnet { html!{<em>{" · "}{t("test")}</em>} } else { html!{} }}</small></span>
+                            <span class="wallet-amount-field"><input type="text" inputmode="decimal" autocomplete="off" aria-label={tf("{symbol} limit on {network}", &[("symbol", coin.symbol.clone()), ("network", net.name.to_string())])} data-testid={format!("limit-{}", coin.key)} value={value} disabled={self.busy}
+                                oninput={link.callback(move |e: InputEvent| LimitsMsg::Draft(key.clone(), e.target_unchecked_into::<HtmlInputElement>().value()))}/><span class="wallet-amount-symbol">{&coin.symbol}</span></span>
+                        </label>}
+                    })}
+                </div>
+                <div class="wallet-limit-actions">
+                    <button type="button" class="secondary-button" data-testid="save-limits" disabled={self.busy || !self.dirty()} onclick={link.callback(|_| LimitsMsg::Save)}>{icon("check")}{if self.busy { t("Saving…") } else { t("Save limits") }}</button>
+                    if self.saved && !self.dirty() {<span class="small-muted" role="status" data-testid="limits-saved">{t("Limits saved.")}</span>}
+                </div>
+            }
+            if !self.error.is_empty() {<p class="login-error" role="alert">{t(&self.error)}</p>}
         </section>}
     }
 }
