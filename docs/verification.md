@@ -515,7 +515,7 @@ For targeted checks, use `make test-auth`, `make test-live`, `make test-native-c
 | Storage | JSONL restore/validation, SQLite restart, relative paths, legacy blob migration, relocation, file versions, Markdown regeneration, deleted/missing bytes not recreated |
 | Search | Hashtags, FTS5 BM25, local embeddings and ranking fusion |
 | Coding agent | Tool events, actual write_file/compile_code, saved compiler diagnostics, valid/invalid Rust, no program execution |
-| Quiz playground | Random math correctness/new numbers and Rust quicksort/sliding-window/producer-consumer prompts |
+| Quiz playground | Random math correctness/new numbers, sequence/word-problem and Rust quicksort/sliding-window/binary-search/two-sum/predict-output/producer-consumer prompts, 30-second regeneration with a held clock during capture |
 | Lifecycle/package | Makefile start/stop, 0.0.0.0 bind, web/API/dashboard/Tailwind URL output, non-loopback access, packaged WASM/assets |
 
 ## Real capture and cloud evidence

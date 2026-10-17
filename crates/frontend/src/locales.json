@@ -2055,14 +2055,6 @@
     "Buscando contexto útil",
     "Hledání užitečného kontextu"
   ],
-  "Fresh numbers, useful coding challenges. Capture a question and see what your bot makes of it.": [
-    "새 숫자와 유용한 코딩 문제입니다. 문제를 캡처해 봇의 답변을 확인하세요.",
-    "新數字、實用編程挑戰。擷取題目，睇吓助手點答。",
-    "新数字、实用编程挑战。截取题目，看看助手如何回答。",
-    "新しい数値と実用的なコーディング問題。キャプチャして回答を試しましょう。",
-    "Nuevos números y retos de programación. Captura una pregunta y comprueba la respuesta del bot.",
-    "Nová čísla a praktické programovací úlohy. Zachyťte otázku a vyzkoušejte odpověď bota."
-  ],
   "From what’s on your screen to what’s on your mind. Let’s make sense of it.": [
     "화면 속 내용부터 머릿속 생각까지 함께 정리해 보세요.",
     "由螢幕內容到你嘅諗法，一齊諗清楚。",
@@ -2622,14 +2614,6 @@
     "テストページを開く",
     "Abrir página de prueba",
     "Otevřít testovací stránku"
-  ],
-  "Open this page on the capture computer. Choose that client here or capture from another device. The question stays visible while capture runs.": [
-    "캡처 컴퓨터에서 이 페이지를 열고 해당 기기를 선택하거나 다른 기기에서 캡처하세요. 캡처 중에도 문제가 표시됩니다.",
-    "喺擷取電腦開呢頁。喺呢度揀該用戶端，或者用另一部裝置擷取。擷取時題目會一直顯示。",
-    "在截屏电脑上打开此页。在此选择该客户端，或从其他设备截屏。截屏时题目会保持显示。",
-    "キャプチャ用コンピューターで開き、そのクライアントを選ぶか別端末から撮影してください。処理中も問題を表示します。",
-    "Abre esta página en el equipo de captura. Selecciónalo aquí o captura desde otro dispositivo. La pregunta permanece visible durante la captura.",
-    "Otevřete stránku na snímacím počítači. Vyberte jej zde nebo snímejte z jiného zařízení. Otázka zůstává při snímání viditelná."
   ],
   "Open this workspace in a browser to connect.": [
     "브라우저에서 이 작업 공간을 열어 연결하세요.",
@@ -12510,5 +12494,133 @@
     "このブラウザからログアウトしますか？ワークスペースはバックエンドに残りますが、このブラウザはウォレットの鍵を忘れます。再度ログインするにはリカバリーフレーズか秘密鍵が必要です。",
     "¿Cerrar sesión en este navegador? Tu espacio de trabajo permanece en el backend, pero este navegador olvida la clave de tu wallet: para volver a entrar necesitarás tu frase de recuperación o tu clave privada.",
     "Odhlásit se z tohoto prohlížeče? Váš pracovní prostor zůstává na backendu, ale tento prohlížeč zapomene klíč vaší peněženky: k dalšímu přihlášení budete potřebovat frázi pro obnovení nebo privátní klíč."
+  ],
+  "Fresh values every 30 seconds: arithmetic, reasoning and Rust coding challenges. Capture a question and see what your bot makes of it.": [
+    "30초마다 새로운 값: 산수, 추론, Rust 코딩 과제. 문제를 캡처해서 봇이 어떻게 푸는지 확인해 보세요.",
+    "每 30 秒換新數值：算術、推理同 Rust 編程挑戰。擷取一條題目，睇吓你嘅機械人點樣解。",
+    "每 30 秒更换新数值：算术、推理和 Rust 编程挑战。截取一道题目，看看你的机器人怎么解。",
+    "30 秒ごとに新しい値：算数、推論、Rust のコーディング課題。問題をキャプチャして、ボットの解き方を確かめましょう。",
+    "Valores nuevos cada 30 segundos: aritmética, razonamiento y retos de programación en Rust. Captura una pregunta y mira qué hace tu bot con ella.",
+    "Nové hodnoty každých 30 sekund: aritmetika, uvažování a programovací výzvy v Rustu. Zachyťte otázku a podívejte se, co s ní váš bot udělá."
+  ],
+  "Open this page on the capture computer. Choose that client here or capture from another device. The question stays visible while capture runs, and the timer waits for the answer.": [
+    "캡처 컴퓨터에서 이 페이지를 여세요. 여기서 그 클라이언트를 선택하거나 다른 기기에서 캡처하세요. 캡처가 진행되는 동안 문제는 그대로 보이고, 타이머는 답변을 기다립니다.",
+    "喺擷取電腦開呢頁。喺度揀嗰個客戶端，或者由另一部裝置擷取。擷取進行緊嗰陣題目會一直顯示，計時器會等答案返嚟。",
+    "在截屏电脑上打开此页面。在这里选择该客户端，或从另一台设备截屏。截屏进行时题目保持可见，计时器会等待答案。",
+    "キャプチャするコンピューターでこのページを開いてください。ここでそのクライアントを選ぶか、別の端末からキャプチャします。キャプチャ中も問題は表示されたままで、タイマーは回答を待ちます。",
+    "Abre esta página en el ordenador de captura. Elige ese cliente aquí o captura desde otro dispositivo. La pregunta sigue visible mientras se captura y el temporizador espera la respuesta.",
+    "Otevřete tuto stránku na počítači, který snímá. Vyberte zde toho klienta, nebo snímejte z jiného zařízení. Otázka zůstane během snímání viditelná a časovač počká na odpověď."
+  ],
+  "Holding while capture runs": [
+    "캡처 중에는 대기",
+    "擷取進行中，暫停倒數",
+    "截屏进行中，暂停倒计时",
+    "キャプチャ中は待機",
+    "En espera mientras se captura",
+    "Čeká, dokud snímání běží"
+  ],
+  "Next quiz in {seconds}s": [
+    "{seconds}초 후 새 퀴즈",
+    "{seconds} 秒後換題",
+    "{seconds} 秒后换题",
+    "{seconds} 秒後に次のクイズ",
+    "Nuevo quiz en {seconds} s",
+    "Další kvíz za {seconds} s"
+  ],
+  "Timer paused": [
+    "타이머 일시정지",
+    "計時器已暫停",
+    "计时器已暂停",
+    "タイマー停止中",
+    "Temporizador en pausa",
+    "Časovač pozastaven"
+  ],
+  "Change every 30 s": [
+    "30초마다 바꾸기",
+    "每 30 秒換題",
+    "每 30 秒换题",
+    "30 秒ごとに変更",
+    "Cambiar cada 30 s",
+    "Měnit každých 30 s"
+  ],
+  "Sequence": [
+    "수열",
+    "數列",
+    "数列",
+    "数列",
+    "Secuencia",
+    "Posloupnost"
+  ],
+  "Word problem": [
+    "문장제",
+    "應用題",
+    "应用题",
+    "文章題",
+    "Problema de texto",
+    "Slovní úloha"
+  ],
+  "Binary search": [
+    "이진 탐색",
+    "二分搜尋",
+    "二分查找",
+    "二分探索",
+    "Búsqueda binaria",
+    "Binární vyhledávání"
+  ],
+  "Two sum": [
+    "두 수의 합",
+    "兩數之和",
+    "两数之和",
+    "二数の和",
+    "Suma de dos",
+    "Součet dvou"
+  ],
+  "Predict the output": [
+    "출력 예측",
+    "預測輸出",
+    "预测输出",
+    "出力を予測",
+    "Predice la salida",
+    "Předpověz výstup"
+  ],
+  "Spot the pattern.": [
+    "규칙을 찾아보세요.",
+    "搵出規律。",
+    "找出规律。",
+    "パターンを見つけよう。",
+    "Descubre el patrón.",
+    "Najděte pravidlo."
+  ],
+  "Reason it through.": [
+    "차근차근 추론해 보세요.",
+    "一步步推理。",
+    "一步步推理。",
+    "筋道を立てて考えよう。",
+    "Razónalo paso a paso.",
+    "Promyslete to krok za krokem."
+  ],
+  "Find it fast.": [
+    "빠르게 찾아보세요.",
+    "快速搵到佢。",
+    "快速找到它。",
+    "すばやく見つけよう。",
+    "Encuéntralo rápido.",
+    "Najděte to rychle."
+  ],
+  "Pair them up.": [
+    "짝을 찾아보세요.",
+    "搵出一對。",
+    "找出一对。",
+    "ペアを見つけよう。",
+    "Forma la pareja.",
+    "Najděte dvojici."
+  ],
+  "What does it print?": [
+    "무엇을 출력할까요?",
+    "會印出啲咩？",
+    "会输出什么？",
+    "何を出力する？",
+    "¿Qué imprime?",
+    "Co vypíše?"
   ]
 }
