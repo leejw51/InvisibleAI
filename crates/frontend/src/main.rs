@@ -61,6 +61,11 @@ struct App {
     node_name: String,
     quiz: quiz::Quiz,
     quiz_answer: bool,
+    /// The quiz regenerates on a timer so an AI under test keeps seeing new values.
+    quiz_auto: bool,
+    quiz_seconds_left: u32,
+    quiz_generation: u32,
+    _quiz_tick: Interval,
     batch: Vec<BatchRun>,
     capture_ids: Vec<String>,
     browser: Value,
@@ -167,6 +172,8 @@ enum Msg {
     NewQuiz(bool),
     RevealQuiz,
     QuizCapture,
+    QuizAuto(bool),
+    QuizTick,
     Started(u64, Result<Memo, String>),
     Select(String),
     Selected(u64, Result<Memo, String>),
@@ -263,6 +270,8 @@ impl Component for App {
         let refresh = Interval::new(15_000, move || link.send_message(Msg::Refresh));
         let link = ctx.link().clone();
         let dashboard_refresh = Interval::new(2000, move || link.send_message(Msg::DashboardTick));
+        let link = ctx.link().clone();
+        let quiz_tick = Interval::new(1000, move || link.send_message(Msg::QuizTick));
         let theme = theme::load();
         theme::activate(theme);
         let language = i18n::load();
@@ -303,6 +312,10 @@ impl Component for App {
             node_name: String::new(),
             quiz: quiz::generate(quiz::Kind::Math, random_seed()),
             quiz_answer: false,
+            quiz_auto: true,
+            quiz_seconds_left: QUIZ_SECONDS,
+            quiz_generation: 0,
+            _quiz_tick: quiz_tick,
             batch: vec![],
             capture_ids: vec![],
             browser: load_browser("local"),
@@ -1017,11 +1030,33 @@ impl Component for App {
             Msg::QuizKind(kind) => self.new_quiz(kind),
             Msg::NewQuiz(random) => {
                 let kind = if random {
-                    quiz::Kind::ALL[(js_sys::Math::random() * 4.) as usize]
+                    quiz::Kind::ALL
+                        [(js_sys::Math::random() * quiz::Kind::ALL.len() as f64) as usize]
                 } else {
                     self.quiz.kind
                 };
                 self.new_quiz(kind);
+            }
+            Msg::QuizAuto(on) => {
+                self.quiz_auto = on;
+                self.quiz_seconds_left = QUIZ_SECONDS;
+            }
+            Msg::QuizTick => {
+                // The countdown holds while a capture runs: the question has to
+                // stay on screen until the answer comes back.
+                if self.page != "quiz" || !self.quiz_auto {
+                    return false;
+                }
+                if self.busy {
+                    // Restart the clock so the answer gets a full 30 s next to its question.
+                    self.quiz_seconds_left = QUIZ_SECONDS;
+                    return false;
+                }
+                if self.quiz_seconds_left > 1 {
+                    self.quiz_seconds_left -= 1;
+                } else {
+                    self.new_quiz(self.quiz.kind);
+                }
             }
             Msg::RevealQuiz => self.quiz_answer = !self.quiz_answer,
             Msg::QuizCapture => {
@@ -1692,6 +1727,7 @@ impl App {
         self.close_stream();
         self.selected = None;
         self.page = page;
+        self.quiz_seconds_left = QUIZ_SECONDS;
         self.mobile_menu = false;
         self.nav_query.clear();
         self.modal.clear();
@@ -1719,22 +1755,41 @@ impl App {
             return;
         }
         let mut next = quiz::generate(kind, random_seed());
-        while next.question == self.quiz.question {
+        while next.question == self.quiz.question && next.code == self.quiz.code {
             next = quiz::generate(kind, random_seed());
         }
         self.quiz = next;
         self.quiz_answer = false;
+        self.quiz_seconds_left = QUIZ_SECONDS;
+        self.quiz_generation = self.quiz_generation.wrapping_add(1);
         self.selected = None;
         self.clear_batch();
     }
     fn quiz_view(&self, ctx: &Context<Self>) -> Html {
-        html! {<section class="quiz-playground"><div class="page-intro"><div><div class="eyebrow">{icon("spark")}{t("A LITTLE ROOM TO EXPERIMENT")}</div><h1>{t("Give your bot a little test.")}</h1><p>{t("Fresh numbers, useful coding challenges. Capture a question and see what your bot makes of it.")}</p></div><a class="text-button" href="/quiz" target="_blank" rel="noopener">{t("Open test page")}{icon("arrow")}</a></div>
+        let timer = if self.busy {
+            t("Holding while capture runs")
+        } else if self.quiz_auto {
+            tf(
+                "Next quiz in {seconds}s",
+                &[("seconds", self.quiz_seconds_left.to_string())],
+            )
+        } else {
+            t("Timer paused")
+        };
+        let progress = if self.quiz_auto {
+            self.quiz_seconds_left as f32 / QUIZ_SECONDS as f32 * 100.
+        } else {
+            100.
+        };
+        html! {<section class="quiz-playground"><div class="page-intro"><div><div class="eyebrow">{icon("spark")}{t("A LITTLE ROOM TO EXPERIMENT")}</div><h1>{t("Give your bot a little test.")}</h1><p>{t("Fresh values every 30 seconds: arithmetic, reasoning and Rust coding challenges. Capture a question and see what your bot makes of it.")}</p></div><a class="text-button" href="/quiz" target="_blank" rel="noopener">{t("Open test page")}{icon("arrow")}</a></div>
             {self.mode_switch(ctx)}{self.client_picker(ctx)}
             <div class="quiz-toolbar"><div class="filter-tabs">{for quiz::Kind::ALL.into_iter().map(|kind|html!{<button class={classes!((self.quiz.kind==kind).then_some("selected"))} aria-pressed={(self.quiz.kind==kind).to_string()} disabled={self.busy} onclick={ctx.link().callback(move |_|Msg::QuizKind(kind))}>{t(kind.label())}</button>})}</div><button class="secondary-button" disabled={self.busy} onclick={ctx.link().callback(|_|Msg::NewQuiz(true))}>{icon("spark")}{t("Random quiz")}</button></div>
-            <article class={classes!("quiz-board",(self.quiz.kind==quiz::Kind::Math).then_some("math-quiz"))} data-testid="quiz-board"><div class="eyebrow">{t(self.quiz.kind.label())}{t(" · CAPTURE CHALLENGE")}</div><h2>{t(&self.quiz.title)}</h2><p class="quiz-question" data-testid="quiz-question">{&self.quiz.question}</p>if !self.quiz.code.is_empty(){<pre><code>{&self.quiz.code}</code></pre>}
+            <article class={classes!("quiz-board",(self.quiz.kind==quiz::Kind::Math).then_some("math-quiz"))} data-testid="quiz-board" data-generation={self.quiz_generation.to_string()} key={self.quiz_generation}><div class="quiz-board-head"><div class="eyebrow">{t(self.quiz.kind.label())}{t(" · CAPTURE CHALLENGE")}</div><label class="quiz-auto"><input type="checkbox" checked={self.quiz_auto} onchange={ctx.link().callback(|e:Event|Msg::QuizAuto(e.target_unchecked_into::<HtmlInputElement>().checked()))}/>{t("Change every 30 s")}</label></div>
+            <div class="quiz-timer" role="timer" aria-live="off" data-testid="quiz-countdown" data-paused={(!self.quiz_auto||self.busy).to_string()}><span>{icon("clock")}{timer}</span><div class="quiz-timer-track"><i style={format!("width:{progress:.1}%")}></i></div></div>
+            <h2>{t(&self.quiz.title)}</h2><p class="quiz-question" data-testid="quiz-question">{&self.quiz.question}</p>if !self.quiz.code.is_empty(){<pre><code>{&self.quiz.code}</code></pre>}
             if self.quiz_answer{<div class="quiz-answer" data-testid="quiz-answer"><strong>{t("Expected result")}</strong><pre>{&self.quiz.answer}</pre></div>}
             <div class="quiz-actions"><button class="secondary-button" disabled={self.busy} onclick={ctx.link().callback(|_|Msg::NewQuiz(false))}>{icon("plus")}{t("New numbers")}</button><button class="text-button" disabled={self.busy} onclick={ctx.link().callback(|_|Msg::RevealQuiz)}>{if self.quiz_answer{t("Hide answer")}else{t("Show answer")}}</button><button class="primary-button" disabled={self.busy} onclick={ctx.link().callback(|_|Msg::QuizCapture)}>{icon("screen")}{if self.busy{t("Capturing / thinking…")}else{t("Capture this quiz")}}</button></div></article>
-            <p class="quiz-hint">{icon("info")}{t("Open this page on the capture computer. Choose that client here or capture from another device. The question stays visible while capture runs.")}</p>
+            <p class="quiz-hint">{icon("info")}{t("Open this page on the capture computer. Choose that client here or capture from another device. The question stays visible while capture runs, and the timer waits for the answer.")}</p>
         </section>}
     }
     fn batch_view(&self, ctx: &Context<Self>) -> Html {
@@ -2677,6 +2732,8 @@ fn load_browser(owner: &str) -> Value {
     v
 }
 
+/// Seconds a quiz stays on screen before fresh values replace it.
+const QUIZ_SECONDS: u32 = 30;
 fn random_seed() -> u64 {
     (js_sys::Math::random() * u64::MAX as f64) as u64
 }
