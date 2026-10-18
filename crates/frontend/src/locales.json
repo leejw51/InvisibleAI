@@ -12790,5 +12790,21 @@
     "ネットワークはまだ送金を確認していません。エクスプローラーを確認してください。",
     "La red aún no confirmó la transferencia. Revisa el explorador.",
     "Síť převod zatím nepotvrdila. Zkontrolujte explorer."
+  ],
+  "Reading balance…": [
+    "잔액 읽는 중…",
+    "讀取緊結餘…",
+    "正在读取余额…",
+    "残高を読み込み中…",
+    "Leyendo saldo…",
+    "Načítám zůstatek…"
+  ],
+  "Not read from this browser.": [
+    "이 브라우저에서 읽지 못했습니다.",
+    "呢個瀏覽器讀唔到。",
+    "此浏览器未能读取。",
+    "このブラウザでは読み取れませんでした。",
+    "No se pudo leer desde este navegador.",
+    "Z tohoto prohlížeče se nepodařilo načíst."
   ]
 }

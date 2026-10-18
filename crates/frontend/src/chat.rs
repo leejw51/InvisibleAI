@@ -6,7 +6,7 @@ use crate::{
     message_cache,
 };
 use base64::Engine;
-use causewaybay_shared::registry::PendingTransfer;
+use causewaybay_shared::registry::{BalanceCheck, PendingTransfer};
 use causewaybay_shared::*;
 use gloo_timers::callback::{Interval, Timeout};
 use serde_json::{Value, json};
@@ -110,6 +110,10 @@ pub struct Chat {
     /// Transfers the AI prepared that this tab is sending, by request id,
     /// with the step under way or why it stopped.
     transfers: std::collections::HashMap<String, Transfer>,
+    /// Balances the AI asked for that this tab has read, by check id: `None`
+    /// while reading or once reported, the error when the report failed.
+    /// Reading needs no key, so any tab of the owner fills in a check, once.
+    balance_reads: std::collections::HashMap<String, Option<String>>,
     /// After Capture: the screenshot, then the answer, each eased into view
     /// once as it arrives, so a hurried reader never has to scroll.
     focus: Option<CaptureFocus>,
@@ -233,6 +237,8 @@ pub enum Msg {
     TransferArrived(String, String, Result<bool, String>),
     TransferSettled(String, String, Result<(String, String), String>),
     TransferReported(String, Result<Value, String>),
+    BalanceRead(String, Result<String, String>),
+    BalanceReported(String, Result<Value, String>),
 }
 impl Component for Chat {
     type Message = Msg;
@@ -315,6 +321,7 @@ impl Component for Chat {
             celebrations: Default::default(),
             posted: Default::default(),
             transfers: Default::default(),
+            balance_reads: Default::default(),
             focus: None,
             focus_to: None,
             tween: None,
@@ -989,6 +996,7 @@ impl Component for Chat {
                             self.merge(m);
                         }
                         self.start_transfers(ctx);
+                        self.start_balance_checks(ctx);
                     }
                     Err(e) => self.error = e,
                 }
@@ -1020,6 +1028,7 @@ impl Component for Chat {
                         .unbounded_send(message_cache::Write::Message(Box::new(m.clone())));
                     self.merge(m);
                     self.start_transfers(ctx);
+                    self.start_balance_checks(ctx);
                     if self.focus.is_some() {
                         // The capture focus decides where the list goes.
                         self.scroll = false;
@@ -1132,6 +1141,23 @@ impl Component for Chat {
                 if let (Err(e), Some(transfer)) = (result, self.transfers.get_mut(&id)) {
                     transfer.step = "";
                     transfer.error = Some(e);
+                }
+            }
+            Msg::BalanceRead(id, result) => {
+                // The figure, or why this browser could not read it, goes to the
+                // backend; the card follows the room's events.
+                let body = match result {
+                    Ok(balance) => serde_json::json!({"balance":balance}),
+                    Err(e) => serde_json::json!({"error":e.chars().take(200).collect::<String>()}),
+                };
+                let url = format!("/api/wallet/balances/{id}");
+                ctx.link().send_future(async move {
+                    Msg::BalanceReported(id, api::<Value>("PATCH", &url, Some(body)).await)
+                });
+            }
+            Msg::BalanceReported(id, result) => {
+                if let Err(e) = result {
+                    self.balance_reads.insert(id, Some(e));
                 }
             }
             Msg::Mode(v) => {
@@ -1772,6 +1798,61 @@ impl Chat {
             });
         }
     }
+    /// Read every balance the AI asked for that nobody has read yet, once per
+    /// tab: the chain is read here, with no key, and the figure reported.
+    fn start_balance_checks(&mut self, ctx: &Context<Self>) {
+        if !ctx.props().owner.starts_with("0x") {
+            return;
+        }
+        let fresh: Vec<BalanceCheck> = self
+            .messages
+            .iter()
+            .filter(|m| m.role != "user")
+            .flat_map(|m| m.wallet_balances.iter().cloned())
+            .filter(|c| c.balance.is_empty() && !self.balance_reads.contains_key(&c.id))
+            .collect();
+        for c in fresh {
+            let Some(coin) = registry::coin(&c.coin) else {
+                continue;
+            };
+            self.balance_reads.insert(c.id.clone(), None);
+            let id = c.id.clone();
+            ctx.link().send_future(async move {
+                Msg::BalanceRead(
+                    id,
+                    crate::wallet::hands_off::balance(&coin, &c.address).await,
+                )
+            });
+        }
+    }
+    /// The card for a balance the AI asked for: the figure once this or another
+    /// tab read it, whose and on which network, and the explorer.
+    fn balance_card(&self, c: &BalanceCheck) -> Html {
+        let net = registry::net_of(&c.network);
+        let local = self.balance_reads.get(&c.id);
+        let error = if !c.error.is_empty() {
+            Some(c.error.clone())
+        } else {
+            local.cloned().flatten()
+        };
+        let reading = c.balance.is_empty() && error.is_none() && local.is_some();
+        let status = if !c.balance.is_empty() {
+            "read"
+        } else if error.is_some() {
+            "failed"
+        } else {
+            "reading"
+        };
+        html! {<div class={classes!("chat-transfer","chat-balance",format!("is-{status}"),reading.then_some("is-running"))} data-testid="chat-balance" data-status={status} data-coin={c.coin.clone()} role="note" aria-busy={reading.to_string()}>
+            {icon("wallet")}
+            <div class="chat-transfer-text">
+                <strong data-testid="balance-amount">{if c.balance.is_empty(){"…".to_string()}else{format!("{} {}",c.balance,c.symbol)}}</strong>
+                <span>{&c.symbol}{" · "}{net.map(|n|n.name).unwrap_or_default()}{" · "}<code title={c.address.clone()}>{crate::wallet::short(&c.address)}</code></span>
+                <small data-testid="balance-state">{if !c.balance.is_empty(){t("Balance")}else if error.is_some(){t("Not read from this browser.")}else{t("Reading balance…")}}</small>
+                if let Some(e)=&error {<p class="login-error" data-testid="balance-error">{t(e)}</p>}</div>
+            <a class="text-button" href={net.map(|n|n.address_url(&c.address)).unwrap_or_default()} target="_blank" rel="noopener noreferrer">{t("Explorer")}{icon("arrow")}</a>
+        </div>}
+    }
     /// Tell the backend how a hands-off transfer is going; the card follows.
     fn report(ctx: &Context<Self>, id: &str, body: Value) {
         let url = format!("/api/wallet/requests/{id}");
@@ -1937,6 +2018,8 @@ impl Chat {
             if !m.sources.is_empty(){<div class="chat-sources" aria-label={t("Web sources")}><strong>{t("Sources")}</strong>{for m.sources.iter().filter(|s|s.url.starts_with("https://")).map(|source|html!{<a href={source.url.clone()} target="_blank" rel="noopener noreferrer">{&source.title}</a>})}</div>}
             // A transfer the AI prepared: sent by this tab when it asked, else confirmed in Wallet.
             if let Some(r)=&m.wallet_request {{self.transfer_card(ctx,r)}}
+            // Balances the AI asked for: read by whichever tab of the owner sees them first.
+            {for m.wallet_balances.iter().map(|c| self.balance_card(c))}
             if !m.ocr_text.is_empty(){<details class="chat-ocr"><summary>{t("Extracted text · Apple Vision")}</summary><pre>{&m.ocr_text}</pre></details>}
             if !m.transcript.is_empty(){<div class="chat-ocr"><strong>{t("Audio transcript")}</strong><pre>{&m.transcript}</pre></div>}
             {for m.attachments.iter().map(|f|html!{<div class="chat-file" key={f.id.clone()}>if f.mime.starts_with("image/"){<a href={format!("/api/files/{}/image",f.id)} target="_blank" rel="noopener"><img decoding="async" loading="lazy" class="chat-photo" src={format!("/api/files/{}/thumbnail",f.id)} alt={f.name.clone()}/></a>}if f.mime.starts_with("audio/"){<audio controls=true preload="none" src={format!("/api/files/{}/download",f.id)}/>}<a href={format!("/api/files/{}/download",f.id)}>{icon("file")}{&f.name}</a></div>})}

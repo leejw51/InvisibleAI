@@ -146,6 +146,31 @@ pub fn wallet_tool(settings: &causewaybay_shared::registry::WalletSettings) -> V
         vec!["coin", "to", "amount"],
     )
 }
+/// `wallet_balance`, offered beside it: the browser reads a balance of the
+/// wallet, or of an address the user named, and shows it on a card.
+pub fn balance_tool() -> Value {
+    use causewaybay_shared::registry::{self, LIMITED_COINS};
+    let coins = LIMITED_COINS
+        .iter()
+        .filter_map(|key| {
+            let coin = registry::coin(key)?;
+            Some(format!("{} ({} on {})", key, coin.symbol, coin.net().name))
+        })
+        .collect::<Vec<_>>()
+        .join("; ");
+    tool(
+        "wallet_balance",
+        &format!(
+            "Read a balance of the user's own wallet, or of an address they named. This tool only asks: the user's browser reads the chain and shows the figure on a card in the chat, so never state or invent a number; say the card shows it. Coins: {coins}. Omit `coin` to read every one of them. CRO without a network means tcro-cronos-testnet; USDC is on Cronos Mainnet."
+        ),
+        json!({"coin":{"type":"string","enum":LIMITED_COINS,"description":"Which coin, on which network; omit for all"},"address":{"type":"string","description":"A 0x address other than the user's own wallet"}}),
+        vec![],
+    )
+}
+/// Both wallet tools, for a signed-in wallet.
+pub fn wallet_tools(settings: &causewaybay_shared::registry::WalletSettings) -> Vec<Value> {
+    vec![wallet_tool(settings), balance_tool()]
+}
 /// The catalogue plus `run_skill` when the account has published skills: programs
 /// the coding agent built, run in the project sandbox with the input on stdin,
 /// plus `wallet_send` when the answer is for a signed-in wallet.
@@ -157,7 +182,7 @@ pub fn definitions_with_skills(
 ) -> Vec<Value> {
     let mut defs = definitions_for(writes, compiler);
     if let Some(settings) = wallet {
-        defs.push(wallet_tool(settings));
+        defs.extend(wallet_tools(settings));
     }
     if !skills.is_empty() {
         let listing = skills
@@ -388,6 +413,34 @@ pub async fn execute(
                 .db
                 .event(memo, "wallet_request", &serde_json::to_string(&request)?)?;
             json!({"status":"prepared","request_id":request.id,"coin":coin.key,"symbol":coin.symbol,"network":coin.net().name,"from":owner,"to":recipient,"amount":amount,"limit":settings.limit_text(&coin.key),"message":"Prepared. The user's browser is sending it now from their key and will show both balances before and after and the transaction hash on the card; if it cannot, the user finishes it under Wallet. Do not claim it was sent."})
+        }
+        "wallet_balance" => {
+            let owner = state.db.owner().to_string();
+            ensure!(
+                owner.starts_with("0x"),
+                "Balances need a wallet sign-in; this account has none"
+            );
+            let coins = crate::wallet::balance_coins(args["coin"].as_str())
+                .map_err(|e| anyhow::anyhow!(e))?;
+            let address = crate::wallet::balance_address(&owner, args["address"].as_str())
+                .map_err(|e| anyhow::anyhow!(e))?;
+            let checks = {
+                let conn = state.db.0.lock().unwrap();
+                state.db.writable(&conn)?;
+                coins
+                    .iter()
+                    .map(|coin| {
+                        crate::wallet::create_balance_check(&conn, &owner, memo, coin, &address)
+                    })
+                    .collect::<Result<Vec<_>>>()?
+            };
+            // The chat shows a card per coin at once; the browser fills each in.
+            for check in &checks {
+                state
+                    .db
+                    .event(memo, "wallet_balance", &serde_json::to_string(check)?)?;
+            }
+            json!({"status":"reading","address":address,"checks":checks.iter().map(|c| json!({"check_id":c.id,"coin":c.coin,"symbol":c.symbol,"network":causewaybay_shared::registry::net_of(&c.network).map(|n| n.name).unwrap_or_default()})).collect::<Vec<_>>(),"message":"Asked. The user's browser is reading these balances now and shows each on a card in the chat. Do not state or invent a number; say the card shows it."})
         }
         "run_skill" => {
             let input = args["input"].as_str().unwrap_or("");
@@ -866,7 +919,7 @@ mod tests {
         let settings = WalletSettings::default();
         let tools = definitions_with_skills(false, false, &[], Some(&settings));
         assert!(names(&tools).contains(&"wallet_send".to_string()));
-        let description = tools.last().unwrap()["description"]
+        let description = tools.iter().find(|t| t["name"] == "wallet_send").unwrap()["description"]
             .as_str()
             .unwrap()
             .to_string();

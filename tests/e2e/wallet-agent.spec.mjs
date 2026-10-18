@@ -2,7 +2,9 @@
 // USDC on Cronos under the account's hard limits, and the chat tab that asked
 // sends it at once with the browser's own key, reporting both balances before
 // and after and the transaction hash on the card. One the browser cannot send
-// stays pending for the Wallet page. The limits (100 CRO, 10 USDC to start)
+// stays pending for the Wallet page. `wallet_balance` asks for a balance of
+// the wallet, or of an address the user names, and the browser reads it and
+// fills in a card per coin. The limits (100 CRO, 10 USDC to start)
 // live on the backend per account, editable on the Wallet page and in AI
 // settings, and the Send form obeys them too. The demo fixture runs the real tool.
 import { test, expect } from '@playwright/test';
@@ -141,6 +143,33 @@ test('hard limits are per account and editable in two places; the AI sends a tra
     await expect(card.getByTestId('from-before')).toHaveText('30 TCRO');
     await expect(card.getByTestId('to-after')).toHaveText('6 TCRO');
     await expect(card.getByRole('link', { name: /Explorer/ })).toHaveAttribute('href', /explorer\.cronos\.org\/testnet\/tx\/0x[0-9a-f]{64}$/);
+  });
+
+  await test.step('a chat asking for balances gets a card per coin, read by this browser and kept on the backend', async () => {
+    const reply = await ask(page, 'get balance');
+    await expect(reply).toContainText('Balance');
+    const cards = page.getByTestId('chat-balance');
+    await expect(cards).toHaveCount(3);
+    await expect(cards.nth(0).getByTestId('balance-amount')).toHaveText('24.895 TCRO', { timeout: 15000 });
+    await expect(cards.nth(1).getByTestId('balance-amount')).toHaveText('3 CRO', { timeout: 15000 });
+    await expect(cards.nth(2).getByTestId('balance-amount')).toHaveText('50 USDC', { timeout: 15000 });
+    await expect(cards.nth(0)).toHaveAttribute('data-status', 'read');
+    await expect(cards.nth(2)).toContainText('Cronos Mainnet');
+    expect(rpc.sent).toHaveLength(1);
+    // Someone else's balance, on one network, in the user's own word order.
+    const other = await ask(page, `balance of ${recipient} on cronos testnet`);
+    await expect(other).toContainText('Cronos Testnet');
+    const card = page.getByTestId('chat-balance').last();
+    await expect(card.getByTestId('balance-amount')).toHaveText('6 TCRO', { timeout: 15000 });
+    await expect(card.getByRole('link', { name: /Explorer/ })).toHaveAttribute('href', new RegExp(`explorer\\.cronos\\.org/testnet/address/${recipient}$`, 'i'));
+    await page.screenshot({ path: 'test-results/wallet-agent-3-balances.png', fullPage: true });
+    // The figures live on the backend with the checks: a reload keeps them.
+    await page.reload();
+    await openConversationOptions(page);
+    await page.getByRole('combobox', { name: 'Chat room' }).selectOption(room);
+    await expect(page.getByTestId('chat-balance')).toHaveCount(4);
+    await expect(page.getByTestId('chat-balance').first().getByTestId('balance-amount')).toHaveText('24.895 TCRO');
+    await expect(page.getByTestId('chat-balance').last().getByTestId('balance-amount')).toHaveText('6 TCRO');
   });
 
   await test.step('a mainnet USDC request this browser cannot send stays pending for the Wallet page, where it can be dismissed', async () => {

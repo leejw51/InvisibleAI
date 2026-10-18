@@ -706,6 +706,26 @@ pub struct PendingTransfer {
     pub created_at: String,
 }
 
+/// A balance the AI asked for from a chat. The backend never reads the chain:
+/// the user's browser reads it and reports the whole-coin figure, or why it
+/// could not, and the chat card shows what came back.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BalanceCheck {
+    pub id: String,
+    pub coin: String,
+    pub symbol: String,
+    pub network: String,
+    /// Whose balance: the wallet itself unless the user named an address.
+    pub address: String,
+    /// Whole coins once the browser read it; empty until then.
+    #[serde(default)]
+    pub balance: String,
+    /// Why the browser could not read it, when it could not.
+    #[serde(default)]
+    pub error: String,
+    pub created_at: String,
+}
+
 /// The public wallet choices kept on the backend for each account, so a new
 /// sign-in opens the wallet as it was left: the active coin, recent picks,
 /// user-added ERC-20s and the receive addresses derived in the browser.

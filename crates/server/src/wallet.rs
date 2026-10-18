@@ -7,7 +7,8 @@ use anyhow::Result;
 use axum::{Json, extract::Path, http::StatusCode};
 use causewaybay_shared::evm::{self, CustomToken, MAX_TOKENS, U256};
 use causewaybay_shared::registry::{
-    self, Chain, Coin, LIMITED_COINS, MAX_RECENT, Net, PendingTransfer, WalletSettings,
+    self, BalanceCheck, Chain, Coin, LIMITED_COINS, MAX_RECENT, Net, PendingTransfer,
+    WalletSettings,
 };
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::Deserialize;
@@ -26,7 +27,8 @@ pub fn init(conn: &Connection) -> Result<()> {
          CREATE TABLE IF NOT EXISTS wallet_usage(owner TEXT NOT NULL,coin TEXT NOT NULL,uses INTEGER NOT NULL DEFAULT 0,last_used TEXT NOT NULL,PRIMARY KEY(owner,coin));
          CREATE TABLE IF NOT EXISTS wallet_limits(owner TEXT NOT NULL,coin TEXT NOT NULL,max_amount TEXT NOT NULL,updated_at TEXT NOT NULL,PRIMARY KEY(owner,coin));
          CREATE TABLE IF NOT EXISTS wallet_requests(id TEXT PRIMARY KEY,owner TEXT NOT NULL,memo_id TEXT NOT NULL,coin TEXT NOT NULL,to_address TEXT NOT NULL,amount TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'pending',hash TEXT NOT NULL DEFAULT '',from_before TEXT NOT NULL DEFAULT '',to_before TEXT NOT NULL DEFAULT '',from_after TEXT NOT NULL DEFAULT '',to_after TEXT NOT NULL DEFAULT '',created_at TEXT NOT NULL,updated_at TEXT NOT NULL);
-         CREATE INDEX IF NOT EXISTS wallet_requests_owner ON wallet_requests(owner,status,created_at);",
+         CREATE INDEX IF NOT EXISTS wallet_requests_owner ON wallet_requests(owner,status,created_at);
+         CREATE TABLE IF NOT EXISTS wallet_balances(id TEXT PRIMARY KEY,owner TEXT NOT NULL,memo_id TEXT NOT NULL,coin TEXT NOT NULL,address TEXT NOT NULL,balance TEXT NOT NULL DEFAULT '',error TEXT NOT NULL DEFAULT '',created_at TEXT NOT NULL,updated_at TEXT NOT NULL);",
     )
 }
 
@@ -40,6 +42,7 @@ pub fn forget_owner(conn: &Connection, owner: &str) -> Result<()> {
         "wallet_usage",
         "wallet_limits",
         "wallet_requests",
+        "wallet_balances",
         "wallet_settings",
         "wallet_selections",
     ] {
@@ -255,6 +258,85 @@ pub fn check_request(
         ));
     }
     Ok((coin, recipient, units))
+}
+
+/// Which coins a balance request names: one of the coins the AI may handle,
+/// or, when none is named, every one of them.
+pub fn balance_coins(coin: Option<&str>) -> Result<Vec<Coin>, String> {
+    match coin.map(str::trim).filter(|c| !c.is_empty()) {
+        None => Ok(LIMITED_COINS
+            .iter()
+            .filter_map(|k| registry::coin(k))
+            .collect()),
+        Some(key) if LIMITED_COINS.contains(&key) => {
+            Ok(vec![registry::coin(key).ok_or("Unknown coin.")?])
+        }
+        Some(_) => Err(format!(
+            "The AI can read balances of {} only.",
+            LIMITED_COINS
+                .iter()
+                .filter_map(|k| registry::coin(k))
+                .map(|c| format!("{} on {}", c.symbol, c.net().name))
+                .collect::<Vec<_>>()
+                .join(", ")
+        )),
+    }
+}
+/// Whose balance a request reads: the wallet itself, or an address the user
+/// named, checked for shape and checksum.
+pub fn balance_address(owner: &str, address: Option<&str>) -> Result<String, String> {
+    match address.map(str::trim).filter(|a| !a.is_empty()) {
+        None => Ok(owner.to_string()),
+        Some(a) => Ok(evm::checksum(&evm::parse_address(a)?)),
+    }
+}
+/// Record a balance the AI asked for from `memo`; the browser fills it in.
+pub fn create_balance_check(
+    conn: &Connection,
+    owner: &str,
+    memo: &str,
+    coin: &Coin,
+    address: &str,
+) -> Result<BalanceCheck> {
+    let check = BalanceCheck {
+        id: db::id(),
+        coin: coin.key.clone(),
+        symbol: coin.symbol.clone(),
+        network: coin.network.clone(),
+        address: address.into(),
+        created_at: db::now(),
+        ..Default::default()
+    };
+    conn.execute(
+        "INSERT INTO wallet_balances(id,owner,memo_id,coin,address,balance,error,created_at,updated_at) VALUES(?1,?2,?3,?4,?5,'','',?6,?6)",
+        params![check.id, owner, memo, check.coin, check.address, check.created_at],
+    )?;
+    Ok(check)
+}
+fn balance_by_id(conn: &Connection, owner: &str, id: &str) -> Result<Option<BalanceCheck>> {
+    let found = conn
+        .query_row(
+            "SELECT id,coin,address,balance,error,created_at FROM wallet_balances WHERE id=?1 AND owner=?2",
+            params![id, owner],
+            |r| {
+                Ok(BalanceCheck {
+                    id: r.get(0)?,
+                    coin: r.get(1)?,
+                    address: r.get(2)?,
+                    balance: r.get(3)?,
+                    error: r.get(4)?,
+                    created_at: r.get(5)?,
+                    ..Default::default()
+                })
+            },
+        )
+        .optional()?;
+    Ok(found.and_then(|mut c| {
+        let coin = registry::coin(&c.coin)?;
+        c.symbol = coin.symbol;
+        c.network = coin.network;
+        Some(c)
+    }))
 }
 
 /// Record a transfer the AI prepared for `memo`, for the wallet page to pick up.
@@ -523,6 +605,78 @@ pub async fn resolve_request(
         )?;
     }
     Ok(Json(request))
+}
+
+#[derive(Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BalanceReport {
+    /// Whole coins, as the browser read them.
+    #[serde(default)]
+    balance: Option<String>,
+    /// Why the browser could not read it.
+    #[serde(default)]
+    error: Option<String>,
+}
+/// The browser reports a balance the AI asked for: the figure, or why it could
+/// not read it. The newest figure wins, so two tabs reading the same check
+/// agree; a failure never erases a figure another tab already read. The chat
+/// that asked is told through its memo's events.
+pub async fn report_balance(
+    PrivateState(s): PrivateState,
+    Path(id): Path<String>,
+    Json(v): Json<BalanceReport>,
+) -> Api<Json<BalanceCheck>> {
+    let balance = valid_balance(v.balance.as_deref())?;
+    let error = v
+        .error
+        .as_deref()
+        .map(str::trim)
+        .filter(|e| !e.is_empty())
+        .map(str::to_string);
+    if balance.is_some() == error.is_some() {
+        return Err(bad("Report the balance, or why it could not be read."));
+    }
+    if error.as_ref().is_some_and(|e| e.chars().count() > 200) {
+        return Err(bad("Keep the reason under 200 characters."));
+    }
+    let owner = s.db.owner().to_string();
+    let (check, memo) = {
+        let conn = s.db.0.lock().unwrap();
+        s.db.writable(&conn)?;
+        let now = db::now();
+        match (&balance, &error) {
+            (Some(figure), _) => conn.execute(
+                "UPDATE wallet_balances SET balance=?3,error='',updated_at=?4 WHERE id=?1 AND owner=?2",
+                params![id, owner, figure, now],
+            )?,
+            (None, Some(reason)) => conn.execute(
+                "UPDATE wallet_balances SET error=?3,updated_at=?4 WHERE id=?1 AND owner=?2 AND balance=''",
+                params![id, owner, reason, now],
+            )?,
+            (None, None) => unreachable!("one of the two is present"),
+        };
+        let check = balance_by_id(&conn, &owner, &id)?.ok_or_else(|| {
+            ApiError(
+                StatusCode::NOT_FOUND,
+                "No balance check with that id".into(),
+            )
+        })?;
+        let memo = conn.query_row(
+            "SELECT memo_id FROM wallet_balances WHERE id=?1",
+            [&id],
+            |r| r.get::<_, String>(0),
+        )?;
+        (check, memo)
+    };
+    // The chat card follows; a memo that is gone has no card.
+    if s.db.require("memos", &memo).is_ok() {
+        s.db.event(
+            &memo,
+            "wallet_balance",
+            &serde_json::to_string(&check).map_err(anyhow::Error::from)?,
+        )?;
+    }
+    Ok(Json(check))
 }
 
 #[derive(Deserialize)]
@@ -1275,6 +1429,136 @@ mod tests {
         Ok(())
     }
 
+    #[tokio::test]
+    async fn balance_checks_are_filled_by_the_browser_for_their_owner_only() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let root =
+            AppState::open_with_credentials(dir.path().into(), true, None, Default::default())?;
+        let alice = root.for_owner(ALICE);
+        let recipient = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
+        // No coin means every coin the AI may handle; another coin is refused.
+        let all = balance_coins(None).unwrap();
+        assert_eq!(
+            all.iter().map(|c| c.key.as_str()).collect::<Vec<_>>(),
+            LIMITED_COINS.to_vec()
+        );
+        assert_eq!(balance_coins(Some("usdc-cronos-mainnet")).unwrap().len(), 1);
+        assert!(
+            balance_coins(Some("usdt-cronos-mainnet"))
+                .unwrap_err()
+                .contains("only")
+        );
+        // No address means the wallet itself; a named one is checksummed.
+        assert_eq!(balance_address(ALICE, None).unwrap(), ALICE);
+        assert_eq!(
+            balance_address(ALICE, Some(&recipient.to_ascii_lowercase())).unwrap(),
+            recipient
+        );
+        assert!(balance_address(ALICE, Some("0xnot-an-address")).is_err());
+
+        let memo = alice.db.create("balance", "question", "local", "")?;
+        let coin = registry::coin("tcro-cronos-testnet").unwrap();
+        let check = {
+            let conn = alice.db.0.lock().unwrap();
+            create_balance_check(&conn, ALICE, &memo.id, &coin, ALICE)?
+        };
+        assert_eq!(
+            (
+                check.symbol.as_str(),
+                check.network.as_str(),
+                check.balance.as_str()
+            ),
+            ("TCRO", "cronos-testnet", "")
+        );
+        let report = |balance: Option<&str>, error: Option<&str>| {
+            Json(BalanceReport {
+                balance: balance.map(String::from),
+                error: error.map(String::from),
+            })
+        };
+        // Another owner cannot fill it in.
+        let bob = root.for_owner("0x3c44cdddb6a900fa2b585dd299e03d12fa4293bc");
+        assert!(
+            report_balance(
+                PrivateState(bob.clone()),
+                Path(check.id.clone()),
+                report(Some("1"), None)
+            )
+            .await
+            .is_err()
+        );
+        // A report names the figure or the reason, never both or neither.
+        for body in [
+            report(None, None),
+            report(Some("1"), Some("down")),
+            report(Some("1e3"), None),
+        ] {
+            assert!(
+                report_balance(PrivateState(alice.clone()), Path(check.id.clone()), body)
+                    .await
+                    .is_err()
+            );
+        }
+        let Json(failed) = report_balance(
+            PrivateState(alice.clone()),
+            Path(check.id.clone()),
+            report(None, Some("The network did not answer.")),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            (failed.balance.as_str(), failed.error.as_str()),
+            ("", "The network did not answer.")
+        );
+        let Json(read) = report_balance(
+            PrivateState(alice.clone()),
+            Path(check.id.clone()),
+            report(Some("24.895"), None),
+        )
+        .await
+        .unwrap();
+        assert_eq!((read.balance.as_str(), read.error.as_str()), ("24.895", ""));
+        // A later failure from another tab does not erase the figure.
+        let Json(kept) = report_balance(
+            PrivateState(alice.clone()),
+            Path(check.id.clone()),
+            report(None, Some("offline")),
+        )
+        .await
+        .unwrap();
+        assert_eq!((kept.balance.as_str(), kept.error.as_str()), ("24.895", ""));
+        assert!(
+            report_balance(
+                PrivateState(alice.clone()),
+                Path("missing".into()),
+                report(Some("1"), None)
+            )
+            .await
+            .is_err()
+        );
+        // The chat card followed: the memo carries each report as an event.
+        let events = alice.db.events(&memo.id, 0)?;
+        let reports: Vec<&str> = events
+            .iter()
+            .filter(|e| e.kind == "wallet_balance")
+            .map(|e| e.text.as_str())
+            .collect();
+        assert_eq!(reports.len(), 3);
+        assert!(reports[0].contains("did not answer") && reports[1].contains("\"24.895\""));
+        // Erasing the account leaves no check behind.
+        {
+            let conn = alice.db.0.lock().unwrap();
+            forget_owner(&conn, ALICE)?;
+            let n: i64 = conn.query_row(
+                "SELECT count(*) FROM wallet_balances WHERE owner=?1",
+                [ALICE],
+                |r| r.get(0),
+            )?;
+            assert_eq!(n, 0);
+        }
+        Ok(())
+    }
+
     /// A database from before `wallet_requests.hash` and `wallet_limits`
     /// existed: opening it adds the column and the table, and the old row reads.
     #[test]
@@ -1306,6 +1590,7 @@ mod tests {
             .query_map([], |r| r.get(0))?
             .collect::<rusqlite::Result<_>>()?;
         assert!(tables.iter().any(|t| t == "wallet_limits"), "{tables:?}");
+        assert!(tables.iter().any(|t| t == "wallet_balances"), "{tables:?}");
         let found = requests(&conn, "0xabc", None)?;
         assert_eq!(found.len(), 1);
         assert_eq!(

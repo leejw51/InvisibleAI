@@ -303,14 +303,19 @@ pub fn intent(text: &str) -> Intent {
         "check",
         "review",
         "please",
-        // A command to send from the wallet is a request, never a diary line.
+        // A command to send from the wallet, or to read a balance, is a
+        // request, never a diary line.
         "send",
         "transfer",
+        "get",
+        "balance",
+        "balances",
     ];
     if OPENERS.contains(&first) {
         return Intent::Question;
     }
     const KO_QUESTION: &[&str] = &[
+        "잔액",
         "뭐야",
         "뭐지",
         "무엇",

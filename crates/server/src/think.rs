@@ -766,15 +766,56 @@ pub(crate) fn demo_send_request(prompt: &str) -> Option<(String, String, String)
     Some((coin.into(), to.to_string(), amount.to_string()))
 }
 
+/// "get balance", "balance tcro cronos testnet", "usdc balance on mainnet",
+/// "balance of 0x… on cronos testnet", as the demo fixture reads them: which
+/// coin (none names every one) and whose address (none means the wallet's).
+/// None when the prompt is not about a balance, or is a send.
+pub(crate) fn demo_balance_request(prompt: &str) -> Option<(Option<String>, Option<String>)> {
+    let words: Vec<&str> = prompt
+        .split_whitespace()
+        .map(|w| w.trim_matches(|c: char| matches!(c, '.' | '!' | '?' | ';' | ':' | ',')))
+        .collect();
+    let lower: Vec<String> = words.iter().map(|w| w.to_ascii_lowercase()).collect();
+    let says = |word: &str| lower.iter().any(|w| w == word);
+    if says("send") || says("transfer") {
+        return None;
+    }
+    if !(says("balance") || says("balances") || lower.iter().any(|w| w.contains("잔액"))) {
+        return None;
+    }
+    let address = words
+        .iter()
+        .find(|w| w.starts_with("0x") && w.len() == 42)
+        .map(|w| w.to_string());
+    let (mainnet, testnet) = (says("mainnet"), says("testnet"));
+    let coin = lower
+        .iter()
+        .find_map(|w| match w.as_str() {
+            "usdc" => Some("usdc-cronos-mainnet"),
+            "cro" | "tcro" if mainnet => Some("cro-cronos-mainnet"),
+            "cro" | "tcro" => Some("tcro-cronos-testnet"),
+            _ => None,
+        })
+        .or_else(|| mainnet.then_some("cro-cronos-mainnet"))
+        .or_else(|| testnet.then_some("tcro-cronos-testnet"));
+    Some((coin.map(String::from), address))
+}
+
 pub(crate) async fn demo_answer(s: &Arc<AppState>, id: &str, req: &ThinkRequest) -> Result<()> {
-    let send = (!req.agent && !req.note && !req.library && !req.capture)
+    let plain = !req.agent && !req.note && !req.library && !req.capture;
+    let settings = if plain { wallet_settings(s)? } else { None };
+    let send = plain
         .then(|| demo_send_request(&req.prompt))
         .flatten()
-        .zip(wallet_settings(s)?);
+        .zip(settings.clone());
+    let balance = plain
+        .then(|| demo_balance_request(&req.prompt))
+        .flatten()
+        .zip(settings);
     let answer = if let Some(((coin, to, amount), settings)) = send {
         // The real tool runs, so the limit check, the request and the chat card
         // are the ones a model would produce; only the words around it are fixed.
-        let tools = vec![agent::wallet_tool(&settings)];
+        let tools = agent::wallet_tools(&settings);
         let call = providers::ToolCall {
             id: "demo-wallet".into(),
             name: "wallet_send".into(),
@@ -805,6 +846,59 @@ pub(crate) async fn demo_answer(s: &Arc<AppState>, id: &str, req: &ThinkRequest)
                 v["symbol"].as_str().unwrap_or(""),
                 v["limit"].as_str().unwrap_or(""),
                 v["symbol"].as_str().unwrap_or("")
+            )
+        }
+    } else if let Some(((coin, address), settings)) = balance {
+        // The real tool runs: the checks and the chat cards are the ones a model
+        // would produce, and the browser reads the figures; only the words are fixed.
+        let tools = agent::wallet_tools(&settings);
+        let mut arguments = serde_json::Map::new();
+        if let Some(coin) = coin {
+            arguments.insert("coin".into(), json!(coin));
+        }
+        if let Some(address) = address {
+            arguments.insert("address".into(), json!(address));
+        }
+        let call = providers::ToolCall {
+            id: "demo-balance".into(),
+            name: "wallet_balance".into(),
+            arguments: Value::Object(arguments).to_string(),
+        };
+        s.db.event(id, "tool_start", &serde_json::to_string(&call)?)?;
+        let result = match agent::execute(s, id, &call, &tools).await {
+            Ok(v) => v,
+            Err(e) => json!({"error":e.to_string()}).to_string(),
+        };
+        s.db.event(
+            id,
+            "tool_result",
+            &json!({"name":"wallet_balance","output":result}).to_string(),
+        )?;
+        let v: Value = serde_json::from_str(&result)?;
+        if let Some(error) = v["error"].as_str() {
+            format!(
+                "<!--kind:question-->\n### Balance not read\n\n{error}\n\n*Demo response: the wallet tool ran for real; only these words are fixed.*"
+            )
+        } else {
+            let coins = v["checks"]
+                .as_array()
+                .map(|checks| {
+                    checks
+                        .iter()
+                        .map(|c| {
+                            format!(
+                                "**{}** on {}",
+                                c["symbol"].as_str().unwrap_or(""),
+                                c["network"].as_str().unwrap_or("")
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                })
+                .unwrap_or_default();
+            format!(
+                "<!--kind:question-->\n### Balance\n\nReading {coins} for `{}` now. The card below shows each figure as the network answers; this browser reads it, so the number is never guessed.\n\n*Demo response: the wallet tool ran for real; only these words are fixed.*",
+                v["address"].as_str().unwrap_or("")
             )
         }
     } else if req.agent {
@@ -1129,5 +1223,40 @@ mod demo_send_tests {
         assert_eq!(parsed(&format!("send 5 SOL to {to}")), None);
         assert_eq!(parsed("send 5 TCRO to alice"), None);
         assert_eq!(parsed(&format!("send tcro to {to}")), None);
+    }
+    #[test]
+    fn the_demo_reads_balance_requests_with_every_coin_as_the_default() {
+        use super::demo_balance_request as parsed;
+        let who = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
+        let s = |v: &str| Some(v.to_string());
+        assert_eq!(parsed("get balance"), Some((None, None)));
+        assert_eq!(parsed("Show my balances."), Some((None, None)));
+        assert_eq!(
+            parsed("balance tcro cronos testnet"),
+            Some((s("tcro-cronos-testnet"), None))
+        );
+        assert_eq!(
+            parsed("get balance cronos mainnet"),
+            Some((s("cro-cronos-mainnet"), None))
+        );
+        assert_eq!(
+            parsed("what is my CRO balance on mainnet?"),
+            Some((s("cro-cronos-mainnet"), None))
+        );
+        assert_eq!(
+            parsed("usdc balance"),
+            Some((s("usdc-cronos-mainnet"), None))
+        );
+        assert_eq!(
+            parsed(&format!("balance of {who} on cronos testnet")),
+            Some((s("tcro-cronos-testnet"), s(who)))
+        );
+        assert_eq!(parsed("잔액 알려줘"), Some((None, None)));
+        // A send is a send, even when it mentions the balance.
+        assert_eq!(
+            parsed(&format!("send 1 tcro to {who} and show the balance")),
+            None
+        );
+        assert_eq!(parsed("what is the weather"), None);
     }
 }

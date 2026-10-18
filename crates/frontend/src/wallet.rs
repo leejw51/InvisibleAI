@@ -390,6 +390,12 @@ pub mod hands_off {
         }
         Err("The network has not confirmed the transfer yet. Check the explorer.".into())
     }
+    /// One holder's balance of `coin`, whole coins, for the chat's balance card.
+    pub async fn balance(coin: &Coin, address: &str) -> Result<String, String> {
+        let (network, asset) = evm(coin)?;
+        let held = holder_balance(&network, &asset, address).await?;
+        Ok(evm::format_units(held, asset.decimals(&network)))
+    }
     /// Both balances after the transfer, whole coins.
     pub async fn balances_after(
         coin: &Coin,

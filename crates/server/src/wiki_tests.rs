@@ -1361,6 +1361,10 @@ fn a_typed_line_is_a_question_a_note_or_unsure() {
         "please list three options",
         "send 0xB32d16a925887f8636F76D84A7448F29b7c00aC2 0.1 tcro cronos testnet",
         "Transfer 2 USDC to 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+        "get balance",
+        "balance tcro cronos testnet",
+        "Balances on cronos mainnet",
+        "내 잔액",
     ] {
         assert_eq!(intent(q), Intent::Question, "{q}");
     }
