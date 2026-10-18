@@ -108,6 +108,24 @@ pub fn refresh(tx: &Transaction<'_>, memo: &str, kind: &str, text: &str) -> Resu
                     m.skills.truncate(20);
                 }
             }
+            // A transfer the AI prepared, and later what became of it.
+            if kind == "wallet_request"
+                && let Ok(request) =
+                    serde_json::from_str::<causewaybay_shared::registry::PendingTransfer>(text)
+            {
+                m.wallet_request = Some(request);
+            }
+            // A balance the AI asked for, and the figure once the browser read it.
+            if kind == "wallet_balance"
+                && let Ok(check) =
+                    serde_json::from_str::<causewaybay_shared::registry::BalanceCheck>(text)
+            {
+                match m.wallet_balances.iter_mut().find(|c| c.id == check.id) {
+                    Some(c) => *c = check,
+                    None => m.wallet_balances.push(check),
+                }
+                m.wallet_balances.truncate(10);
+            }
             if kind == "tool_result"
                 && let Ok(event) = serde_json::from_str::<serde_json::Value>(text)
                 && event["name"] == "web_search"

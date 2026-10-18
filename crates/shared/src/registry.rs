@@ -653,6 +653,79 @@ pub fn confirms(typed: &str, amount: evm::U256, coin: &Coin) -> bool {
 /// Most recently chosen coins kept for the search box's empty state.
 pub const MAX_RECENT: usize = 8;
 
+/// The coins the AI may prepare a transfer of, and the only ones with a hard
+/// limit: Cronos's own coin on testnet and mainnet, and USDC on Cronos Mainnet.
+pub const LIMITED_COINS: [&str; 3] = [
+    "tcro-cronos-testnet",
+    "cro-cronos-mainnet",
+    "usdc-cronos-mainnet",
+];
+/// The hard limit a new account starts with, per transfer, in whole coins:
+/// 100 CRO (on either Cronos network) and 10 USDC.
+pub fn default_limit(coin_key: &str) -> Option<&'static str> {
+    match coin_key {
+        "tcro-cronos-testnet" | "cro-cronos-mainnet" => Some("100"),
+        "usdc-cronos-mainnet" => Some("10"),
+        _ => None,
+    }
+}
+/// The widest a limit can be set: a number no transfer will ever reach, so a
+/// typo cannot store something the odometer cannot show.
+pub const MAX_LIMIT: &str = "1000000000";
+
+/// A transfer the AI prepared from a chat. The backend never signs: the
+/// browser that asked sends it from the user's own key and reports back, and
+/// a request it could not send stays `pending` for the Wallet page to finish.
+/// Both wallets' balances of the coin, as the browser read them, travel with
+/// the request so the chat can show the transfer's effect.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PendingTransfer {
+    pub id: String,
+    pub coin: String,
+    pub symbol: String,
+    pub network: String,
+    /// The sending wallet: the account that asked.
+    #[serde(default)]
+    pub from: String,
+    pub to: String,
+    pub amount: String,
+    /// `pending`, `sent` or `cancelled`.
+    pub status: String,
+    #[serde(default)]
+    pub hash: String,
+    /// Whole-coin balances before the transfer, once the browser read them.
+    #[serde(default)]
+    pub from_before: String,
+    #[serde(default)]
+    pub to_before: String,
+    /// Whole-coin balances once the transfer arrived.
+    #[serde(default)]
+    pub from_after: String,
+    #[serde(default)]
+    pub to_after: String,
+    pub created_at: String,
+}
+
+/// A balance the AI asked for from a chat. The backend never reads the chain:
+/// the user's browser reads it and reports the whole-coin figure, or why it
+/// could not, and the chat card shows what came back.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BalanceCheck {
+    pub id: String,
+    pub coin: String,
+    pub symbol: String,
+    pub network: String,
+    /// Whose balance: the wallet itself unless the user named an address.
+    pub address: String,
+    /// Whole coins once the browser read it; empty until then.
+    #[serde(default)]
+    pub balance: String,
+    /// Why the browser could not read it, when it could not.
+    #[serde(default)]
+    pub error: String,
+    pub created_at: String,
+}
+
 /// The public wallet choices kept on the backend for each account, so a new
 /// sign-in opens the wallet as it was left: the active coin, recent picks,
 /// user-added ERC-20s and the receive addresses derived in the browser.
@@ -668,6 +741,13 @@ pub struct WalletSettings {
     pub tokens: std::collections::BTreeMap<String, Vec<CustomToken>>,
     /// Network key → this account's receive address there.
     pub addresses: std::collections::BTreeMap<String, String>,
+    /// Coin key → the hard limit per transfer the user set, in whole coins.
+    /// Only `LIMITED_COINS` are listed; a coin missing here keeps its default.
+    #[serde(default)]
+    pub limits: std::collections::BTreeMap<String, String>,
+    /// Transfers the AI prepared that are still waiting to be confirmed.
+    #[serde(default)]
+    pub pending: Vec<PendingTransfer>,
 }
 impl Default for WalletSettings {
     fn default() -> Self {
@@ -677,10 +757,29 @@ impl Default for WalletSettings {
             uses: Default::default(),
             tokens: Default::default(),
             addresses: Default::default(),
+            limits: Default::default(),
+            pending: Vec::new(),
         }
     }
 }
 impl WalletSettings {
+    /// The hard limit per transfer of `coin`, as a decimal string: the user's
+    /// setting, else the default. None for a coin that has no limit.
+    pub fn limit_text(&self, coin_key: &str) -> Option<String> {
+        let default = default_limit(coin_key)?;
+        Some(
+            self.limits
+                .get(coin_key)
+                .cloned()
+                .unwrap_or_else(|| default.to_string()),
+        )
+    }
+    /// The hard limit per transfer of `coin` in its base units. None for a
+    /// coin that has no limit.
+    pub fn limit_for(&self, coin: &Coin) -> Option<evm::U256> {
+        let text = self.limit_text(&coin.key)?;
+        evm::parse_units(&text, coin.decimals).ok()
+    }
     /// Built-in coins and this account's own ERC-20s, in registry order.
     pub fn all_coins(&self) -> Vec<Coin> {
         let mut all = coins();
@@ -789,6 +888,31 @@ mod tests {
                 .chain_id,
             421614
         );
+    }
+    #[test]
+    fn hard_limits_default_to_100_cro_and_10_usdc_and_follow_the_user() {
+        let mut s = WalletSettings::default();
+        for key in LIMITED_COINS {
+            assert!(coin(key).unwrap().can_send(), "{key}");
+            assert!(default_limit(key).is_some(), "{key}");
+        }
+        assert_eq!(s.limit_text("cro-cronos-mainnet").as_deref(), Some("100"));
+        assert_eq!(s.limit_text("tcro-cronos-testnet").as_deref(), Some("100"));
+        assert_eq!(s.limit_text("usdc-cronos-mainnet").as_deref(), Some("10"));
+        assert_eq!(s.limit_text("devusdc.e-cronos-testnet"), None);
+        let usdc = coin("usdc-cronos-mainnet").unwrap();
+        assert_eq!(s.limit_for(&usdc), Some(evm::U256::from(10_000_000u64)));
+        s.limits.insert("usdc-cronos-mainnet".into(), "2.5".into());
+        assert_eq!(s.limit_for(&usdc), Some(evm::U256::from(2_500_000u64)));
+        // A coin without a limit is never limited, whatever is stored for it.
+        s.limits.insert("sol-solana-mainnet".into(), "1".into());
+        assert_eq!(s.limit_for(&coin("sol-solana-mainnet").unwrap()), None);
+        // Settings written before limits existed read as the defaults.
+        let old: WalletSettings = serde_json::from_str(
+            r#"{"active":"tcro-cronos-testnet","recent":[],"tokens":{},"addresses":{}}"#,
+        )
+        .unwrap();
+        assert_eq!(old, WalletSettings::default());
     }
     #[test]
     fn only_evm_coins_can_be_sent_for_now() {

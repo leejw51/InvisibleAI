@@ -56,6 +56,30 @@ test('Coding creates a sandboxed project, the agent writes and runs it, the user
   expect(detail.folder.endsWith(`/projects/${id}`)).toBeTruthy();
   expect(detail.files.map(f => f.path)).toEqual(['.gitignore', 'README.md', 'main.py']);
 
+  // A long file list: on a touch screen (iPad, iPhone) the list has no scroller
+  // of its own, which iPad Safari would not scroll; it grows and the page
+  // scrolls. On a desktop it keeps its own bounded scroll area.
+  for (let i = 0; i < 14; i++) expect((await request.post(`/api/coding/projects/${id}/file`, {data: {path: `helpers/module_${String(i).padStart(2, '0')}.py`, text: `VALUE = ${i}\n`}})).ok()).toBeTruthy();
+  await page.reload();
+  const files = page.getByTestId('coding-files');
+  await expect(files.getByRole('button')).toHaveCount(17);
+  const listing = await files.evaluate(el => ({maxHeight: getComputedStyle(el).maxHeight, scroll: el.scrollHeight, client: el.clientHeight, coarse: matchMedia('(hover:none) and (pointer:coarse)').matches}));
+  if (listing.coarse) {
+    expect(listing.maxHeight).toBe('none');
+    expect(listing.scroll).toBeLessThanOrEqual(listing.client + 1);
+    await files.getByRole('button', {name: /module_13/}).scrollIntoViewIfNeeded();
+    await expect(files.getByRole('button', {name: /module_13/})).toBeInViewport();
+  } else {
+    expect(listing.maxHeight).toBe('220px');
+    expect(listing.scroll).toBeGreaterThan(listing.client);
+    await files.getByRole('button', {name: /module_13/}).scrollIntoViewIfNeeded();
+    await expect(files.getByRole('button', {name: /module_13/})).toBeInViewport();
+    expect(await files.evaluate(el => el.scrollTop)).toBeGreaterThan(0);
+  }
+  for (let i = 0; i < 14; i++) expect((await request.delete(`/api/coding/projects/${id}/file?path=helpers/module_${String(i).padStart(2, '0')}.py`)).ok()).toBeTruthy();
+  await page.reload();
+  await expect(files.getByRole('button')).toHaveCount(3);
+
   // Asking the agent: the work shows live (file written, run), then the answer.
   await page.getByTestId('coding-prompt').fill('Print hello');
   await page.getByTestId('coding-ask').click();

@@ -2061,3 +2061,30 @@ cwb-send-stage.is-failed{box-shadow:0 0 0 2px #ff8a9a88,0 40px 80px -40px #3a0f1
 @keyframes island-pulse{50%{opacity:.35;transform:scale(.75)}}
 @media(max-width:1023px){.capture-island-anchor{left:50%;top:calc(env(safe-area-inset-top) + 74px)}}
 @media(max-width:700px){.chat-page.is-capture .chat-dock textarea{padding:15px 12px}.chat-page.is-capture .chat-dock textarea::placeholder{white-space:nowrap;overflow:hidden}}
+/* Hard limits per transfer: the same panel on the Wallet page and AI settings. */
+.wallet-limits{display:flex;flex-direction:column;gap:10px;margin-top:22px;padding:16px 18px;border:1px solid var(--feature-line,#e3dbe9);border-radius:16px;background:var(--feature-paper,#fff)}
+.wallet-limits h3{display:flex;align-items:center;gap:8px;margin:0;font-size:13px;font-weight:600;letter-spacing:.2px;color:#4d3aa3}.wallet-limits h3 svg{width:15px;height:15px}.wallet-limits>p{margin:0;font-size:12px;line-height:1.6}
+.wallet-limit-rows{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}.wallet-limit-rows .form-label{display:flex;flex-direction:column;align-items:stretch;gap:6px}
+.wallet-limit-name{display:flex;align-items:baseline;gap:8px;font-size:12px}.wallet-limit-name strong{color:#4f3a69}.wallet-limit-name small{color:var(--feature-muted,#8d8198)}.wallet-limit-name em{font-style:normal;color:#b4832b}
+.wallet-limits .wallet-amount-field input{min-width:0;flex:1 1 auto;padding:10px 12px;border:1px solid var(--feature-line,#e3dbe9);border-radius:10px;background:var(--feature-field,#fbfafc);color:var(--feature-ink,#2d2538);font:inherit;font-size:14px;font-variant-numeric:tabular-nums}
+.wallet-limit-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.wallet-limit-actions .secondary-button{min-height:40px}
+:root[data-theme=dark] .wallet-limits{background:#24212b;border-color:#3b3446}:root[data-theme=dark] .wallet-limits h3,:root[data-theme=dark] .wallet-limit-name strong{color:#c2a5da}
+/* A transfer the AI prepared from a chat, filled into the Send form. */
+.wallet-agent-request{display:flex;align-items:center;gap:10px;margin:-6px 0 18px;padding:12px 14px;border-radius:12px;background:#efeafa;border:1px solid #d7c5ea;color:#4d3aa3;font-size:13px;flex-wrap:wrap}
+.wallet-agent-request svg{width:15px;height:15px;flex:none}.wallet-agent-request span{flex:1 1 240px;line-height:1.6}.wallet-agent-request code{font-size:12px}.wallet-agent-request .text-button{margin-left:auto}
+:root[data-theme=dark] .wallet-agent-request{background:#2b2437;border-color:#4a3d5e;color:#c2a5da}
+/* The chat's card for that transfer: pending, sent or cancelled. */
+.chat-transfer{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:14px;padding:12px 14px;border-radius:12px;border:1px solid #d7c5ea;background:#f6f0fd}
+.chat-transfer>svg{width:18px;height:18px;flex:none;color:#7760cf}.chat-transfer-text{display:flex;flex-direction:column;gap:2px;flex:1 1 200px;min-width:0;font-size:13px}.chat-transfer-text strong{font-size:16px;color:#4f3a69}.chat-transfer-text span{color:#5f4a76;overflow-wrap:anywhere}.chat-transfer-text small{font-size:11px;color:#7760cf}
+.chat-transfer.is-sent{border-color:#cfe6d4;background:#f3faf4}.chat-transfer.is-sent>svg,.chat-transfer.is-sent small{color:#3d8a55}.chat-transfer.is-cancelled{border-color:#e5dbec;background:#f7f4fa;opacity:.85}.chat-transfer.is-cancelled small{color:var(--feature-muted,#8d8198)}
+.chat-transfer .secondary-button{min-height:40px}
+.chat-transfer-balances{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;margin:6px 0 2px;font-size:12px}.chat-transfer-balances div{display:contents}.chat-transfer-balances dt{color:#7760cf;font-weight:600}.chat-transfer-balances dd{margin:0;display:flex;flex-wrap:wrap;gap:0 6px;align-items:baseline;color:#4f3a69}.chat-transfer-balances code,.chat-transfer-hash code{font-size:11px;padding:1px 5px;border-radius:6px;background:#ece3f8}.chat-transfer-hash{font-size:12px}.chat-transfer-hash a{color:#5b45b8}
+.chat-balance strong{font-variant-numeric:tabular-nums}.chat-transfer.is-read{border-color:#cfe6d4;background:#f3faf4}.chat-transfer.is-read>svg,.chat-transfer.is-read small{color:#3d8a55}:root[data-theme=dark] .chat-transfer.is-read{background:#1e2a21;border-color:#2f4a36}
+.chat-transfer.is-running>svg{animation:chat-transfer-pulse 1.2s ease-in-out infinite}@keyframes chat-transfer-pulse{0%,100%{opacity:1}50%{opacity:.35}}@media (prefers-reduced-motion:reduce){.chat-transfer.is-running>svg{animation:none}}
+:root[data-theme=dark] .chat-transfer-balances dd{color:#eae5ef}:root[data-theme=dark] .chat-transfer-balances code,:root[data-theme=dark] .chat-transfer-hash code{background:#3b3050}:root[data-theme=dark] .chat-transfer-hash a{color:#b9a8ff}
+:root[data-theme=dark] .chat-transfer{background:#2b2437;border-color:#4a3d5e}:root[data-theme=dark] .chat-transfer-text strong{color:#eae5ef}:root[data-theme=dark] .chat-transfer-text span{color:#c9bfd6}:root[data-theme=dark] .chat-transfer.is-sent{background:#1e2a21;border-color:#2f4a36}
+/* Coding files on a touch screen: no nested scroller (iPad Safari does not
+   reliably scroll one), the list grows and the page scrolls instead. On a
+   desktop the list keeps its own scroll, contained so the page stays put. */
+.coding-file-list{overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y}
+@media (hover:none) and (pointer:coarse){.coding-file-list{max-height:none;overflow:visible}}

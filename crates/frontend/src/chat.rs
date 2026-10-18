@@ -6,6 +6,7 @@ use crate::{
     message_cache,
 };
 use base64::Engine;
+use causewaybay_shared::registry::{BalanceCheck, PendingTransfer};
 use causewaybay_shared::*;
 use gloo_timers::callback::{Interval, Timeout};
 use serde_json::{Value, json};
@@ -103,6 +104,16 @@ pub struct Chat {
     /// Replies that solved a captured problem while this chat watched, each
     /// with its place in this visit's streak; they play the celebration once.
     celebrations: std::collections::HashMap<String, usize>,
+    /// Message ids this tab posted: only the tab that asked for a transfer
+    /// sends it, so two tabs on one room never sign the same request.
+    posted: std::collections::HashSet<String>,
+    /// Transfers the AI prepared that this tab is sending, by request id,
+    /// with the step under way or why it stopped.
+    transfers: std::collections::HashMap<String, Transfer>,
+    /// Balances the AI asked for that this tab has read, by check id: `None`
+    /// while reading or once reported, the error when the report failed.
+    /// Reading needs no key, so any tab of the owner fills in a check, once.
+    balance_reads: std::collections::HashMap<String, Option<String>>,
     /// After Capture: the screenshot, then the answer, each eased into view
     /// once as it arrives, so a hurried reader never has to scroll.
     focus: Option<CaptureFocus>,
@@ -116,6 +127,19 @@ pub struct Chat {
     glow_generation: u64,
     glow_timer: Option<Timeout>,
     _notifications: Option<crate::api::Notifications>,
+}
+/// A prepared transfer this tab is sending hands-off: the same checks and
+/// signing as the Wallet's Send form, step by step, reported to the backend
+/// so the card follows. One that stops before broadcast stays `pending` for
+/// the Wallet page to finish.
+#[derive(Clone)]
+struct Transfer {
+    coin: causewaybay_shared::registry::Coin,
+    from: String,
+    to: String,
+    /// What is happening now, as a translatable label; empty once done.
+    step: &'static str,
+    error: Option<String>,
 }
 /// Following one capture: the newest message before it, and how far the
 /// capture post and its reply have been shown.
@@ -206,6 +230,15 @@ pub enum Msg {
     Skills(Result<Value, String>),
     CheckAi,
     Error(String),
+    /// A hands-off transfer, step by step: prepared (balances read, transaction
+    /// built), broadcast (hash), arrived (receipt), settled (balances after).
+    TransferPrepared(String, Result<crate::wallet::Prepared, String>),
+    TransferBroadcast(String, Result<String, String>),
+    TransferArrived(String, String, Result<bool, String>),
+    TransferSettled(String, String, Result<(String, String), String>),
+    TransferReported(String, Result<Value, String>),
+    BalanceRead(String, Result<String, String>),
+    BalanceReported(String, Result<Value, String>),
 }
 impl Component for Chat {
     type Message = Msg;
@@ -286,6 +319,9 @@ impl Component for Chat {
             bottom: NodeRef::default(),
             scroll: false,
             celebrations: Default::default(),
+            posted: Default::default(),
+            transfers: Default::default(),
+            balance_reads: Default::default(),
             focus: None,
             focus_to: None,
             tween: None,
@@ -959,6 +995,8 @@ impl Component for Chat {
                                 .unbounded_send(message_cache::Write::Message(Box::new(m.clone())));
                             self.merge(m);
                         }
+                        self.start_transfers(ctx);
+                        self.start_balance_checks(ctx);
                     }
                     Err(e) => self.error = e,
                 }
@@ -989,6 +1027,8 @@ impl Component for Chat {
                         .cache
                         .unbounded_send(message_cache::Write::Message(Box::new(m.clone())));
                     self.merge(m);
+                    self.start_transfers(ctx);
+                    self.start_balance_checks(ctx);
                     if self.focus.is_some() {
                         // The capture focus decides where the list goes.
                         self.scroll = false;
@@ -996,6 +1036,130 @@ impl Component for Chat {
                 }
             }
             Msg::Prompt(v) => self.prompt = v,
+            Msg::TransferPrepared(id, result) => {
+                let Some(transfer) = self.transfers.get_mut(&id) else {
+                    return false;
+                };
+                match result {
+                    Ok(prepared) => {
+                        // The balances go to the backend first, and only a request
+                        // still pending there is signed: one cancelled meanwhile
+                        // (Dismiss on the Wallet page, say) is never sent.
+                        let (from_before, to_before) = prepared.balances_before();
+                        transfer.step = "Sending…";
+                        let (coin, from) = (transfer.coin.clone(), transfer.from.clone());
+                        let url = format!("/api/wallet/requests/{id}");
+                        ctx.link().send_future(async move {
+                            let still_pending = api::<Value>(
+                                "PATCH",
+                                &url,
+                                Some(json!({"status":"pending","from_before":from_before,"to_before":to_before})),
+                            )
+                            .await;
+                            Msg::TransferBroadcast(
+                                id,
+                                match still_pending {
+                                    Ok(_) => crate::wallet::hands_off::send(&coin, &from, &prepared).await,
+                                    Err(e) => Err(e),
+                                },
+                            )
+                        });
+                    }
+                    Err(e) => {
+                        transfer.step = "";
+                        transfer.error = Some(e);
+                    }
+                }
+            }
+            Msg::TransferBroadcast(id, result) => {
+                let Some(transfer) = self.transfers.get_mut(&id) else {
+                    return false;
+                };
+                match result {
+                    Ok(hash) => {
+                        Self::report(ctx, &id, json!({"status":"sent","hash":hash}));
+                        transfer.step = "Waiting for the network…";
+                        let coin = transfer.coin.clone();
+                        ctx.link().send_future(async move {
+                            let arrived = crate::wallet::hands_off::arrival(&coin, &hash).await;
+                            Msg::TransferArrived(id, hash, arrived)
+                        });
+                    }
+                    Err(e) => {
+                        transfer.step = "";
+                        transfer.error = Some(e);
+                    }
+                }
+            }
+            Msg::TransferArrived(id, hash, result) => {
+                let Some(transfer) = self.transfers.get_mut(&id) else {
+                    return false;
+                };
+                match result {
+                    Ok(true) => {
+                        let (coin, from, to) = (
+                            transfer.coin.clone(),
+                            transfer.from.clone(),
+                            transfer.to.clone(),
+                        );
+                        ctx.link().send_future(async move {
+                            let after =
+                                crate::wallet::hands_off::balances_after(&coin, &from, &to).await;
+                            Msg::TransferSettled(id, hash, after)
+                        });
+                    }
+                    Ok(false) => {
+                        transfer.step = "";
+                        transfer.error =
+                            Some("The network rejected the transfer. Check the explorer.".into());
+                    }
+                    Err(e) => {
+                        transfer.step = "";
+                        transfer.error = Some(e);
+                    }
+                }
+            }
+            Msg::TransferSettled(id, hash, result) => {
+                let Some(transfer) = self.transfers.get_mut(&id) else {
+                    return false;
+                };
+                transfer.step = "";
+                match result {
+                    Ok((from_after, to_after)) => {
+                        Self::report(
+                            ctx,
+                            &id,
+                            json!({"status":"sent","hash":hash,"from_after":from_after,"to_after":to_after}),
+                        );
+                    }
+                    // The transfer arrived; only the fresh numbers are missing.
+                    Err(e) => transfer.error = Some(e),
+                }
+            }
+            Msg::TransferReported(id, result) => {
+                // The card follows the room's events; only a refusal is shown here.
+                if let (Err(e), Some(transfer)) = (result, self.transfers.get_mut(&id)) {
+                    transfer.step = "";
+                    transfer.error = Some(e);
+                }
+            }
+            Msg::BalanceRead(id, result) => {
+                // The figure, or why this browser could not read it, goes to the
+                // backend; the card follows the room's events.
+                let body = match result {
+                    Ok(balance) => serde_json::json!({"balance":balance}),
+                    Err(e) => serde_json::json!({"error":e.chars().take(200).collect::<String>()}),
+                };
+                let url = format!("/api/wallet/balances/{id}");
+                ctx.link().send_future(async move {
+                    Msg::BalanceReported(id, api::<Value>("PATCH", &url, Some(body)).await)
+                });
+            }
+            Msg::BalanceReported(id, result) => {
+                if let Err(e) = result {
+                    self.balance_reads.insert(id, Some(e));
+                }
+            }
             Msg::Mode(v) => {
                 self.mode = if causewaybay_shared::text_only_provider(&self.provider) {
                     InputMode::Text
@@ -1586,6 +1750,155 @@ impl Chat {
                 "Browser storage is unavailable; this selection lasts for this session.".into();
         }
     }
+    /// Send every transfer the AI prepared for a message this tab posted, once:
+    /// the key must be this browser's, and the request must still be pending.
+    /// Anything else is left for the Wallet page.
+    fn start_transfers(&mut self, ctx: &Context<Self>) {
+        let owner = ctx.props().owner.clone();
+        if !owner.starts_with("0x")
+            || crate::account::saved_address().as_deref() != Some(owner.as_str())
+        {
+            return;
+        }
+        let mine: Vec<String> = self
+            .messages
+            .iter()
+            .filter(|u| u.role == "user" && self.posted.contains(&u.messageid))
+            .map(|u| u.memo_id.clone())
+            .collect();
+        let fresh: Vec<PendingTransfer> = self
+            .messages
+            .iter()
+            .filter(|m| m.role != "user" && mine.contains(&m.memo_id))
+            .filter_map(|m| m.wallet_request.clone())
+            .filter(|r| {
+                r.status == "pending" && r.from == owner && !self.transfers.contains_key(&r.id)
+            })
+            .collect();
+        for r in fresh {
+            let Some(coin) = registry::coin(&r.coin) else {
+                continue;
+            };
+            self.transfers.insert(
+                r.id.clone(),
+                Transfer {
+                    coin: coin.clone(),
+                    from: r.from.clone(),
+                    to: r.to.clone(),
+                    step: "Reading balances…",
+                    error: None,
+                },
+            );
+            let id = r.id.clone();
+            ctx.link().send_future(async move {
+                Msg::TransferPrepared(
+                    id,
+                    crate::wallet::hands_off::prepare(&coin, &r.from, &r.to, &r.amount).await,
+                )
+            });
+        }
+    }
+    /// Read every balance the AI asked for that nobody has read yet, once per
+    /// tab: the chain is read here, with no key, and the figure reported.
+    fn start_balance_checks(&mut self, ctx: &Context<Self>) {
+        if !ctx.props().owner.starts_with("0x") {
+            return;
+        }
+        let fresh: Vec<BalanceCheck> = self
+            .messages
+            .iter()
+            .filter(|m| m.role != "user")
+            .flat_map(|m| m.wallet_balances.iter().cloned())
+            .filter(|c| c.balance.is_empty() && !self.balance_reads.contains_key(&c.id))
+            .collect();
+        for c in fresh {
+            let Some(coin) = registry::coin(&c.coin) else {
+                continue;
+            };
+            self.balance_reads.insert(c.id.clone(), None);
+            let id = c.id.clone();
+            ctx.link().send_future(async move {
+                Msg::BalanceRead(
+                    id,
+                    crate::wallet::hands_off::balance(&coin, &c.address).await,
+                )
+            });
+        }
+    }
+    /// The card for a balance the AI asked for: the figure once this or another
+    /// tab read it, whose and on which network, and the explorer.
+    fn balance_card(&self, c: &BalanceCheck) -> Html {
+        let net = registry::net_of(&c.network);
+        let local = self.balance_reads.get(&c.id);
+        let error = if !c.error.is_empty() {
+            Some(c.error.clone())
+        } else {
+            local.cloned().flatten()
+        };
+        let reading = c.balance.is_empty() && error.is_none() && local.is_some();
+        let status = if !c.balance.is_empty() {
+            "read"
+        } else if error.is_some() {
+            "failed"
+        } else {
+            "reading"
+        };
+        html! {<div class={classes!("chat-transfer","chat-balance",format!("is-{status}"),reading.then_some("is-running"))} data-testid="chat-balance" data-status={status} data-coin={c.coin.clone()} role="note" aria-busy={reading.to_string()}>
+            {icon("wallet")}
+            <div class="chat-transfer-text">
+                <strong data-testid="balance-amount">{if c.balance.is_empty(){"…".to_string()}else{format!("{} {}",c.balance,c.symbol)}}</strong>
+                <span>{&c.symbol}{" · "}{net.map(|n|n.name).unwrap_or_default()}{" · "}<code title={c.address.clone()}>{crate::wallet::short(&c.address)}</code></span>
+                <small data-testid="balance-state">{if !c.balance.is_empty(){t("Balance")}else if error.is_some(){t("Not read from this browser.")}else{t("Reading balance…")}}</small>
+                if let Some(e)=&error {<p class="login-error" data-testid="balance-error">{t(e)}</p>}</div>
+            <a class="text-button" href={net.map(|n|n.address_url(&c.address)).unwrap_or_default()} target="_blank" rel="noopener noreferrer">{t("Explorer")}{icon("arrow")}</a>
+        </div>}
+    }
+    /// Tell the backend how a hands-off transfer is going; the card follows.
+    fn report(ctx: &Context<Self>, id: &str, body: Value) {
+        let url = format!("/api/wallet/requests/{id}");
+        let id = id.to_string();
+        ctx.link().send_future(async move {
+            Msg::TransferReported(id, api("PATCH", &url, Some(body)).await)
+        });
+    }
+    /// The card for a transfer the AI prepared: who sends what to whom, both
+    /// balances before and after once read, the transaction, and what is
+    /// happening now. Confirmed in Wallet only when this tab could not send it.
+    fn transfer_card(&self, ctx: &Context<Self>, r: &PendingTransfer) -> Html {
+        let net = registry::net_of(&r.network);
+        let local = self.transfers.get(&r.id);
+        let running = local.is_some_and(|x| !x.step.is_empty() && x.error.is_none());
+        let error = local.and_then(|x| x.error.clone());
+        let balance = |v: &str| {
+            if v.is_empty() {
+                "…".to_string()
+            } else {
+                format!("{v} {}", r.symbol)
+            }
+        };
+        let line = match r.status.as_str() {
+            "sent" if !r.from_after.is_empty() => t("Arrived"),
+            "sent" if running => t(local.map(|x| x.step).unwrap_or("Waiting for the network…")),
+            "sent" => t("Sent from your wallet"),
+            "cancelled" => t("Cancelled in your wallet"),
+            _ if running => t(local.map(|x| x.step).unwrap_or("Sending…")),
+            _ if error.is_some() => t("Not sent from this browser; finish it under Wallet."),
+            _ => t("Waiting for your confirmation in Wallet"),
+        };
+        html! {<div class={classes!("chat-transfer",format!("is-{}",r.status),running.then_some("is-running"))} data-testid="chat-transfer" data-status={r.status.clone()} data-step={local.map(|x| x.step).unwrap_or_default()} role="note" aria-busy={running.to_string()}>
+            {icon("wallet")}
+            <div class="chat-transfer-text"><strong>{&r.amount}{" "}{&r.symbol}</strong><span>{t("to")}{" "}<code title={r.to.clone()}>{crate::wallet::short(&r.to)}</code>{" · "}{net.map(|n|n.name).unwrap_or_default()}</span>
+                if !r.from_before.is_empty() {<dl class="chat-transfer-balances" data-testid="transfer-balances">
+                    <div><dt>{t("From")}</dt><dd><code title={r.from.clone()}>{crate::wallet::short(&r.from)}</code><span data-testid="from-before">{balance(&r.from_before)}</span>{" → "}<span data-testid="from-after">{balance(&r.from_after)}</span></dd></div>
+                    <div><dt>{t("To")}</dt><dd><code title={r.to.clone()}>{crate::wallet::short(&r.to)}</code><span data-testid="to-before">{balance(&r.to_before)}</span>{" → "}<span data-testid="to-after">{balance(&r.to_after)}</span></dd></div>
+                </dl>}
+                if !r.hash.is_empty() {<span class="chat-transfer-hash">{t("Transaction")}{" "}<a data-testid="transfer-hash" href={net.map(|n|n.tx_url(&r.hash)).unwrap_or_default()} target="_blank" rel="noopener noreferrer"><code title={r.hash.clone()}>{crate::wallet::short(&r.hash)}</code></a></span>}
+                <small data-testid="transfer-state">{line}</small>
+                if let Some(e)=&error {<p class="login-error" data-testid="transfer-error">{t(e)}</p>}</div>
+            if r.status=="pending" && !running {<button type="button" class="secondary-button" data-testid="review-in-wallet" onclick={ctx.props().navigate.reform(|_|"wallet".to_string())}>{t("Review in Wallet")}{icon("arrow")}</button>}
+            else if r.status=="sent" && !r.hash.is_empty() {<a class="text-button" href={net.map(|n|n.tx_url(&r.hash)).unwrap_or_default()} target="_blank" rel="noopener noreferrer">{t("Explorer")}{icon("arrow")}</a>}
+        </div>}
+    }
     fn merge(&mut self, m: ChatMessage) {
         if m.roomid != self.room
             || m.messagesyncid
@@ -1658,6 +1971,9 @@ impl Chat {
     }
     fn send(&mut self, ctx: &Context<Self>, req: ThinkRequest) {
         self.busy = true;
+        if let Some(id) = &req.message_id {
+            self.posted.insert(id.clone());
+        }
         let room = req.room_id.clone().unwrap_or_default();
         let version = self.draft_version;
         ctx.link().send_future(async move {
@@ -1700,6 +2016,10 @@ impl Chat {
             if !m.text.is_empty(){if user && !m.text.contains("```") && !m.text.contains("~~~"){<p class="chat-user-text">{&m.text}</p>}else{<div class="answer-content">{copyable_markdown(&m.text, ctx.props().copy.clone())}</div>}}
             if let Some(s)=&solved{<p class="chat-solved" data-testid="chat-solved">{icon("spark")}<strong>{t("Solved")}</strong><span>{format!("{} = {}",s.problem,s.result)}</span></p>}
             if !m.sources.is_empty(){<div class="chat-sources" aria-label={t("Web sources")}><strong>{t("Sources")}</strong>{for m.sources.iter().filter(|s|s.url.starts_with("https://")).map(|source|html!{<a href={source.url.clone()} target="_blank" rel="noopener noreferrer">{&source.title}</a>})}</div>}
+            // A transfer the AI prepared: sent by this tab when it asked, else confirmed in Wallet.
+            if let Some(r)=&m.wallet_request {{self.transfer_card(ctx,r)}}
+            // Balances the AI asked for: read by whichever tab of the owner sees them first.
+            {for m.wallet_balances.iter().map(|c| self.balance_card(c))}
             if !m.ocr_text.is_empty(){<details class="chat-ocr"><summary>{t("Extracted text · Apple Vision")}</summary><pre>{&m.ocr_text}</pre></details>}
             if !m.transcript.is_empty(){<div class="chat-ocr"><strong>{t("Audio transcript")}</strong><pre>{&m.transcript}</pre></div>}
             {for m.attachments.iter().map(|f|html!{<div class="chat-file" key={f.id.clone()}>if f.mime.starts_with("image/"){<a href={format!("/api/files/{}/image",f.id)} target="_blank" rel="noopener"><img decoding="async" loading="lazy" class="chat-photo" src={format!("/api/files/{}/thumbnail",f.id)} alt={f.name.clone()}/></a>}if f.mime.starts_with("audio/"){<audio controls=true preload="none" src={format!("/api/files/{}/download",f.id)}/>}<a href={format!("/api/files/{}/download",f.id)}>{icon("file")}{&f.name}</a></div>})}

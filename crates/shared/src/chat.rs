@@ -84,6 +84,14 @@ pub struct ChatMessage {
     /// can keep it anyway).
     #[serde(default)]
     pub wiki_state: String,
+    /// A transfer the AI prepared while answering: the user confirms it in the
+    /// wallet, and its status follows it here (`pending`, `sent`, `cancelled`).
+    #[serde(default)]
+    pub wallet_request: Option<crate::registry::PendingTransfer>,
+    /// Balances the AI asked for while answering: the browser reads each and
+    /// the figure, or the reason it could not, follows it here.
+    #[serde(default)]
+    pub wallet_balances: Vec<crate::registry::BalanceCheck>,
 }
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct MessageSync {

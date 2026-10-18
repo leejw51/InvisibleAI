@@ -109,6 +109,14 @@ pub fn api_routes() -> Router<Arc<AppState>> {
         .route("/wallet/tokens", post(wallet::add_token))
         .route("/wallet/cardano", post(wallet::cardano))
         .route(
+            "/wallet/requests/{id}",
+            axum::routing::patch(wallet::resolve_request),
+        )
+        .route(
+            "/wallet/balances/{id}",
+            axum::routing::patch(wallet::report_balance),
+        )
+        .route(
             "/wallet/tokens/{network}/{address}",
             axum::routing::delete(wallet::remove_token),
         )
