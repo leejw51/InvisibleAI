@@ -37,7 +37,7 @@ Notes that save time:
 - Keep a change to one concern. Behavior changes, pure moves, and documentation are easier to review as separate commits.
 - Run `make check` before pushing. CI runs the same formatting, Clippy, build, and offline test steps on a macOS runner.
 - User-facing strings live in `crates/frontend/src/i18n.rs` with seven languages; add every new string to all of them.
-- Protocol changes need a matching update in `PROTOCOL.md`. New pages need the server's single-page-app path list in `crates/server/src/lib.rs` and the `location_page` match in `crates/frontend/src/main.rs`.
+- Protocol changes need a matching update in `PROTOCOL.md`. New pages need the server's single-page-app path list in `crates/server/src/routes.rs`, the `location_page` match, header label and `MENU` entry in `crates/frontend/src/main.rs`, and the route list in `tests/e2e/translation-coverage.spec.mjs`.
 - Generated artwork keeps its prompt beside the file (`frontend/assets/*.prompt.txt`).
 - Never commit `.env`, recovery phrases, private keys, or provider keys. `.env.example` lists every variable the server reads and holds no values.
 

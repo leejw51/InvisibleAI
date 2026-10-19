@@ -4,6 +4,7 @@ mod ai_activity;
 mod ai_settings;
 mod api;
 mod assistance;
+mod audio;
 mod chat;
 mod clipboard;
 mod cloud;
@@ -890,6 +891,7 @@ impl Component for App {
                         self.attachment.as_ref().map(|f| f.id.clone())
                     },
                     parent_id: self.selected.as_ref().map(|m| m.id.clone()),
+                    context: String::new(),
                     room_id: None,
                     message_id: None,
                     clear_epoch: None,
@@ -1687,6 +1689,7 @@ impl Component for App {
                         else if self.page=="save"{<save_anything::SaveAnything language={self.language} data_epoch={self.browser["erased"].as_str().and_then(|v|v.parse::<i64>().ok()).unwrap_or(0)} key={format!("{}:{}",self.session["address"],self.browser["erased"])}/>}
                         else if self.page=="wiki"{<wiki::Wiki language={self.language} key={format!("{}:{}",self.session["address"],self.selection_version)}/> }
                         else if self.page=="autonomous"{<cloud::Cloud owner={self.session["address"].as_str().unwrap_or("local").to_string()} data_epoch={self.browser["erased"].as_str().and_then(|v|v.parse::<i64>().ok()).unwrap_or(0)} key={self.session["address"].to_string()} ai_saved={ctx.link().callback(|_|Msg::Refresh)} language={self.language} settings={self.settings.clone()} clients={self.clients.clone()} active_client={self.devices.active.clone()} navigate={ctx.link().callback(Msg::Navigate)}/> }
+                        else if self.page=="audio"{<audio::Audio language={self.language} key={self.session["address"].to_string()} clients={self.clients.clone()} active_client={self.devices.active.clone()} demo={self.settings.demo} navigate={ctx.link().callback(Msg::Navigate)}/> }
                         else if self.page=="assistance"{<assistance::Assistance language={self.language} key={self.session["address"].to_string()}/> }
                         else if self.page=="images"{<images::Images key={format!("{}:{}",self.session["address"],self.selection_version)} language={self.language}/>}
                         else if self.page=="videos"{<videos::Videos key={format!("{}:{}",self.session["address"],self.selection_version)} language={self.language}/>}
@@ -2009,7 +2012,7 @@ impl App {
         html! {<label class="sidebar-search menu-finder">{icon("search")}<input type="search" data-testid="nav-search" aria-label={t("Find a menu")} placeholder={format!("{}…", t("Find a menu"))} autocomplete="off" value={self.nav_query.clone()} {oninput} {onkeydown}/></label>}
     }
     fn sidebar(&self, ctx: &Context<Self>) -> Html {
-        // Three everyday actions: capture the screen, save anything, ask anything.
+        // The everyday actions: capture the screen, capture audio, save anything, ask anything.
         // Optional tools, including the Wiki, are folded below.
         let library = matches!(
             self.page.as_str(),
@@ -2041,6 +2044,7 @@ impl App {
             <div class="nav-label">{t("YOUR LITTLE CORNER")}</div>
             <nav aria-label={t("Main navigation")}>
                 {self.nav(ctx,"home")}
+                {self.nav(ctx,"audio")}
                 {self.nav(ctx,"save")}
                 {self.nav(ctx,"chat")}
                 {self.nav(ctx,"wallet")}
@@ -2071,6 +2075,7 @@ impl App {
                 "save" => "Save anything",
                 "wiki" => "Find anything",
                 "autonomous" => "Autonomous AI",
+                "audio" => "Audio Capture",
                 "assistance" => "Assistance settings",
                 "library" => "Library",
                 "notes" => "Notes",
@@ -2306,9 +2311,9 @@ fn location_page() -> String {
         .pathname()
         .unwrap_or_default();
     match path.trim_matches('/') {
-        page @ ("save" | "notes" | "wiki" | "autonomous" | "assistance" | "overview" | "chat"
-        | "library" | "files" | "images" | "videos" | "code" | "coding" | "skills"
-        | "dashboard" | "devices" | "admin" | "quiz" | "ai" | "wallet") => page.into(),
+        page @ ("save" | "notes" | "wiki" | "autonomous" | "audio" | "assistance" | "overview"
+        | "chat" | "library" | "files" | "images" | "videos" | "code" | "coding"
+        | "skills" | "dashboard" | "devices" | "admin" | "quiz" | "ai" | "wallet") => page.into(),
         // Older links: the backend session page was /cloud and the Dashboard was /status.
         "cloud" => "autonomous".into(),
         "status" => "dashboard".into(),
@@ -2506,6 +2511,12 @@ const MENU: &[MenuItem] = &[
         "Capture",
         "screen",
         "screen, screenshot, OCR, new thought, home",
+    ),
+    menu(
+        "audio",
+        "Audio Capture",
+        "audio",
+        "microphone, listen, meeting, lecture, transcript, notes, solve, note, speech, chat",
     ),
     menu(
         "save",

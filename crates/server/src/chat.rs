@@ -370,9 +370,13 @@ pub fn kept_message(db: &db::Database, room: &str, messageid: &str) -> Result<Op
 fn history_documents(db: &db::Database, room: &str, before: &str) -> Result<Vec<ChatMessage>> {
     get_room(db, room)?;
     let conn = db.0.lock().unwrap();
-    let mut stmt=conn.prepare("SELECT document FROM chat_messages WHERE roomid=?1 AND json_extract(document,'$.sequence') < (SELECT MIN(json_extract(document,'$.sequence')) FROM chat_messages WHERE memo_id=?2) ORDER BY json_extract(document,'$.sequence') DESC LIMIT 24")?;
+    // Filter Heard blocks before the history limit: a long stretch of speech
+    // must not push the earlier Solve answers out of the conversation window.
+    let mut stmt=conn.prepare("SELECT document FROM chat_messages WHERE roomid=?1 AND COALESCE(json_extract(document,'$.memo_kind'),'') != ?3 AND json_extract(document,'$.sequence') < (SELECT MIN(json_extract(document,'$.sequence')) FROM chat_messages WHERE memo_id=?2) ORDER BY json_extract(document,'$.sequence') DESC LIMIT 24")?;
     let docs = stmt
-        .query_map(params![room, before], |r| r.get::<_, String>(0))?
+        .query_map(params![room, before, crate::audio::NOTES_KIND], |r| {
+            r.get::<_, String>(0)
+        })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
     docs.into_iter()
         .map(|doc| Ok(serde_json::from_str(&doc)?))
@@ -434,7 +438,10 @@ pub async fn history(
     let docs = history_documents(db, room, before)?;
     let mut out = vec![];
     for m in docs {
-        if m.deleted || m.status != "complete" {
+        // Audio Capture notes reach the model once, bounded, inside the
+        // Solve or Note turn itself; repeating them here would spend the
+        // history window on raw speech.
+        if m.deleted || m.status != "complete" || m.memo_kind == crate::audio::NOTES_KIND {
             continue;
         }
         let mut text = m.text.chars().take(8000).collect::<String>();
@@ -825,6 +832,7 @@ pub async fn delete_all(PrivateState(s): PrivateState) -> Api<Json<serde_json::V
     for handle in handles {
         let _ = handle.await;
     }
+    crate::audio::erase(&s);
     let state = s.clone();
     let cutoff = tokio::task::spawn_blocking(move || -> Result<i64> {
         // The durable marker rejects new writes. Drain writes that started before
@@ -913,6 +921,10 @@ pub fn finish_user_purge(database: &db::Database) -> Result<i64> {
         "DELETE FROM settings WHERE key=?1",
         [format!("thought.{}", database.owner())],
     )?;
+    tx.execute(
+        "DELETE FROM settings WHERE key=?1",
+        [format!("audio.room.{}", database.owner())],
+    )?;
     // Only identifiers and erasure cursors survive. Device erasure notifications
     // are retained separately until the capture clients have seen them.
     tx.execute(
@@ -984,6 +996,7 @@ async fn purge_room(s: &Arc<AppState>, room: &str, delete: bool) -> Api<Json<ser
     }
     let _lock = s.chat_submit.lock().unwrap();
     crate::notes::cancel_room(s, room);
+    crate::audio::room_purged(s, room);
     let cutoff = finish_purge(&s.db, room, delete)?;
     Ok(Json(
         serde_json::json!({"deleted":delete,"cleared":true,"messagesyncid":cutoff}),
@@ -998,6 +1011,14 @@ pub fn finish_purge(database: &db::Database, room: &str, delete: bool) -> Result
     let delete = delete || matches!(state, 1 | 3);
     // Progress history belongs to the cleared conversation; nothing may recreate it.
     crate::activity::purge(&tx, room)?;
+    // An Audio Capture chat forgets its transcript; a cleared one stays an
+    // (empty) Audio Capture chat.
+    let audio = format!("audio.state.{room}");
+    if delete {
+        tx.execute("DELETE FROM settings WHERE key=?1", [&audio])?;
+    } else {
+        tx.execute("UPDATE settings SET value='{}' WHERE key=?1", [&audio])?;
+    }
     if delete {
         tx.execute("DELETE FROM invisible_sessions WHERE id=?1", [room])?;
     } else {

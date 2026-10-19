@@ -51,6 +51,7 @@ impl db::Database {
                     owner_wallet: None,
                     can_capture: false,
                     textedit: Default::default(),
+                    audio: false,
                 })
             })?
             .collect::<rusqlite::Result<_>>()?)

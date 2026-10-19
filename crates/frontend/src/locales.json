@@ -12806,5 +12806,381 @@
     "このブラウザでは読み取れませんでした。",
     "No se pudo leer desde este navegador.",
     "Z tohoto prohlížeče se nepodařilo načíst."
+  ],
+  "LISTEN. NOTE. SOLVE.": [
+    "듣고. 적고. 풀고.",
+    "聽。記。解。",
+    "听。记。解。",
+    "聞く。書く。解く。",
+    "ESCUCHA. ANOTA. RESUELVE.",
+    "POSLOUCHEJ. ZAPISUJ. ŘEŠ."
+  ],
+  "Your Mac takes the notes. ": [
+    "Mac이 노트를 대신 적습니다. ",
+    "你嘅 Mac 幫你記筆記。",
+    "你的 Mac 替你记笔记。",
+    "Mac がノートを取ります。",
+    "Tu Mac toma las notas. ",
+    "Tvůj Mac si dělá poznámky. "
+  ],
+  "You just ask.": [
+    "당신은 묻기만 하세요.",
+    "你只需要問。",
+    "你只需提问。",
+    "あなたは尋ねるだけ。",
+    "Tú solo preguntas.",
+    "Ty se jen zeptáš."
+  ],
+  "Capture Audio listens through your Mac's microphone and writes the notes by itself. Press Solve from any device and the AI reads them, finds the problem and answers before you have to ask.": [
+    "오디오 캡처는 Mac의 마이크로 듣고 스스로 노트를 적습니다. 어느 기기에서든 Solve를 누르면 AI가 노트를 읽고 문제를 찾아, 묻기 전에 먼저 답합니다.",
+    "「擷取音訊」會透過 Mac 嘅麥克風聆聽，自動寫低筆記。喺任何裝置撳「解答」，AI 就會讀筆記、搵出問題，喺你開口之前答你。",
+    "「捕获音频」通过 Mac 的麦克风聆听并自动记笔记。在任何设备上按「解答」，AI 就会阅读笔记、找出问题，在你开口之前作答。",
+    "オーディオキャプチャは Mac のマイクで聞き取り、ノートを自動で書きます。どの端末からでも「解く」を押せば、AI がノートを読んで問題を見つけ、尋ねる前に答えます。",
+    "Capturar audio escucha por el micrófono de tu Mac y escribe las notas por sí solo. Pulsa Resolver desde cualquier dispositivo y la IA las lee, encuentra el problema y responde antes de que preguntes.",
+    "Zachytávání zvuku poslouchá mikrofonem tvého Macu a samo píše poznámky. Stiskni Vyřešit z libovolného zařízení a AI je přečte, najde problém a odpoví dřív, než se zeptáš."
+  ],
+  "Audio stays on your backend Mac. The AI reads the notes only when you press Solve.": [
+    "오디오는 백엔드 Mac에만 머뭅니다. AI는 Solve를 누를 때만 노트를 읽습니다.",
+    "音訊只會留喺後端 Mac。AI 只會喺你撳「解答」時先讀筆記。",
+    "音频只保留在后端 Mac 上。AI 只在你按「解答」时才读取笔记。",
+    "音声はバックエンドの Mac から出ません。AI がノートを読むのは「解く」を押したときだけです。",
+    "El audio se queda en tu Mac backend. La IA lee las notas solo cuando pulsas Resolver.",
+    "Zvuk zůstává na tvém backendovém Macu. AI čte poznámky jen po stisknutí Vyřešit."
+  ],
+  "Listening on {name}": [
+    "{name}에서 듣는 중",
+    "正喺 {name} 聆聽",
+    "正在 {name} 上聆听",
+    "{name} で聞き取り中",
+    "Escuchando en {name}",
+    "Poslouchá na {name}"
+  ],
+  "Demo capture Mac": [
+    "데모 캡처 Mac",
+    "示範擷取 Mac",
+    "演示捕获 Mac",
+    "デモのキャプチャ Mac",
+    "Mac de captura de demostración",
+    "Ukázkový Mac pro zachytávání"
+  ],
+  "No capture Mac can listen": [
+    "들을 수 있는 캡처 Mac이 없습니다",
+    "冇可以聆聽嘅擷取 Mac",
+    "没有可以聆听的捕获 Mac",
+    "聞き取れるキャプチャ Mac がありません",
+    "Ningún Mac de captura puede escuchar",
+    "Žádný Mac pro zachytávání nemůže poslouchat"
+  ],
+  "Listen with": [
+    "듣는 기기",
+    "用邊部聆聽",
+    "聆听设备",
+    "聞き取る Mac",
+    "Escuchar con",
+    "Poslouchat pomocí"
+  ],
+  "Capture Mac to listen with": [
+    "들을 캡처 Mac",
+    "用嚟聆聽嘅擷取 Mac",
+    "用于聆听的捕获 Mac",
+    "聞き取りに使うキャプチャ Mac",
+    "Mac de captura para escuchar",
+    "Mac pro zachytávání, který bude poslouchat"
+  ],
+  "Stop listening": [
+    "듣기 중지",
+    "停止聆聽",
+    "停止聆听",
+    "聞き取りを停止",
+    "Dejar de escuchar",
+    "Přestat poslouchat"
+  ],
+  "Capture Audio": [
+    "오디오 캡처",
+    "擷取音訊",
+    "捕获音频",
+    "オーディオキャプチャ",
+    "Capturar audio",
+    "Zachytit zvuk"
+  ],
+  "{minutes} heard": [
+    "{minutes} 들음",
+    "聽咗 {minutes}",
+    "已聆听 {minutes}",
+    "{minutes} 聞き取り",
+    "{minutes} escuchado",
+    "{minutes} vyslechnuto"
+  ],
+  "{count} being transcribed": [
+    "{count}개 변환 중",
+    "{count} 段轉錄中",
+    "{count} 段转录中",
+    "{count} 件を文字起こし中",
+    "{count} en transcripción",
+    "{count} se přepisuje"
+  ],
+  "Condensed earlier notes": [
+    "앞부분 노트 요약",
+    "較早筆記摘要",
+    "早前笔记摘要",
+    "これまでのノートの要約",
+    "Notas anteriores condensadas",
+    "Zhuštěné dřívější poznámky"
+  ],
+  "Nothing heard yet. Speak near the Mac's microphone; each pause becomes a note.": [
+    "아직 들린 것이 없습니다. Mac 마이크 가까이에서 말하세요. 말이 멈출 때마다 노트가 됩니다.",
+    "仲未聽到嘢。喺 Mac 麥克風附近講嘢；每次停頓就會變成一條筆記。",
+    "还没有听到内容。请在 Mac 麦克风附近说话；每次停顿都会成为一条笔记。",
+    "まだ何も聞こえていません。Mac のマイクの近くで話してください。間が空くたびにノートになります。",
+    "Aún no se ha oído nada. Habla cerca del micrófono del Mac; cada pausa se convierte en una nota.",
+    "Zatím nic nezaznělo. Mluv blízko mikrofonu Macu; každá pauza se stane poznámkou."
+  ],
+  "Press Capture Audio and your Mac starts writing notes from what it hears.": [
+    "오디오 캡처를 누르면 Mac이 들리는 내용으로 노트를 적기 시작합니다.",
+    "撳「擷取音訊」，Mac 就會開始將聽到嘅內容寫成筆記。",
+    "按「捕获音频」，Mac 就会开始把听到的内容写成笔记。",
+    "「オーディオキャプチャ」を押すと、Mac が聞こえた内容からノートを書き始めます。",
+    "Pulsa Capturar audio y tu Mac empieza a escribir notas de lo que oye.",
+    "Stiskni Zachytit zvuk a tvůj Mac začne psát poznámky z toho, co slyší."
+  ],
+  "Open chat": [
+    "채팅 열기",
+    "開啟對話",
+    "打开聊天",
+    "チャットを開く",
+    "Abrir chat",
+    "Otevřít chat"
+  ],
+  "Solve": [
+    "풀기",
+    "解答",
+    "解答",
+    "解く",
+    "Resolver",
+    "Vyřešit"
+  ],
+  "{count} new": [
+    "새 노트 {count}",
+    "{count} 條新",
+    "{count} 条新",
+    "新着 {count}",
+    "{count} nuevas",
+    "{count} nové"
+  ],
+  "Solve sends the condensed earlier notes and the newest speech, never more than the AI's context allows. The question and its answer are kept in the Audio Capture chat.": [
+    "Solve는 요약된 앞부분 노트와 최신 발화만 보내며, AI의 컨텍스트 한도를 넘지 않습니다. 질문과 답변은 오디오 캡처 채팅에 보관됩니다.",
+    "「解答」只會送出較早筆記嘅摘要同最新嘅說話，永遠唔會超過 AI 嘅 context 上限。問題同答案會保存喺「擷取音訊」對話入面。",
+    "「解答」只发送早前笔记的摘要和最新的话语，绝不超过 AI 的上下文上限。问题和答案保存在「捕获音频」聊天中。",
+    "「解く」はこれまでのノートの要約と最新の発話だけを送り、AI のコンテキスト上限を超えることはありません。質問と答えはオーディオキャプチャのチャットに残ります。",
+    "Resolver envía las notas anteriores condensadas y lo último dicho, nunca más de lo que permite el contexto de la IA. La pregunta y su respuesta se guardan en el chat de Capturar audio.",
+    "Vyřešit posílá zhuštěné dřívější poznámky a nejnovější řeč, nikdy víc, než dovolí kontext AI. Otázka i odpověď zůstávají v chatu Zachytit zvuk."
+  ],
+  "AI answer": [
+    "AI 답변",
+    "AI 答案",
+    "AI 回答",
+    "AI の答え",
+    "Respuesta de la IA",
+    "Odpověď AI"
+  ],
+  "Answered": [
+    "답변 완료",
+    "已回答",
+    "已回答",
+    "回答済み",
+    "Respondido",
+    "Zodpovězeno"
+  ],
+  "Reading the notes…": [
+    "노트를 읽는 중…",
+    "讀緊筆記…",
+    "正在阅读笔记…",
+    "ノートを読んでいます…",
+    "Leyendo las notas…",
+    "Čtu poznámky…"
+  ],
+  "Audio Capture": [
+    "오디오 캡처",
+    "擷取音訊",
+    "捕获音频",
+    "オーディオキャプチャ",
+    "Capturar audio",
+    "Zachytit zvuk"
+  ],
+  "microphone, listen, meeting, lecture, transcript, notes, solve, speech": [
+    "마이크, 듣기, 회의, 강의, 받아쓰기, 노트, 풀기, 음성",
+    "麥克風, 聆聽, 會議, 講課, 逐字稿, 筆記, 解答, 語音",
+    "麦克风, 聆听, 会议, 讲课, 转录, 笔记, 解答, 语音",
+    "マイク, 聞き取り, 会議, 講義, 文字起こし, ノート, 解く, 音声",
+    "micrófono, escuchar, reunión, clase, transcripción, notas, resolver, voz",
+    "mikrofon, poslouchat, schůzka, přednáška, přepis, poznámky, vyřešit, řeč"
+  ],
+  "Starting the microphone…": [
+    "마이크를 켜는 중…",
+    "開緊麥克風…",
+    "正在打开麦克风…",
+    "マイクを起動中…",
+    "Iniciando el micrófono…",
+    "Spouštím mikrofon…"
+  ],
+  "Listening…": [
+    "듣는 중…",
+    "聆聽緊…",
+    "正在聆听…",
+    "聞き取り中…",
+    "Escuchando…",
+    "Poslouchám…"
+  ],
+  "Transcribing…": [
+    "글로 옮기는 중…",
+    "轉錄緊…",
+    "正在转录…",
+    "文字起こし中…",
+    "Transcribiendo…",
+    "Přepisuji…"
+  ],
+  "Not listening": [
+    "듣고 있지 않음",
+    "未有聆聽",
+    "未在聆听",
+    "聞き取り停止中",
+    "Sin escuchar",
+    "Neposlouchá"
+  ],
+  "Condensing older notes…": [
+    "앞부분 노트를 요약하는 중…",
+    "摘要緊較早嘅筆記…",
+    "正在摘要早前笔记…",
+    "これまでのノートを要約中…",
+    "Condensando notas anteriores…",
+    "Zhušťuji dřívější poznámky…"
+  ],
+  "Device disconnected. Press Capture Audio to listen again.": [
+    "기기 연결이 끊겼습니다. 다시 들으려면 오디오 캡처를 누르세요.",
+    "裝置已斷線。撳「擷取音訊」再聆聽。",
+    "设备已断开。按「捕获音频」重新聆听。",
+    "デバイスが切断されました。もう一度聞き取るには「オーディオキャプチャ」を押してください。",
+    "Dispositivo desconectado. Pulsa Capturar audio para volver a escuchar.",
+    "Zařízení odpojeno. Stiskni Zachytit zvuk a poslouchej znovu."
+  ],
+  "Apple Speech": [
+    "Apple Speech",
+    "Apple Speech",
+    "Apple Speech",
+    "Apple Speech",
+    "Apple Speech",
+    "Apple Speech"
+  ],
+  "MLX Whisper": [
+    "MLX Whisper",
+    "MLX Whisper",
+    "MLX Whisper",
+    "MLX Whisper",
+    "MLX Whisper",
+    "MLX Whisper"
+  ],
+  "Audio chat": [
+    "오디오 채팅",
+    "錄音對話",
+    "音频聊天",
+    "音声チャット",
+    "Chat de audio",
+    "Zvukový chat"
+  ],
+  "Capture Audio listens through your Mac's microphone and writes what it hears into this chat. Press Solve from any device for an answer to the newest part, or Note for a write-up of the whole session.": [
+    "오디오 캡처는 Mac의 마이크로 듣고 들은 내용을 이 채팅에 적습니다. 어느 기기에서든 풀기를 누르면 가장 최근 내용에 대한 답을, 노트를 누르면 전체 세션 정리를 받습니다.",
+    "錄音擷取會用你部 Mac 嘅咪聽，再將聽到嘅內容寫入呢個對話。喺任何裝置撳「解答」就會答最新嗰段，撳「筆記」就會整理成個階段。",
+    "音频捕获通过 Mac 的麦克风收听，并把听到的内容写进这个聊天。在任何设备上按“解答”即可获得针对最新内容的答案，按“笔记”可整理整个会话。",
+    "音声キャプチャは Mac のマイクで聞き取り、聞いた内容をこのチャットに書き込みます。どのデバイスからでも「解く」を押すと最新部分への回答を、「ノート」を押すとセッション全体のまとめを作ります。",
+    "Captura de audio escucha con el micrófono de tu Mac y escribe lo que oye en este chat. Pulsa Resolver desde cualquier dispositivo para obtener una respuesta a lo más reciente, o Nota para un resumen de toda la sesión.",
+    "Zachytávání zvuku poslouchá mikrofonem Macu a zapisuje, co slyší, do tohoto chatu. Na libovolném zařízení stiskněte Vyřešit pro odpověď na nejnovější část, nebo Poznámka pro shrnutí celé relace."
+  ],
+  "Conversation": [
+    "대화",
+    "對話",
+    "对话",
+    "会話",
+    "Conversación",
+    "Konverzace"
+  ],
+  "Heard": [
+    "들은 내용",
+    "聽到",
+    "听到",
+    "聞き取り",
+    "Escuchado",
+    "Slyšeno"
+  ],
+  "Nothing has been heard yet. Say something, then press Solve.": [
+    "아직 들린 내용이 없습니다. 말을 한 뒤 풀기를 누르세요.",
+    "仲未聽到任何嘢。講啲嘢，再撳解答。",
+    "还没有听到内容。说点什么，然后按解答。",
+    "まだ何も聞き取れていません。話してから「解く」を押してください。",
+    "Aún no se ha oído nada. Di algo y pulsa Resolver.",
+    "Zatím nic nezaznělo. Něco řekněte a pak stiskněte Vyřešit."
+  ],
+  "Open in Ask anything": [
+    "무엇이든 물어보기에서 열기",
+    "喺「問任何嘢」打開",
+    "在“随便问”中打开",
+    "「何でも質問」で開く",
+    "Abrir en Pregunta lo que sea",
+    "Otevřít v Zeptejte se na cokoli"
+  ],
+  "Solve answers the newest speech, with the earlier speech and answers in this chat as context. Note writes the whole session up as a note. Older speech is condensed, so the AI's context is never exceeded.": [
+    "풀기는 이전 말과 이 채팅의 이전 답변을 맥락으로 삼아 가장 최근 말에 답합니다. 노트는 전체 세션을 노트로 정리합니다. 오래된 말은 요약되므로 AI의 컨텍스트 한도를 넘지 않습니다.",
+    "解答會用之前講過嘅嘢同呢個對話之前嘅答案做背景，答最新嗰段。筆記會將成個階段整理成筆記。舊啲嘅內容會濃縮，所以唔會超出 AI 嘅上下文。",
+    "解答会以之前的话和本聊天中之前的回答为上下文，回答最新的内容。笔记会把整个会话整理成一条笔记。较早的内容会被浓缩，因此不会超出 AI 的上下文。",
+    "「解く」は、それまでの発言とこのチャットの過去の回答を文脈にして、最新の発言に答えます。「ノート」はセッション全体をノートにまとめます。古い発言は要約されるので、AI のコンテキストを超えることはありません。",
+    "Resolver responde a lo último que se dijo, con lo anterior y las respuestas de este chat como contexto. Nota resume toda la sesión en una nota. Lo más antiguo se condensa, así que nunca se supera el contexto de la IA.",
+    "Vyřešit odpoví na nejnovější řeč a jako kontext použije dřívější řeč a odpovědi v tomto chatu. Poznámka shrne celou relaci do poznámky. Starší řeč se zhušťuje, takže kontext AI se nikdy nepřekročí."
+  ],
+  "Speech is turned into text on your backend Mac. The cloud AI reads it only when you press Solve or Note.": [
+    "음성은 백엔드 Mac에서 텍스트로 바뀝니다. 클라우드 AI는 풀기나 노트를 누를 때만 읽습니다.",
+    "語音喺你嘅後端 Mac 轉成文字。雲端 AI 只會喺你撳解答或者筆記嘅時候先睇。",
+    "语音在你的后端 Mac 上转成文字。云端 AI 只在你按解答或笔记时才读取。",
+    "音声はバックエンドの Mac でテキストに変換されます。クラウド AI が読むのは「解く」か「ノート」を押したときだけです。",
+    "La voz se convierte en texto en tu Mac de backend. La IA en la nube solo la lee cuando pulsas Resolver o Nota.",
+    "Řeč se převádí na text na vašem backendovém Macu. Cloudová AI ji čte, jen když stisknete Vyřešit nebo Poznámka."
+  ],
+  "That chat is not an Audio Capture session": [
+    "그 채팅은 오디오 캡처 세션이 아닙니다",
+    "嗰個對話唔係錄音擷取階段",
+    "该聊天不是音频捕获会话",
+    "そのチャットは音声キャプチャのセッションではありません",
+    "Ese chat no es una sesión de Captura de audio",
+    "Tento chat není relací zachytávání zvuku"
+  ],
+  "This chat was cleared or deleted": [
+    "이 채팅은 비워졌거나 삭제되었습니다",
+    "呢個對話已經清除或者刪除咗",
+    "此聊天已被清空或删除",
+    "このチャットは消去または削除されました",
+    "Este chat se vació o se eliminó",
+    "Tento chat byl vymazán nebo smazán"
+  ],
+  "This chat was cleared. Press Capture Audio to listen again.": [
+    "이 채팅이 비워졌습니다. 다시 들으려면 오디오 캡처를 누르세요.",
+    "呢個對話已經清除。撳擷取音訊再聽過。",
+    "此聊天已清空。按音频捕获重新收听。",
+    "このチャットは消去されました。もう一度聞くには「オーディオキャプチャ」を押してください。",
+    "Se vació este chat. Pulsa Capturar audio para volver a escuchar.",
+    "Tento chat byl vymazán. Stiskněte Zachytit zvuk a poslouchejte znovu."
+  ],
+  "You asked for a note": [
+    "노트를 요청했습니다",
+    "你要求整理筆記",
+    "你请求了笔记",
+    "ノートを依頼しました",
+    "Pediste una nota",
+    "Požádali jste o poznámku"
+  ],
+  "You pressed Solve": [
+    "풀기를 눌렀습니다",
+    "你撳咗解答",
+    "你按了解答",
+    "「解く」を押しました",
+    "Pulsaste Resolver",
+    "Stiskli jste Vyřešit"
   ]
 }

@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+pub mod audio;
 pub mod chat;
 pub mod evm;
 pub mod invisible;
@@ -6,6 +7,7 @@ pub mod quiz;
 pub mod registry;
 pub mod solved;
 pub mod status;
+pub use audio::*;
 pub use chat::*;
 pub use invisible::*;
 pub use status::*;
@@ -327,6 +329,11 @@ pub struct ThinkRequest {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub file_ids: Vec<String>,
     pub parent_id: Option<String>,
+    /// Context only the backend adds and only the model reads (an Audio
+    /// Capture transcript): never accepted from a client, never shown as the
+    /// message, never saved as the memo's input.
+    #[serde(skip)]
+    pub context: String,
     pub room_id: Option<String>,
     pub message_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -397,6 +404,9 @@ pub struct CaptureClient {
     /// Account permission and live CLI capability, independent of AI policy.
     #[serde(default)]
     pub textedit: TextEditAvailability,
+    /// The connected CLI can record its microphone for Audio Capture.
+    #[serde(default)]
+    pub audio: bool,
 }
 
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]

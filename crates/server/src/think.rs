@@ -572,6 +572,9 @@ pub(crate) async fn pipeline(
     }
     let _permit = s.slots.clone().acquire_owned().await?;
     s.db.event(id, "stage", "Finding useful context")?;
+    // An Audio Capture turn: the room shows the short request, the model
+    // reads the bounded transcript the backend prepared.
+    input = with_context(&req, input);
     // Small on-device models slip on arithmetic, so a problem on the screen
     // reaches the model with its exact result. Only the model sees this line;
     // the saved input stays what the user captured.
@@ -1078,6 +1081,17 @@ pub(crate) async fn kept_notes(s: &Arc<AppState>, id: &str, question: &str) -> R
         ));
     }
     Ok(notes.join("\n\n"))
+}
+/// What the model reads for a turn: the backend's hidden context (an Audio
+/// Capture transcript) ahead of what the room shows.
+pub(crate) fn with_context(req: &ThinkRequest, input: String) -> String {
+    if req.context.is_empty() {
+        input
+    } else if input.trim().is_empty() {
+        req.context.clone()
+    } else {
+        format!("{}\n\n{input}", req.context)
+    }
 }
 /// The trail appended to an Ask answer.
 pub(crate) fn sources_markdown(sources: &[Value]) -> String {
