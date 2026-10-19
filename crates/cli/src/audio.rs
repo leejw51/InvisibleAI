@@ -74,7 +74,7 @@ impl Resampler {
                 out.push(self.pending[j] + (self.pending[j + 1] - self.pending[j]) * frac);
                 self.pos += step;
             }
-            let consumed = self.pos as usize;
+            let consumed = (self.pos as usize).min(self.pending.len());
             self.pending.drain(..consumed);
             self.pos -= consumed as f64;
         }
@@ -546,10 +546,17 @@ mod tests {
         assert!(out.iter().all(|v| v.abs() <= 0.5));
         let mut rs = Resampler::new(1, 44100);
         let input = tone(1.0, 0.5, 44100, 1);
+        let expected = Resampler::new(1, 44100).push(&input);
         let mut out = Vec::new();
-        for chunk in input.chunks(441) {
+        for chunk in input.chunks(512) {
             out.extend(rs.push(chunk));
         }
+        assert_eq!(out.len(), expected.len());
+        assert!(
+            out.iter()
+                .zip(&expected)
+                .all(|(a, b)| (a - b).abs() < 0.0001)
+        );
         assert!(
             (out.len() as i64 - SAMPLE_RATE as i64).abs() <= 2,
             "{}",

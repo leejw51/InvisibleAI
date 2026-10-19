@@ -367,16 +367,22 @@ pub fn kept_message(db: &db::Database, room: &str, messageid: &str) -> Result<Op
         anyhow::anyhow!("This message was already kept and its memo was deleted")
     })?))
 }
-fn history_documents(db: &db::Database, room: &str, before: &str) -> Result<Vec<ChatMessage>> {
+fn history_documents(
+    db: &db::Database,
+    room: &str,
+    before: &str,
+    exclude_audio: bool,
+) -> Result<Vec<ChatMessage>> {
     get_room(db, room)?;
     let conn = db.0.lock().unwrap();
     // Filter Heard blocks before the history limit: a long stretch of speech
     // must not push the earlier Solve answers out of the conversation window.
-    let mut stmt=conn.prepare("SELECT document FROM chat_messages WHERE roomid=?1 AND COALESCE(json_extract(document,'$.memo_kind'),'') != ?3 AND json_extract(document,'$.sequence') < (SELECT MIN(json_extract(document,'$.sequence')) FROM chat_messages WHERE memo_id=?2) ORDER BY json_extract(document,'$.sequence') DESC LIMIT 24")?;
+    let mut stmt=conn.prepare("SELECT document FROM chat_messages WHERE roomid=?1 AND (?4=0 OR COALESCE(json_extract(document,'$.memo_kind'),'') != ?3) AND json_extract(document,'$.sequence') < (SELECT MIN(json_extract(document,'$.sequence')) FROM chat_messages WHERE memo_id=?2) ORDER BY json_extract(document,'$.sequence') DESC LIMIT 24")?;
     let docs = stmt
-        .query_map(params![room, before, crate::audio::NOTES_KIND], |r| {
-            r.get::<_, String>(0)
-        })?
+        .query_map(
+            params![room, before, crate::audio::NOTES_KIND, exclude_audio],
+            |r| r.get::<_, String>(0),
+        )?
         .collect::<rusqlite::Result<Vec<_>>>()?;
     docs.into_iter()
         .map(|doc| Ok(serde_json::from_str(&doc)?))
@@ -432,16 +438,30 @@ pub async fn history(
     room: &str,
     before: &str,
     mode: InputMode,
+    image_budget: usize,
+) -> Result<Vec<crate::providers::Message>> {
+    history_with_context(db, room, before, mode, image_budget, false).await
+}
+
+pub(crate) async fn history_with_context(
+    db: &db::Database,
+    room: &str,
+    before: &str,
+    mode: InputMode,
     mut image_budget: usize,
+    exclude_audio: bool,
 ) -> Result<Vec<crate::providers::Message>> {
     use crate::{capture, media, providers::Message};
-    let docs = history_documents(db, room, before)?;
+    let docs = history_documents(db, room, before, exclude_audio)?;
     let mut out = vec![];
     for m in docs {
         // Audio Capture notes reach the model once, bounded, inside the
         // Solve or Note turn itself; repeating them here would spend the
         // history window on raw speech.
-        if m.deleted || m.status != "complete" || m.memo_kind == crate::audio::NOTES_KIND {
+        if m.deleted
+            || m.status != "complete"
+            || (exclude_audio && m.memo_kind == crate::audio::NOTES_KIND)
+        {
             continue;
         }
         let mut text = m.text.chars().take(8000).collect::<String>();

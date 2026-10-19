@@ -64,6 +64,8 @@ struct Pending {
 }
 #[derive(Clone)]
 struct Chunk {
+    room: String,
+    epoch: i64,
     seq: u64,
     seconds: f64,
     wav: Vec<u8>,
@@ -616,19 +618,30 @@ pub async fn start(
         } else {
             run(&state, &g, &client_id, rx, preview_rx).await
         };
-        update(&state, &g, |r| {
-            r.finish();
-            r.status.error = result.err().map(|e| e.to_string());
-            r.status.stage = "Not listening".into();
-        });
-        // Whatever ended the run, the microphone closes.
-        if !demo {
-            let _ = command(&state, &client_id, &g, "stop").await;
-        }
+        finish_run(&state, &g, &client_id, demo, result).await;
     });
     update(&s, &generation, |r| r.task = Some(task.abort_handle()));
     let _ = ready.send(());
     Ok(Json(current_status(&s)))
+}
+
+/// Called by the run task itself, so its cleanup must survive cancellation.
+async fn finish_run(
+    s: &Arc<AppState>,
+    generation: &str,
+    client: &str,
+    demo: bool,
+    result: Result<()>,
+) {
+    update(s, generation, |r| {
+        r.task.take();
+        r.finish();
+        r.status.error = result.err().map(|e| e.to_string());
+        r.status.stage = "Not listening".into();
+    });
+    if !demo {
+        let _ = command(s, client, generation, "stop").await;
+    }
 }
 
 /// A listening session: start the CLI's microphone, then transcribe every
@@ -669,7 +682,9 @@ async fn transcribe_chunks(
                     r.status.error = None;
                     r.status.stage = "Listening…".into();
                 });
-                if let Err(e) = heard(s, generation, text, chunk.seconds).await {
+                if let Err(e) =
+                    heard_at(s, generation, &chunk.room, chunk.epoch, text, chunk.seconds).await
+                {
                     update(s, generation, |r| r.status.error = Some(format!("{e:#}")));
                 }
             }
@@ -731,22 +746,34 @@ async fn demo_run(s: &Arc<AppState>, generation: &str) -> Result<()> {
 /// One utterance was transcribed: it joins the room's transcript and its
 /// notes message, which every device sees through the room sync.
 async fn heard(s: &Arc<AppState>, generation: &str, text: String, seconds: f64) -> Result<()> {
-    // Persist the transcript and its room message together with respect to
-    // room erasure; clearing cannot slip between these two writes.
+    let room = current_status(s).room_id;
+    let epoch = room_epoch(s, &room)?;
+    heard_at(s, generation, &room, epoch, text, seconds).await
+}
+
+async fn heard_at(
+    s: &Arc<AppState>,
+    generation: &str,
+    room: &str,
+    epoch: i64,
+    text: String,
+    seconds: f64,
+) -> Result<()> {
     let lock = s.chat_submit.lock().unwrap();
-    let Some((room, client_name)) = s
+    crate::chat::validate_epoch(&s.db, Some(room), Some(epoch), None)?;
+    let Some(client_name) = s
         .audio
         .runs
         .lock()
         .unwrap()
         .get(&owner(s))
         .filter(|r| r.generation == generation && r.status.active)
-        .map(|r| (r.status.room_id.clone(), r.status.client_name.clone()))
+        .map(|r| r.status.client_name.clone())
     else {
         return Ok(());
     };
     let text = text.trim().to_string();
-    let segment = edit(s, &room, |st| {
+    let segment = edit(s, room, |st| {
         st.heard_seconds += seconds;
         if text.is_empty() {
             return None;
@@ -771,9 +798,9 @@ async fn heard(s: &Arc<AppState>, generation: &str, text: String, seconds: f64) 
     let Some(segment) = segment else {
         return Ok(());
     };
-    write_notes(s, generation, &room, &client_name, segment.seq)?;
+    write_notes(s, generation, room, &client_name, segment.seq)?;
     drop(lock);
-    condense_later(s, &room);
+    condense_later(s, room);
     Ok(())
 }
 
@@ -941,6 +968,8 @@ pub fn preview(s: &AppState, client: &str, session: &str, v: &Value) -> Result<(
         && let Some(preview) = &r.preview
     {
         preview.send_replace(Some(Chunk {
+            room: r.status.room_id.clone(),
+            epoch: room_epoch(s, &r.status.room_id)?,
             seq,
             seconds: 0.0,
             wav,
@@ -958,7 +987,7 @@ async fn preview_loop(
         let Some(chunk) = previews.borrow_and_update().clone() else {
             continue;
         };
-        let room = current_status(s).room_id;
+        let room = &chunk.room;
         // Skip superseded drafts; only the latest queued snapshot is decoded.
         let current = s
             .audio
@@ -974,7 +1003,7 @@ async fn preview_loop(
             tokio::time::timeout(Duration::from_secs(5), transcribe(s, &chunk.wav)).await
         {
             update(s, generation, |r| {
-                if r.status.active && r.status.room_id == room && chunk.seq > r.last_seq {
+                if r.status.active && r.status.room_id == *room && chunk.seq > r.last_seq {
                     r.partial_seq = chunk.seq;
                     r.status.partial_text = text;
                 }
@@ -998,6 +1027,7 @@ pub fn chunk(s: &AppState, client: &str, session: &str, v: &Value) -> Result<()>
         wav.len() > 44 && wav.len() <= MAX_AUDIO_CHUNK_BYTES && wav.starts_with(b"RIFF"),
         "Audio chunk must be a WAV under 4 MB"
     );
+    let _lock = s.chat_submit.lock().unwrap();
     let mut runs = s.audio.runs.lock().unwrap();
     let r = runs
         .values_mut()
@@ -1012,7 +1042,13 @@ pub fn chunk(s: &AppState, client: &str, session: &str, v: &Value) -> Result<()>
     r.last_seq = seq;
     let queue = r.queue.as_ref().context("Session is stopping")?;
     queue
-        .try_send(Chunk { seq, seconds, wav })
+        .try_send(Chunk {
+            room: r.status.room_id.clone(),
+            epoch: room_epoch(s, &r.status.room_id)?,
+            seq,
+            seconds,
+            wav,
+        })
         .map_err(|_| anyhow::anyhow!("Transcription is behind; the utterance was dropped"))?;
     r.status.pending_chunks += 1;
     Ok(())
@@ -1250,6 +1286,7 @@ async fn condense_batch(s: &Arc<AppState>, room: &str, local_only: bool) -> Resu
 }
 /// Show a stage on the session writing into `room`; returns the stage it replaced.
 fn update_stage(s: &AppState, room: &str, stage: &str) -> Option<String> {
+    let _lock = s.chat_submit.lock().unwrap();
     let mut runs = s.audio.runs.lock().unwrap();
     let r = runs
         .get_mut(&owner(s))
@@ -1401,7 +1438,9 @@ mod tests {
         wait_memo(&s, &second_memo).await?;
         // The second Solve sees the first Solve and its answer as history,
         // never the raw notes messages.
-        let history = crate::chat::history(&s.db, &room, &second_memo, InputMode::Text, 0).await?;
+        let history =
+            crate::chat::history_with_context(&s.db, &room, &second_memo, InputMode::Text, 0, true)
+                .await?;
         let texts: Vec<String> = history
             .iter()
             .map(|m| match m {
@@ -1416,6 +1455,11 @@ mod tests {
             !texts.iter().any(|t| t.contains("simple arithmetic")),
             "notes are not history: {texts:?}"
         );
+
+        let ordinary = crate::chat::history(&s.db, &room, &second_memo, InputMode::Text, 0).await?;
+        assert!(ordinary.iter().any(
+            |m| matches!(m, crate::providers::Message::User(t) if t.contains("multiplication"))
+        ));
 
         // Note writes the session up as a note kept in the chat and the Wiki.
         let noted = api(note(PrivateState(s.clone()), headers.clone()).await)?.0;
@@ -1542,6 +1586,7 @@ mod tests {
     #[test]
     fn chunks_need_a_live_session_and_arrive_in_order() -> Result<()> {
         let (_dir, s) = state();
+        let room = current_room(&s)?;
         let (queue, mut rx) = tokio::sync::mpsc::channel(2);
         s.audio.runs.lock().unwrap().insert(
             owner(&s),
@@ -1551,6 +1596,7 @@ mod tests {
                 generation: "gen".into(),
                 status: AudioStatus {
                     active: true,
+                    room_id: room.clone(),
                     ..Default::default()
                 },
                 queue: Some(queue),
@@ -1613,6 +1659,8 @@ mod tests {
         bad["wav_base64"] = json!(STANDARD.encode(b"not a wav at all, far too short"));
         assert!(chunk(&s, "mac", "sess", &bad).is_err());
         let received = rx.try_recv()?;
+        assert_eq!(received.room, room);
+        assert_eq!(received.epoch, room_epoch(&s, &room)?);
         assert_eq!(received.seq, 1);
         assert_eq!(received.wav, wav);
         // A dropped connection ends the session with a visible stage.
@@ -1686,6 +1734,111 @@ mod tests {
         let text = std::str::from_utf8(&data)?;
         assert!(text.contains("\"listening\":false"), "{text}");
         assert!(text.contains("\"partial_text\":\"\""), "{text}");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn delayed_speech_stays_in_its_room_and_cannot_survive_clear() -> Result<()> {
+        let (_dir, s) = state();
+        let first = api(start(
+            PrivateState(s.clone()),
+            HeaderMap::new(),
+            Json(AudioStart::default()),
+        )
+        .await)?
+        .0
+        .room_id;
+        let generation = s.audio.runs.lock().unwrap()[&owner(&s)].generation.clone();
+        let epoch = room_epoch(&s, &first)?;
+        let second = api(choose_room(
+            PrivateState(s.clone()),
+            Json(RoomRequest {
+                fresh: true,
+                room_id: None,
+            }),
+        )
+        .await)?
+        .0
+        .room_id;
+        heard_at(
+            &s,
+            &generation,
+            &first,
+            epoch,
+            "Original room speech".into(),
+            1.0,
+        )
+        .await?;
+        assert_eq!(load(&s, &first)?.segments[0].text, "Original room speech");
+        assert!(load(&s, &second)?.segments.is_empty());
+        let _ = api(crate::chat::clear_room(
+            PrivateState(s.clone()),
+            axum::extract::Path(first.clone()),
+        )
+        .await)?;
+        assert!(
+            heard_at(&s, &generation, &first, epoch, "Erased speech".into(), 1.0)
+                .await
+                .is_err()
+        );
+        assert!(load(&s, &first)?.segments.is_empty());
+        erase(&s);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn failed_run_delivers_stop_without_aborting_its_cleanup() -> Result<()> {
+        let (_dir, s) = state();
+        let _ = api(start(
+            PrivateState(s.clone()),
+            HeaderMap::new(),
+            Json(AudioStart::default()),
+        )
+        .await)?;
+        let generation = s.audio.runs.lock().unwrap()[&owner(&s)].generation.clone();
+        s.audio
+            .capable
+            .lock()
+            .unwrap()
+            .insert("mac".into(), "sess".into());
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        let state = s.clone();
+        let g = generation.clone();
+        let task = tokio::spawn(async move {
+            rx.await.unwrap();
+            finish_run(
+                &state,
+                &g,
+                "mac",
+                false,
+                Err(anyhow::anyhow!("Speech recognition failed three times")),
+            )
+            .await;
+        });
+        update(&s, &generation, |r| {
+            if let Some(old) = r.task.replace(task.abort_handle()) {
+                old.abort();
+            }
+        });
+        tx.send(()).unwrap();
+        let stop = tokio::time::timeout(Duration::from_secs(2), async {
+            loop {
+                if let Some(v) = claim(&s, "mac", "sess") {
+                    break v;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await?;
+        assert_eq!(stop["operation"], "stop");
+        complete(
+            &s,
+            "mac",
+            "sess",
+            json!({"request_id":stop["request_id"], "ok":true}),
+        );
+        task.await?;
+        assert!(!current_status(&s).active);
         Ok(())
     }
 

@@ -1125,12 +1125,13 @@ pub(crate) async fn answer_messages(
         return Ok((vec![providers::Message::User(input)], sources));
     }
     let mut messages = if let Some(room) = &req.room_id {
-        chat::history(
+        chat::history_with_context(
             &s.db,
             room,
             id,
             req.input_mode,
             16usize.saturating_sub(cloud_pictures.len()),
+            !req.context.is_empty(),
         )
         .await?
     } else {
