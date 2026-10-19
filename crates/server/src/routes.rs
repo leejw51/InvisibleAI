@@ -69,6 +69,14 @@ pub fn api_routes() -> Router<Arc<AppState>> {
         )
         .route("/rooms/{id}/notes/approval", post(notes::decide))
         .route(
+            "/audio",
+            get(audio::status).post(audio::start).delete(audio::stop),
+        )
+        .route("/audio/solve", post(audio::solve))
+        .route("/audio/events", get(audio::events))
+        .route("/audio/note", post(audio::note))
+        .route("/audio/room", post(audio::choose_room))
+        .route(
             "/invisible/sessions",
             get(invisible_sessions::list).post(invisible_sessions::create),
         )
@@ -201,6 +209,7 @@ pub fn app(state: Arc<AppState>, dist: PathBuf) -> Router {
     // kept as aliases of `/autonomous` and `/dashboard` for saved links.
     let pages = [
         "/autonomous",
+        "/audio",
         "/cloud",
         "/wiki",
         "/wiki/map",

@@ -53,6 +53,7 @@ impl db::Database {
                     owner_wallet: r.get(4)?,
                     can_capture: true,
                     textedit: Default::default(),
+                    audio: false,
                     online: chrono::Utc::now().timestamp() - last_seen < 45,
                 })
             })?
@@ -159,6 +160,7 @@ pub fn client_permissions(s: &AppState, c: &mut CaptureClient, wallet: Option<&s
     } else {
         Ready
     };
+    c.audio = c.can_capture && c.online && crate::audio::capable(s, &c.id);
 }
 pub async fn clients(PrivateState(s): PrivateState, headers: HeaderMap) -> Api<impl IntoResponse> {
     let p = crate::auth::principal(&s, &headers)?;
@@ -508,6 +510,7 @@ async fn client_socket(s: Arc<AppState>, mut socket: WebSocket) {
         .insert(id.clone(), session.clone());
     if let Some(previous) = previous {
         crate::notes::disconnected(&s, &id, &previous);
+        crate::audio::disconnected(&s, &id, &previous);
     }
     let _session = CaptureSession {
         state: s.clone(),
@@ -527,6 +530,13 @@ async fn client_socket(s: Arc<AppState>, mut socket: WebSocket) {
                 .unwrap()
                 .insert(id.clone(), session.clone());
         }
+    }
+    if v[causewaybay_shared::AUDIO_CAPABILITY] == true {
+        s.audio
+            .capable
+            .lock()
+            .unwrap()
+            .insert(id.clone(), session.clone());
     }
     let sse = v["callbacks"] == "sse";
     crate::connections::report_capture(&s, "connected");
@@ -551,6 +561,7 @@ async fn client_socket(s: Arc<AppState>, mut socket: WebSocket) {
                     if current!=sent_name {sent_name=current.clone();if socket.send(Message::Text(json!({"type":"node_config","name":current}).to_string().into())).await.is_err(){break;}}
                 }
                 if let Some(command)=crate::notes::claim(&s,&id,&session) && socket.send(Message::Text(command.to_string().into())).await.is_err(){break;}
+                if let Some(command)=crate::audio::claim(&s,&id,&session) && socket.send(Message::Text(command.to_string().into())).await.is_err(){break;}
                 if !sse && let Ok(Some(command))=s.db.claim_capture(&id) && socket.send(Message::Text(serde_json::to_string(&command).unwrap().into())).await.is_err(){break;}
             },
             incoming=socket.recv()=>{
@@ -561,6 +572,15 @@ async fn client_socket(s: Arc<AppState>, mut socket: WebSocket) {
                 match v["type"].as_str().unwrap_or(""){
                     "heartbeat"=>{let _=socket.send(Message::Text(json!({"type":"heartbeat"}).to_string().into())).await;},
                     "notes_result"=>crate::notes::complete(&s,&id,&session,v),
+                    "audio_result"=>crate::audio::complete(&s,&id,&session,v),
+                    "audio_activity"=>crate::audio::activity(&s,&id,&session,&v),
+                    "audio_preview"=>{let _=crate::audio::preview(&s,&id,&session,&v);},
+                    "audio_chunk"=>{
+                        let seq=v["seq"].clone();
+                        let error=crate::audio::chunk(&s,&id,&session,&v).err().map(|e|e.to_string());
+                        let live=crate::audio::has_session(&s,&id,&session,v["generation"].as_str().unwrap_or(""));
+                        let _=socket.send(Message::Text(json!({"type":"audio_ack","seq":seq,"ok":error.is_none(),"error":error,"session":live}).to_string().into())).await;
+                    },
                     "capture_result"=>{
                         let request=v["request_id"].as_str().unwrap_or("");
                         let result=(||->Result<()>{
@@ -619,6 +639,7 @@ impl Drop for CaptureSession {
         if sessions.get(&self.id) == Some(&self.session) {
             sessions.remove(&self.id);
             crate::notes::disconnected(&self.state, &self.id, &self.session);
+            crate::audio::disconnected(&self.state, &self.id, &self.session);
             let _ = self.state.db.release_captures(&self.id);
             crate::connections::report_capture(&self.state, "disconnected");
         }

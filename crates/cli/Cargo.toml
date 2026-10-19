@@ -19,6 +19,13 @@ tempfile = "3"
 uuid = { version = "1", features = ["v4"] }
 clap = { version = "4", features = ["derive", "env"] }
 reqwest = { version = "0.12", default-features = false, features = ["stream", "rustls-tls"] }
+# Audio Capture: WAV encoding of each utterance (and replaying a fixture file).
+hound = "3.5"
+
+# The microphone itself: CoreAudio through cpal. Opened only when the backend
+# asks the CLI to listen, never at startup.
+[target.'cfg(target_os = "macos")'.dependencies]
+cpal = "0.18"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["test-util"] }

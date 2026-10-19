@@ -20,7 +20,7 @@ const languages = [
   ['es', 'Español', 4, false],
   ['cs', 'Čeština', 5, false],
 ];
-const routes = ['/', '/chat', '/save', '/notes', '/wiki', '/autonomous', '/assistance', '/overview', '/library', '/files', '/images', '/videos', '/code', '/coding', '/skills', '/dashboard', '/devices', '/admin', '/quiz', '/ai', '/wallet'];
+const routes = ['/', '/chat', '/save', '/notes', '/wiki', '/autonomous', '/audio', '/assistance', '/overview', '/library', '/files', '/images', '/videos', '/code', '/coding', '/skills', '/dashboard', '/devices', '/admin', '/quiz', '/ai', '/wallet'];
 const sourceDir = 'crates/frontend/src';
 const catalog = JSON.parse(fs.readFileSync(path.join(sourceDir, 'locales.json'), 'utf8'));
 const sources = fs.readdirSync(sourceDir).filter(f => f.endsWith('.rs')).map(f => [f, fs.readFileSync(path.join(sourceDir, f), 'utf8').split('#[cfg(test)]')[0]]);

@@ -433,6 +433,37 @@
 .quiz-timer[data-paused="true"] .quiz-timer-track i { background:#cfc6d8;transition:none; }
 .quiz-board { animation:quiz-in .45s cubic-bezier(.2,.8,.2,1); }
 @keyframes quiz-in { from { opacity:0;transform:translateY(8px); } to { opacity:1;transform:none; } }
+/* Audio Capture: the listening toolbar, the notes board and the Solve answer. */
+.audio-toolbar { display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin:18px 0; }
+.audio-toolbar .client-picker { margin:0; }
+.audio-board,.audio-answer { background:var(--feature-paper,#fffdfa);border:1px solid var(--feature-line,#e3d9ed);border-radius:18px;padding:26px 28px;box-shadow:0 8px 32px #7658a008;animation:quiz-in .45s cubic-bezier(.2,.8,.2,1); }
+.audio-answer { margin-top:18px; }
+.audio-board-head { display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap; }
+.audio-board-head h2 { display:flex;align-items:center;gap:8px;font-size:15px;font-weight:500;margin:0; }
+.audio-board-head h2 svg { width:16px;height:16px; }
+.audio-live { display:flex;align-items:center;gap:7px;font-size:11px;color:var(--feature-muted,#94839f);background:var(--feature-field,#faf9f6);padding:6px 10px;border-radius:30px; }
+.audio-live i { width:7px;height:7px;border-radius:50%;background:#a39aa9; }
+.audio-live.is-listening i { background:#d85c6a;animation:audio-pulse 1.4s ease-in-out infinite; }
+@keyframes audio-pulse { 0%,100% { transform:scale(1);opacity:1; } 50% { transform:scale(1.5);opacity:.5; } }
+.audio-meter { display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--feature-muted,#94839f);margin:14px 0 4px;font-variant-numeric:tabular-nums; }
+.audio-summary { margin:14px 0 0;border:1px solid var(--feature-line,#e3d9ed);border-radius:12px;padding:10px 14px;background:var(--feature-field,#faf9f6); }
+.audio-summary summary { display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--feature-muted,#94839f); }
+.audio-summary summary svg { width:14px;height:14px; }
+.audio-summary p { margin:10px 0 2px;font-size:13px;line-height:1.75;white-space:pre-wrap; }
+.audio-empty { color:var(--feature-muted,#94839f);font-size:13px;line-height:1.8;margin:18px 0; }
+.audio-notes { list-style:none;margin:16px 0 0;padding:0;max-height:52vh;overflow:auto;display:flex;flex-direction:column;gap:6px; }
+.audio-notes li { display:grid;grid-template-columns:44px 1fr;gap:12px;padding:8px 12px;border-radius:10px;font-size:14px;line-height:1.7;color:#473a52;background:transparent; }
+.audio-notes li.is-new { background:#f3f0fa; }
+.audio-notes time { color:var(--feature-muted,#94839f);font-size:11px;font-variant-numeric:tabular-nums;padding-top:3px; }
+.audio-actions { display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-top:22px; }
+.audio-actions .primary-button { margin-left:auto; }
+.audio-actions .primary-button small { font-size:10px;opacity:.8;margin-left:6px; }
+.audio-hint { display:flex;gap:8px;color:var(--feature-muted,#94839f);font-size:12px;line-height:1.8;margin:16px 0 0; }
+.audio-hint svg { width:14px;height:14px;flex:none;margin-top:4px; }
+:root[data-theme=dark] .audio-page { --feature-paper:#24212b;--feature-field:#1e1b24;--feature-ink:#eae5ef;--feature-muted:#aca1b8;--feature-line:#3b3446;--feature-accent:#c2a5da; }
+:root[data-theme=dark] .audio-notes li { color:inherit; }
+:root[data-theme=dark] .audio-notes li.is-new { background:#2c2740; }
+@media (max-width:640px) { .audio-board,.audio-answer { padding:18px 16px; } .audio-notes li { grid-template-columns:38px 1fr;gap:8px;font-size:13px; } .audio-actions .primary-button { margin-left:0;width:100%;justify-content:center; } }
 .quiz-hint svg { flex-shrink:0;width:16px;margin-top:3px; }
 .capture-checklist { display:flex;gap:12px;flex-wrap:wrap;margin:0 0 20px; }
 .capture-checklist label { display:flex;gap:8px;align-items:center;font-size:12px;background:#f3edf7;border:1px solid #e2d7eb;border-radius:8px;padding:8px 12px; }
@@ -892,7 +923,7 @@
 .wiki-article table {display:block}
 .wiki-back,.wiki-pagination button {min-height:44px;font-size:12px;color:var(--feature-accent);padding:8px 0}
 .wiki-pagination {display:flex;align-items:center;justify-content:center;gap:24px;font-size:11px;color:var(--feature-muted);margin-top:20px}
-:root[data-theme=dark] .assistance-page,:root[data-theme=dark] .wiki-page {--feature-paper:#24212b;--feature-field:#1e1b24;--feature-ink:#eae5ef;--feature-muted:#aca1b8;--feature-line:#3b3446;--feature-accent:#c2a5da;--feature-tint:#372c43;--feature-green:#9bb59d}
+:root[data-theme=dark] .assistance-page,:root[data-theme=dark] .audio-page,:root[data-theme=dark] .wiki-page {--feature-paper:#24212b;--feature-field:#1e1b24;--feature-ink:#eae5ef;--feature-muted:#aca1b8;--feature-line:#3b3446;--feature-accent:#c2a5da;--feature-tint:#372c43;--feature-green:#9bb59d}
 :root[data-theme=dark] .feature-intro {background:#302b34;border-color:#43384a}
 :root[data-theme=dark] .feature-intro>img {mix-blend-mode:normal;opacity:.38;mask-image:linear-gradient(90deg,transparent,#000 45%)}
 :root[data-theme=dark] .feature-intro .eyebrow,:root[data-theme=dark] .feature-intro p,:root[data-theme=dark] .feature-trust {color:#b9acbf}
@@ -2088,3 +2119,32 @@ cwb-send-stage.is-failed{box-shadow:0 0 0 2px #ff8a9a88,0 40px 80px -40px #3a0f1
    desktop the list keeps its own scroll, contained so the page stays put. */
 .coding-file-list{overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y}
 @media (hover:none) and (pointer:coarse){.coding-file-list{max-height:none;overflow:visible}}
+/* Audio Capture as a chat: heard notes, requests and answers in one thread. */
+.audio-session-bar { display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0 0 14px; }
+.audio-room-picker { display:flex;align-items:center;gap:8px;font-size:13px; }
+.audio-room-title { display:flex;align-items:center;gap:6px;font-size:14px; }
+.audio-thread { list-style:none;margin:16px 0 0;padding:0;max-height:60vh;overflow:auto;display:flex;flex-direction:column;gap:10px; }
+.audio-thread > li { border-radius:12px;padding:10px 14px;font-size:14px;line-height:1.7; }
+.audio-heard { background:#f6f3fb; }
+.audio-heard .audio-line { display:block; }
+.audio-request { align-self:flex-end;display:flex;gap:10px;align-items:center;background:#ece6f7;font-size:13px; }
+.audio-thread .audio-answer { border:1px solid var(--feature-line,#e3d9ed);background:var(--feature-paper,#fffdfa);margin:0;animation:none;box-shadow:none; }
+.audio-message-meta { display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:12px;color:var(--feature-muted,#94839f);margin-bottom:4px; }
+.audio-message-meta strong { display:flex;gap:4px;align-items:center;color:inherit; }
+.audio-thread time { font-size:11px;font-variant-numeric:tabular-nums;color:var(--feature-muted,#94839f); }
+:root[data-theme=dark] .audio-heard { background:#262236; }
+:root[data-theme=dark] .audio-request { background:#2c2740; }
+@media (max-width:640px) { .audio-session-bar { gap:8px; } .audio-request { align-self:stretch; } }
+/* Microphone activity comes from rust-cli, independently of speech decoding. */
+.audio-listening{display:flex;align-items:center;gap:16px;margin:18px 0;padding:18px 20px;border:1px solid #cabce9;border-radius:16px;background:linear-gradient(115deg,#f3edff,#f9f5fc);color:#7254bc;overflow:hidden}
+.audio-mic-orbit{position:relative;display:grid;place-items:center;flex:none;width:44px;height:44px;border-radius:50%;background:#8564ce;color:white;box-shadow:0 0 0 7px #9874d918}
+.audio-mic-orbit:before,.audio-mic-orbit:after{content:"";position:absolute;inset:-3px;border:1px solid #9672d9;border-radius:50%;animation:audio-ripple 2.4s ease-out infinite}
+.audio-mic-orbit:after{animation-delay:1.2s}.audio-mic-orbit svg{width:22px;height:22px}
+.audio-listening-label{display:flex;flex-direction:column;gap:4px;min-width:0;flex:1;font-size:12px}.audio-listening-label strong{font-size:15px}.audio-listening-label span{overflow-wrap:anywhere;opacity:.8}
+.audio-wave{display:flex;align-items:center;gap:4px;height:38px;flex:none}.audio-wave i{display:block;width:4px;height:32px;border-radius:4px;background:currentColor;transform:scaleY(calc(.12 + var(--audio-level,0)*.88));transition:transform .16s ease-out}
+.audio-wave i:nth-child(2n){height:24px}.audio-wave i:nth-child(3n){height:38px}.audio-wave i:first-child,.audio-wave i:last-child{height:16px}
+.audio-draft{margin-top:12px;padding:14px 16px;border-left:3px solid #9672d9;border-radius:4px 12px 12px 4px;background:#f6f3fb}.audio-draft p{margin:0;line-height:1.7;white-space:pre-wrap;overflow-wrap:anywhere}.audio-caret{display:inline-block;vertical-align:middle;width:2px;height:1em;background:#8564ce;margin-left:5px;animation:audio-pulse 1s ease-in-out infinite}
+@keyframes audio-ripple{0%{transform:scale(1);opacity:.6}100%{transform:scale(1.65);opacity:0}}
+:root[data-theme=dark] .audio-listening{background:linear-gradient(115deg,#30263f,#25212f);border-color:#594572;color:#d2b8ff}:root[data-theme=dark] .audio-draft{background:#2a2435}
+@media(prefers-reduced-motion:reduce){.audio-mic-orbit:before,.audio-mic-orbit:after,.audio-caret,.audio-live.is-listening i{animation:none}.audio-mic-orbit:before,.audio-mic-orbit:after{display:none}.audio-wave i{transition:none}}
+@media(max-width:480px){.audio-listening{gap:12px;padding:16px 12px}.audio-wave{gap:3px}.audio-wave i{width:3px}}

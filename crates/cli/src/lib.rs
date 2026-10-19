@@ -1,3 +1,4 @@
+mod audio;
 mod callbacks;
 mod notes;
 #[cfg(target_os = "macos")]
@@ -56,6 +57,11 @@ struct Config {
         help = "TEST ONLY: send this image instead of capturing"
     )]
     fixture: Option<PathBuf>,
+    #[arg(
+        long = "fixture-audio",
+        help = "TEST ONLY: replay this WAV instead of the microphone"
+    )]
+    fixture_audio: Option<PathBuf>,
     #[arg(long, help = "Exit after delivering one capture")]
     once: bool,
     #[arg(long,value_parser=clap::value_parser!(u64).range(1..=60))]
@@ -70,6 +76,7 @@ struct Resolved {
     name: String,
     id: String,
     fixture: Option<PathBuf>,
+    fixture_audio: Option<PathBuf>,
     once: bool,
     retry_seconds: u64,
 }
@@ -118,6 +125,14 @@ pub async fn run() -> Result<()> {
             .owner_wallet
             .as_deref()
             .unwrap_or("All approved workspace users")
+    );
+    println!(
+        "Audio Capture: {}",
+        if config.fixture_audio.is_some() {
+            "TEST FIXTURE replays a WAV file; the microphone is never opened"
+        } else {
+            "the microphone opens only while a session listens; press Capture Audio in the web UI"
+        }
     );
     println!(
         "TextEdit Auto: {}",
@@ -206,6 +221,7 @@ fn resolve_config(args: Config, resume_saved: bool) -> Result<Option<Resolved>> 
             .or_else(|| stored["client_id"].as_str().map(str::to_string))
             .unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
         fixture: args.fixture,
+        fixture_audio: args.fixture_audio,
         once: args.once,
         retry_seconds: args
             .retry_seconds
@@ -246,7 +262,7 @@ async fn connected(c: &mut Resolved) -> Result<()> {
         tokio::time::timeout(Duration::from_secs(15), connect_async(request)).await??;
     let (mut sink, mut stream) = socket.split();
     sink.send(Message::Text(
-        json!({"type":"hello","id":c.id,"name":c.name,"platform":std::env::consts::OS,"callbacks":"sse","device_key":causewaybay_shared::config::secret(&c.config_dir, "device-key")?,"owner_wallet":c.owner_wallet,"textedit_notes_v1":cfg!(target_os="macos"),"mac_actions_v1":cfg!(target_os="macos")})
+        json!({"type":"hello","id":c.id,"name":c.name,"platform":std::env::consts::OS,"callbacks":"sse","device_key":causewaybay_shared::config::secret(&c.config_dir, "device-key")?,"owner_wallet":c.owner_wallet,"textedit_notes_v1":cfg!(target_os="macos"),"mac_actions_v1":cfg!(target_os="macos"),causewaybay_shared::AUDIO_CAPABILITY:cfg!(target_os="macos")||c.fixture_audio.is_some()})
             .to_string()
             .into(),
     ))
@@ -261,6 +277,12 @@ async fn connected(c: &mut Resolved) -> Result<()> {
     let mut note_generation = String::new();
     let mut note_seen = std::collections::VecDeque::new();
     let mut active_request = String::new();
+    // The microphone run, shared with the task that opens it; `wanted` is the
+    // generation that should be listening, so a stop that lands while the
+    // microphone is still opening wins.
+    let recorder: std::sync::Arc<std::sync::Mutex<Option<audio::Recorder>>> = Default::default();
+    let wanted: std::sync::Arc<std::sync::Mutex<String>> = Default::default();
+    let mut audio_seen = std::collections::VecDeque::new();
     let mut callbacks_task = CaptureTask::default();
     let (callback_tx, mut callback_rx) = tokio::sync::mpsc::channel(8);
     let mut seen = std::collections::VecDeque::new();
@@ -401,6 +423,107 @@ async fn connected(c: &mut Resolved) -> Result<()> {
                     };
                     let _ = sender.send(response).await;
                 }));
+            }
+            "audio_command" => {
+                let id = v["request_id"].as_str().unwrap_or("").to_string();
+                let generation = v["generation"].as_str().unwrap_or("").to_string();
+                let operation = v["operation"].as_str().unwrap_or("");
+                let now = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)?
+                    .as_millis() as i64;
+                let result = if audio_seen.contains(&id) {
+                    Err("Audio command already handled".to_string())
+                } else if generation.is_empty()
+                    || v["expires_at"]
+                        .as_i64()
+                        .is_none_or(|t| t < now || t > now + 60_000)
+                {
+                    Err("Expired audio command".to_string())
+                } else {
+                    audio_seen.push_back(id.clone());
+                    if audio_seen.len() > 256 {
+                        audio_seen.pop_front();
+                    }
+                    match operation {
+                        "start" => {
+                            // A new generation replaces whatever was listening. The
+                            // microphone opens off this task so heartbeats keep flowing,
+                            // and the result follows through the outgoing channel.
+                            *wanted.lock().unwrap() = generation.clone();
+                            recorder.lock().unwrap().take();
+                            let (slot, wanted, sender, fixture, id) = (
+                                recorder.clone(),
+                                wanted.clone(),
+                                tx.clone(),
+                                c.fixture_audio.clone(),
+                                id.clone(),
+                            );
+                            tokio::spawn(async move {
+                                let g = generation.clone();
+                                let chunks = sender.clone();
+                                let started = tokio::task::spawn_blocking(move || {
+                                    audio::Recorder::start(g, fixture, chunks)
+                                })
+                                .await
+                                .map_err(|e| e.to_string())
+                                .and_then(|r| r.map_err(|e| format!("{e:#}")));
+                                let result = match started {
+                                    Ok(r) if *wanted.lock().unwrap() == generation => {
+                                        *slot.lock().unwrap() = Some(r);
+                                        Ok(())
+                                    }
+                                    // Stopped while opening: the recorder drops and closes.
+                                    Ok(_) => Ok(()),
+                                    Err(e) => {
+                                        eprintln!("Audio capture: {e}");
+                                        Err(e)
+                                    }
+                                };
+                                let _ = sender
+                                    .send(json!({"type":"audio_result","request_id":id,"ok":result.is_ok(),"error":result.err()}))
+                                    .await;
+                            });
+                            continue;
+                        }
+                        "stop" => {
+                            let mut wanted = wanted.lock().unwrap();
+                            if *wanted == generation {
+                                wanted.clear();
+                            }
+                            let mut slot = recorder.lock().unwrap();
+                            if slot.as_ref().is_some_and(|r| r.generation == generation) {
+                                slot.take();
+                            }
+                            Ok(())
+                        }
+                        _ => Err("Unknown audio operation".to_string()),
+                    }
+                };
+                if let Err(error) = &result {
+                    eprintln!("Audio capture: {error}");
+                }
+                sink.send(Message::Text(
+                    json!({"type":"audio_result","request_id":id,"ok":result.is_ok(),"error":result.err()})
+                        .to_string()
+                        .into(),
+                ))
+                .await?;
+            }
+            "audio_ack" => {
+                if v["ok"] != true {
+                    eprintln!(
+                        "Utterance {} rejected: {}",
+                        v["seq"],
+                        v["error"].as_str().unwrap_or("Backend refused the audio")
+                    );
+                }
+                // The backend ended the session on its own: close the microphone.
+                if v["session"] == false {
+                    wanted.lock().unwrap().clear();
+                    if recorder.lock().unwrap().take().is_some() {
+                        println!("The backend stopped listening; microphone closed.");
+                    }
+                }
             }
             "capture" => {
                 let command: CaptureCommand = serde_json::from_value(v)?;

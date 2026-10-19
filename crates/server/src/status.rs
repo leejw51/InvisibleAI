@@ -62,10 +62,10 @@ fn connections(s: &AppState) -> Result<Dashboard> {
     let conn = s.db.0.lock().unwrap();
     let now = chrono::Utc::now().timestamp();
     let rust_clients=conn.prepare("SELECT id,name,platform,last_seen,owner_wallet FROM capture_clients WHERE (?1 IS NULL OR owner_wallet=?1 OR owner_wallet IS NULL) ORDER BY last_seen DESC")?
-        .query_map([&s.db.2],|r|{let seen=r.get::<_,i64>(3)?;Ok(CaptureClient{id:r.get(0)?,name:r.get(1)?,platform:r.get(2)?,last_seen:seen,online:now-seen<45,owner_wallet:r.get(4)?,can_capture:false,textedit:Default::default()})})?
+        .query_map([&s.db.2],|r|{let seen=r.get::<_,i64>(3)?;Ok(CaptureClient{id:r.get(0)?,name:r.get(1)?,platform:r.get(2)?,last_seen:seen,online:now-seen<45,owner_wallet:r.get(4)?,can_capture:false,textedit:Default::default(),audio:false})})?
         .collect::<rusqlite::Result<Vec<_>>>()?;
     let web_clients=conn.prepare("SELECT id,name,platform,last_seen,connected FROM web_clients WHERE (?1 IS NULL OR owner_wallet=?1) ORDER BY connected DESC,last_seen DESC")?
-        .query_map([&s.db.2],|r|{let seen=r.get::<_,i64>(3)?;Ok(CaptureClient{id:r.get(0)?,name:r.get(1)?,platform:r.get(2)?,last_seen:seen,online:r.get::<_,bool>(4)?&&now-seen<35,owner_wallet:None,can_capture:false,textedit:Default::default()})})?
+        .query_map([&s.db.2],|r|{let seen=r.get::<_,i64>(3)?;Ok(CaptureClient{id:r.get(0)?,name:r.get(1)?,platform:r.get(2)?,last_seen:seen,online:r.get::<_,bool>(4)?&&now-seen<35,owner_wallet:None,can_capture:false,textedit:Default::default(),audio:false})})?
         .collect::<rusqlite::Result<Vec<_>>>()?;
     Ok(Dashboard {
         rust_connected: rust_clients.iter().filter(|c| c.online).count(),

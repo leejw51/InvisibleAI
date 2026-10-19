@@ -5,6 +5,7 @@ pub mod ai_preferences;
 pub mod ai_status;
 pub mod artifacts;
 pub mod assistance;
+pub mod audio;
 pub mod auth;
 pub mod capture;
 pub mod capture_choices;
@@ -97,6 +98,7 @@ pub struct AppState {
     continuous: Arc<Mutex<HashMap<String, continuous::Running>>>,
     pub local_runtime: local_ai::Runtime,
     pub notes: Arc<notes::Hub>,
+    pub audio: Arc<audio::Hub>,
     pub demo: bool,
     pub token: Option<String>,
     pub capture_token: Option<String>,
@@ -205,6 +207,7 @@ impl AppState {
             local_runtime: local_ai::Runtime::from_environment()
                 .with_models_dir(data_dir.join("models/mlx")),
             notes: Arc::new(notes::Hub::default()),
+            audio: Arc::new(audio::Hub::default()),
             semantic: semantic::Semantic::new(),
             data_dir,
             config_dir,
@@ -595,7 +598,7 @@ async fn save_memo(PrivateState(s): PrivateState, Json(v): Json<Value>) -> Api<J
 /// room is given, indexed, and organized into the Wiki (where its category and
 /// tags and tidied text are set by the selected AI in the background). Used by "Save memo" and by a typed line the
 /// chat files as a record rather than a question.
-async fn keep(
+pub(crate) async fn keep(
     s: &Arc<AppState>,
     content: &str,
     file_ids: &[String],
