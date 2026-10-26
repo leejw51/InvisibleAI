@@ -17,6 +17,8 @@ Meet the **companion**, Invisible AI's main character: a small glassy friend who
 
 ## Install a built release
 
+Building needs Xcode with its Metal Toolchain (`xcodebuild -downloadComponent MetalToolchain`), which compiles the MLX GPU kernels; Command Line Tools alone have no `metal` compiler. When `xcode-select` points at the Command Line Tools, `make mlx-ai` uses `/Applications/Xcode.app` automatically; set `DEVELOPER_DIR` to use a different Xcode.
+
 Run `make package` on an Apple Silicon Mac to produce two archives and `package/SHA256SUMS`:
 
 - `package/invisible-ai-server-<version>-darwin-arm64.zip` — backend, web UI, on-device AI workers and a local capture client. Unzip it and double-click **Start Invisible AI.command**; it opens your browser and runs the backend and capture client, and Control-C in its Terminal window stops both.
