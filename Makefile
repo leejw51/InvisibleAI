@@ -190,8 +190,15 @@ test-auth: build-debug
 
 .PHONY: mlx-ai test-mlx
 # Standalone crate: compiles MLX from source once (cmake), then installs the worker.
+# MLX's Metal kernels need Xcode's `metal` compiler; Command Line Tools alone lack it,
+# so prefer Xcode.app when xcode-select still points at the Command Line Tools.
+MLX_DEVELOPER_DIR := $(or $(DEVELOPER_DIR),$(if $(findstring CommandLineTools,$(shell xcode-select -p 2>/dev/null)),$(wildcard /Applications/Xcode.app/Contents/Developer)))
 mlx-ai:
-	cargo build --release --manifest-path native/mlx-ai/Cargo.toml
+	@$(if $(MLX_DEVELOPER_DIR),DEVELOPER_DIR='$(MLX_DEVELOPER_DIR)') xcrun -sdk macosx metal --version >/dev/null 2>&1 || { \
+		echo "mlx-ai: the Metal compiler is unavailable. Install Xcode, then run:" >&2; \
+		echo "  xcodebuild -downloadComponent MetalToolchain" >&2; \
+		echo "(or set DEVELOPER_DIR=/path/to/Xcode.app/Contents/Developer)" >&2; exit 1; }
+	$(if $(MLX_DEVELOPER_DIR),DEVELOPER_DIR='$(MLX_DEVELOPER_DIR)') cargo build --release --manifest-path native/mlx-ai/Cargo.toml
 	mkdir -p bin
 	install -m 755 native/mlx-ai/target/release/invisible-mlx bin/invisible-mlx
 	@KERNEL=$$(find native/mlx-ai/target/release/build -path '*/out/build/lib/mlx.metallib' -type f -print -quit); test -n "$$KERNEL"; install -m 644 "$$KERNEL" bin/mlx.metallib

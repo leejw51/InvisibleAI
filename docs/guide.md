@@ -255,6 +255,8 @@ make build
 make package
 ```
 
+Building needs Xcode with its Metal Toolchain (`xcodebuild -downloadComponent MetalToolchain`), which compiles the MLX GPU kernels; Command Line Tools alone have no `metal` compiler. When `xcode-select` points at the Command Line Tools, `make mlx-ai` uses `/Applications/Xcode.app` automatically; set `DEVELOPER_DIR` to use a different Xcode.
+
 Produces `package/invisible-ai-server-<version>-<os>-<arch>.zip`, `package/invisible-ai-client-<version>-<os>-<arch>.zip`, `package/SHA256SUMS` for both, and a clean extracted copy of the server folder. `<version>` is the workspace version in `Cargo.toml` (`make version`). Each zip unpacks into one folder named like the archive and includes `.env.example`, `QUICK.md` (tutorial) and `README.md` (manual), whose sources are in `packaging/`. The server folder contains:
 
 - `bin/server` and `bin/client` — backend and capture binaries.
